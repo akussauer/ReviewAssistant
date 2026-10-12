@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Article, Column } from '../../shared/types'
+import { ArticleTable } from './components/ArticleTable/ArticleTable'
 
 function App(): React.JSX.Element {
   const [columns, setColumns] = useState<Column[]>([])
@@ -12,20 +13,7 @@ function App(): React.JSX.Element {
     })
   }, [])
 
-  return (
-    <table>
-      <thead>
-        <tr>{columns.map((c) => <th key={c.id}>{c.label}</th>)}</tr>
-      </thead>
-      <tbody>
-        {articles.map((a) => (
-          <tr key={a.id}>
-            {columns.map((c) => <td key={c.id}>{String(a.data[c.key] ?? '')}</td>)}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
+  return <ArticleTable columns={columns} articles={articles} />
 }
 
 export default App

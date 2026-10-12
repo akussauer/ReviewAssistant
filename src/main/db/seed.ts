@@ -15,8 +15,15 @@ export function seedIfEmpty(): void {
     insertColumn.run('authors', 'Author(s)', 'text', 1)
     insertColumn.run('year', 'Publish Date', 'number', 2)
 
-    insertArticle.run(JSON.stringify({ title: 'Example A', authors: 'Smith, J.', year: 2021 }), 0)
-    insertArticle.run(JSON.stringify({ title: 'Example B', authors: 'Lee, K.', year: 2023 }), 1)
-    insertArticle.run(JSON.stringify({ title: 'Example C', authors: 'Garcia, M.', year: 2019 }), 2)
+    for (let i = 0; i < 100; i++) {
+      insertArticle.run(
+        JSON.stringify({
+          title: `Example ${i + 1}`,
+          authors: ['Smith, J.', 'Lee, K.', 'Garcia, M.'][i % 3],
+          year: 1990 + ((i * 7) % 35)
+        }),
+        i
+      )
+    }
   })()
 }

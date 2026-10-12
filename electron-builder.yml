@@ -1,5 +1,5 @@
 appId: com.electron.app
-productName: article-notes
+productName: ReviewAssistant
 directories:
   buildResources: build
 files:
@@ -12,7 +12,7 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: article-notes
+  executableName: ReviewAssistant
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
