@@ -6,7 +6,10 @@ import { Api } from '../shared/types'
 const api: Api = {
   ping: (name) => ipcRenderer.invoke('ping', name),
   columns: { list: () => ipcRenderer.invoke('columns:list') },
-  articles: { list: () => ipcRenderer.invoke('articles:list') }
+  articles: {
+    list: () => ipcRenderer.invoke('articles:list'),
+    update: (id, patch) => ipcRenderer.invoke('articles:update', { id, patch })
+}
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

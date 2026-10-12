@@ -13,8 +13,13 @@ export type Article = {
   data: Record<string, unknown> // values keyed by column.key
 }
 
+export type ArticlePatch = Record<string, string | number | null>
+
 export type Api = {
   ping(name: string): Promise<string>
   columns: { list(): Promise<Column[]> }
-  articles: { list(): Promise<Article[]> }
+  articles: {
+    list(): Promise<Article[]>
+    update(id: number, patch: ArticlePatch): Promise<Article>
+  }
 }

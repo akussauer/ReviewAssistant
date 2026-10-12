@@ -12,13 +12,15 @@ import {
   useReactTable
 } from '@tanstack/react-table'
 import type { Article, Column } from '../../../../shared/types'
+import { EditableCell } from './EditableCell'
+
 
 // Default row height
 const ROW_HEIGHT = 36
 
-type Props = { columns: Column[]; articles: Article[] }
+type Props = { columns: Column[]; articles: Article[], onUpdate:(id: number, key: string, value: string | number | null) => Promise<void>}
 
-export function ArticleTable({ columns, articles }: Props): React.JSX.Element {
+export function ArticleTable({ columns, articles, onUpdate }: Props): React.JSX.Element {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
@@ -50,13 +52,20 @@ export function ArticleTable({ columns, articles }: Props): React.JSX.Element {
       },
       ...columns.map(
         (c): ColumnDef<Article> => ({
-          id: c.key,
-          header: c.label,
-          accessorFn: (a) => a.data[c.key],
-          size: c.width,
-          filterFn: 'includesString'
+            id: c.key,
+            header: c.label,
+            accessorFn: (a) => a.data[c.key],
+            size: c.width,
+            filterFn: 'includesString',
+            cell: ({ row, getValue }) => (
+            <EditableCell
+                value={getValue()}
+                widgetType={c.widgetType}
+                onCommit={(v) => onUpdate(row.original.id, c.key, v)}
+            />
+            )
         })
-      )
+        )
     ],
     [columns]
   )

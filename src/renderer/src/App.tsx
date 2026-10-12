@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Article, Column } from '../../shared/types'
 import { ArticleTable } from './components/ArticleTable/ArticleTable'
 
@@ -13,7 +13,19 @@ function App(): React.JSX.Element {
     })
   }, [])
 
-  return <ArticleTable columns={columns} articles={articles} />
+  const handleUpdate = useCallback(
+    async (id: number, key: string, value: string | number | null) => {
+      try {
+        const updated = await window.api.articles.update(id, { [key]: value })
+        setArticles((prev) => prev.map((a) => (a.id === id ? updated : a)))
+      } catch (err) {
+        console.error('Update failed', err)
+      }
+    },
+    []
+  )
+
+  return <ArticleTable columns={columns} articles={articles} onUpdate={handleUpdate} />
 }
 
 export default App

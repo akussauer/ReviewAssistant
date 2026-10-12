@@ -1,6 +1,8 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../db/connection'
 import type { Article, Column } from '../../shared/types'
+import { UpdateArticleInput } from './schemas'
+import { updateArticle } from '../db/articles'
 
 type ColumnRow = {
   id: number
@@ -15,6 +17,11 @@ type ColumnRow = {
 export function registerIpc(): void {
   ipcMain.handle('ping', (_event, name: string) => {
     return `pong, ${name}! (from main, Node ${process.versions.node})`
+  })
+
+  ipcMain.handle('articles:update', (_event, raw: unknown): Article => {
+  const { id, patch } = UpdateArticleInput.parse(raw)
+  return updateArticle(id, patch)
   })
 
   ipcMain.handle('columns:list', (): Column[] => {
