@@ -1,8 +1,8 @@
-import { ipcMain } from 'electron'
 import { getDb } from '../db/connection'
-import type { Article, Column } from '../../shared/types'
-import { UpdateArticleInput } from './schemas'
 import { updateArticle } from '../db/articles'
+import { IPC, type Article, type Column } from '../../shared/ipc'
+import { NoInput, UpdateArticleInput } from '../../shared/schemas'
+import { handle } from './handle'
 
 type ColumnRow = {
   id: number
@@ -15,18 +15,15 @@ type ColumnRow = {
 }
 
 export function registerIpc(): void {
-  ipcMain.handle('ping', (_event, name: string) => {
-    return `pong, ${name}! (from main, Node ${process.versions.node})`
+  handle(IPC.articlesUpdate, UpdateArticleInput, ({ id, patch }): Article => {
+    return updateArticle(id, patch)
   })
 
-  ipcMain.handle('articles:update', (_event, raw: unknown): Article => {
-  const { id, patch } = UpdateArticleInput.parse(raw)
-  return updateArticle(id, patch)
-  })
-
-  ipcMain.handle('columns:list', (): Column[] => {
+  handle(IPC.columnsList, NoInput, (): Column[] => {
     const rows = getDb()
-      .prepare('SELECT id, key, label, widget_type, options, width, position FROM columns ORDER BY position')
+      .prepare(
+        'SELECT id, key, label, widget_type, options, width, position FROM columns ORDER BY position'
+      )
       .all() as ColumnRow[]
     return rows.map((r) => ({
       id: r.id,
@@ -39,10 +36,11 @@ export function registerIpc(): void {
     }))
   })
 
-  ipcMain.handle('articles:list', (): Article[] => {
-    const rows = getDb()
-      .prepare('SELECT id, data FROM articles ORDER BY position, id')
-      .all() as { id: number; data: string }[]
+  handle(IPC.articlesList, NoInput, (): Article[] => {
+    const rows = getDb().prepare('SELECT id, data FROM articles ORDER BY position, id').all() as {
+      id: number
+      data: string
+    }[]
     return rows.map((r) => ({ id: r.id, data: JSON.parse(r.data) }))
   })
 }

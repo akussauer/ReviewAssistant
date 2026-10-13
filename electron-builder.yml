@@ -1,4 +1,4 @@
-appId: com.electron.app
+appId: com.mps.reviewassistant
 productName: ReviewAssistant
 directories:
   buildResources: build
@@ -33,7 +33,7 @@ linux:
     - AppImage
     - snap
     - deb
-  maintainer: electronjs.org
+  maintainer: Alex Kussauer
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}

@@ -1,0 +1,211 @@
+---
+tags: [program, electron, spec]
+status: draft v2
+related: "[[Review Assistant (electron)]]"
+reference_app: D:\Projects\Review_Assistant (PySide6)
+---
+# Review Assistant – Specification
+
+How the Electron version should behave. The **PySide6 app** (`D:\Projects\Review_Assistant`) is the functional reference. Unless this note says otherwise, match what it does. This note replaces the schema and chat sections of [[Review Assistant (electron)]]; that note's stack and IPC rule still apply.
+
+> [!info] Labels
+> - **[Py]** behaviour carried over from the PySide6 app
+> - **[New]** a deliberate change or addition
+> - **(A)** an assumption to confirm
+
+> [!quote] Philosophy (from the README)
+> The app is for writing good notes on many articles and analysing sub-groups. The AI is optional help, never the point. **Everything must work with no API key.**
+
+---
+## 1. Core ideas
+1. **A review is a file.** Each review (e.g. `scoping-review.review`) is its own SQLite file. You open, create and "save as" files like documents. **[New]** Every edit is saved automatically.
+2. **Tabs are references.** The main table holds every row. A user tab is a list of links to main rows. Editing a cell anywhere edits the one underlying row, and every tab updates. **[Py]**
+3. **Columns are user-defined.** Name, type, options, order and width are all managed in the app. A new file starts from a default template. **[Py]**
+4. **The assistant is per tab and read-only.** Each tab can have its own chat, which automatically sees that tab's rows. It never changes data.
+
+---
+## 2. Window layout
+```
+┌ File  Settings ───────────────────────────────────────────────────────────────┐
+│ [Main] [Pacing ×] [Juniors ×] [+]                                             │
+├───────────────────────────────────────────────────────────┬───────────────────┤
+│ 🔍 Search…                                                │ Assistant         │
+├──────┬──────────────┬─────────────┬──────┬────────────────┤ (if enabled for   │
+│      │ Title        │ Study Type  │ Year │ Notes          │  this tab)        │
+│      │ [Filter…]    │ [Filter…]   │[Fil…]│ [Filter…]      │                   │
+├──────┼──────────────┼─────────────┼──────┼────────────────┤ messages…         │
+│ ☐    │ multiline    │ [Cohort ▾]  │ 2021 │ **markdown**   │                   │
+│      │ text         │             │      │ notes…         │ [This tab: 12 rows│
+├──────┼──────────────┼─────────────┼──────┼────────────────┤  ×] [paper.pdf ×] │
+│ ☑    │ …            │ [RCT ▾]     │ 2018 │ …              │ [+] [input] [Send]│
+└──────┴──────────────┴─────────────┴──────┴────────────────┴───────────────────┘
+```
+- **Menu:** File (New, Open, Open Recent, Save As…, Import old JSON…, Export → CSV / JSON) and Settings (Preferences).
+- **Tab strip:** the main tab is first; it can't be closed and has no × **[Py]**. User tabs have a × that asks for confirmation.
+- **Search bar** above the table filters across all columns **[Py]**.
+- **Table:** a two-line header (column name, then that column's filter box) **[Py]**. A narrow row header holds each row's checkbox **[Py]**.
+- **Assistant panel:** a resizable right-hand splitter inside the tab, hidden unless the assistant is enabled for that tab **[Py]**.
+
+---
+## 3. Files and saving
+| Action | Behaviour |
+|---|---|
+| **New** | Creates a new `.review` file from the default column template with one blank row **[Py]**. The save location is asked for up front **(A)**. |
+| **Open** | Opens a `.review` file. Choosing an old `.json` file runs the importer (§9). |
+| **Open Recent** | The last 10 files **[New]**. On startup, the last file reopens. |
+| **Autosave** | Every change is written straight away; text typing is debounced by about 300 ms **[New]**. There is no Save command and no "unsaved changes" state. |
+| **Save As…** | Writes a copy to a new path and switches to it. If any rows are checked, it asks "Save only checked rows?" (default Yes) **[Py]**, and in that case tabs keep only the rows that still exist. |
+| **Backups** | When a file is opened, a copy is saved to `<file>.backups/` (keeping the last 5) **(A)**, plus one before any destructive column operation **[New]**. |
+
+The window title shows the file name. One file is open per window **(A)**.
+
+### 3.1 What a `.review` file is
+- **Each review is one standard SQLite database.** The `.review` extension just lets Windows open it with the app. Any SQLite tool can read it: DB Browser for SQLite, Python's `sqlite3`, R's `RSQLite`, DuckDB, Excel via ODBC, and so on.
+- **It's a single self-contained file.** The app uses SQLite's standard rollback journal instead of WAL mode, so there are no `-wal`/`-shm` side files. Copying, emailing or syncing the file (e.g. through OneDrive) always gives you the complete, current data.
+- **Readable views [New]:** values are stored as JSON keyed by column id, which is robust but awkward to read from outside the app. Whenever columns change, the app regenerates two SQL views:
+  - `rows_readable`: one row per article, one SQL column per user column, named with the column label, with dropdown ids turned into their text and checkboxes as 0/1.
+  - `tab_membership`: tab label → row id.
+
+  In another tool, `SELECT * FROM rows_readable` gives you a normal table.
+- **Other formats:** CSV, JSON and (later) Markdown exports cover the cases where SQLite isn't convenient (§9).
+
+---
+## 4. Columns
+### 4.1 Types
+| Type | Cell behaviour | Options | New-row default |
+|---|---|---|---|
+| **Text** | Multiline text with markdown highlighting and spellcheck (§6) **[Py]** | – | empty |
+| **Dropdown** | A select showing all options **[Py]**. The mouse wheel doesn't change the value **[Py]**. | Ordered option list (add, rename, remove, drag to reorder); at least one option required **[Py]** | first option **[Py]** |
+| **Checkbox** | Toggle with a click or Space/Enter **[Py]** | – | unchecked |
+| **Date** | Date picker (`YYYY-MM-DD`); the wheel doesn't change it **[Py]** | – | today **[Py]** |
+| **Number** | Integer input; the wheel doesn't change it **[Py]** | min, max (min ≤ max) **[Py]** | min **[Py]** |
+
+**[New]** Dropdown options are stored by id, so renaming an option updates every row that uses it. (In the PySide app, renaming leaves the old text in the rows.)
+
+### 4.2 Column operations
+- **Right-click a column name** to choose *Insert column before*, *Insert column after*, *Edit*, or *Delete* **[Py]**.
+- **Edit dialog:** name, type and the options for that type, validated as in the PySide app **[Py]**. Names can't be empty, and must be unique **[New]**.
+- **Delete:** a warning dialog, with *Cancel* as the default button **[Py]**. A backup is taken first **[New]**.
+- **Change type [New]:** before applying, the dialog previews the result, e.g. "38 values convert, 4 will be cleared". Conversions: text→number/date parse or clear; anything→text becomes its display string; text→dropdown turns distinct values into options.
+- **Reorder** columns by dragging headers **[Py]**. **Resize** by dragging the header divider; widths are saved **[Py]**. Width and order are global, not per tab.
+- **Ctrl+Shift+N** creates a new column at the end **[Py]**.
+
+### 4.3 Default template (new files) [Py]
+Title (text), Study Type (dropdown: RCT, Cohort, Case Study, Systematic Review, Meta-Analysis, Other), Author(s) (text), Year (number 1950–2030), Date Added (date), Read (checkbox), Spin (number 0–100), Notes (text).
+
+---
+## 5. Rows
+- **Order:** rows have a manual order **[Py]**. New rows go at the bottom, and *Insert row above/below* puts them at a specific place.
+- **Height:** each row's height can be changed by dragging (default 80 px) and is saved **[Py]**.
+- **Checkbox:** in the row header. The check belongs to the row itself: it's shared across all tabs and saved in the file **[Py]**.
+- **Never empty:** if the main table loses its last row, a blank one is added **[Py]**.
+- **Ctrl+N** adds a row **[Py]**. In a user tab, the new row is also added to that tab.
+
+### Row-header context menu [Py]
+| Item | Main tab | User tab |
+|---|---|---|
+| Add row to… → existing tabs / New Tab… | ✓ | ✓ |
+| Add checked rows (n) to… → tabs / New Tab… | ✓ (if any are checked) | ✓ |
+| Delete row / Delete checked rows (n) | ✓ (removes everywhere) | – |
+| Remove row / Remove checked rows (n) | – | ✓ (only from this tab) |
+| Insert row above / below | ✓ | – |
+| Check all / Uncheck all | ✓ | ✓ |
+
+**[New]** Deleting rows that appear in tabs asks for confirmation, e.g. "3 rows are in 2 tabs".
+
+---
+## 6. Cells and editing
+- **Always editable [Py]:** cells look and act like live form fields, not spreadsheet cells you have to double-click. A single click edits.
+- **Text cells [Py]:** plain text with markdown syntax highlighting (headings, bold, italic, strikethrough, lists, `- [ ]` checkboxes, inline code, quotes, links, `<br>`, horizontal rules) in one configurable colour. Misspellings get a red underline.
+- **Spellcheck language** is chosen in Settings (English variants, default `en_GB`) **[Py]**. **[New]** It uses Electron's built-in spellchecker, so there's no extra dependency.
+- **Keyboard (A):** Tab and Shift+Tab move between cells; Esc leaves a cell.
+- **Undo [New, optional]:** Ctrl+Z for the most recent cell edits. This is a polish item, not core.
+
+---
+## 7. Sorting, filtering, search
+- **Sort:** clicking a header cycles ascending → descending → off, where *off* means the manual order **[New]**. Sorting is case-insensitive, puts numbers in numeric order, and puts unchecked before checked **[Py]**. *Insert row above/below* is disabled while a sort is active **(A)**.
+- **Column filters [Py]:** each column has a filter box under its name. Filters are case-insensitive "contains" matches, and all column filters must match (AND).
+  - **[New] type-aware filters:** dropdown and checkbox columns get a small picker instead of a text box. Number and date filters accept `>2015`, `<2020` or `2010..2020` as well as plain text.
+- **Global search [Py]:** a row matches if any cell contains the text. Typing is debounced by 150 ms. Search and column filters combine (AND).
+- **Per tab (A):** each tab keeps its own sort, filters and search, saved in the file.
+
+---
+## 8. Tabs
+- **Creating a tab:** *New Tab…* (from the row menu, or the **+** in the tab strip **[New]**) opens a dialog with **Name** (default "Tab N"; must be unique and non-empty) and **Type** (*Review Table* or *Synthesis*) **[Py]**.
+- **Tab right-click [Py]:** *Edit Tab* (rename or change type; not for the main tab) and *Assistant* (on/off toggle, available on every tab including the main one; only shown when an LLM is configured).
+- **Close (×):** asks "Delete *Name*?". It removes the tab, not its rows **[Py]**.
+- **Reorder** tabs by dragging **[New]**. The **active tab** is restored when the file is reopened **[Py]**.
+- **A Review Table tab** is the same table limited to its rows, which are shown in main-table order **[Py]**. Columns, widths and row heights are shared with the main table.
+- **A Synthesis tab** is described in §11.
+
+---
+## 9. Import and export
+- **Import an old PySide6 JSON file** (schema v1 and v2) into a new `.review` file. It brings in columns (`name`, `type_key`, `options`, `min_val`, `max_val`, `width`), rows, row heights, checks, row ids and tabs (`row_ids`, or legacy `row_idx`), along with each tab's `assistant_enabled` setting and the active tab. Type keys map as `textedit`→Text, `combobox`→Dropdown, `checkbox`→Checkbox, `date`→Date, `spinbox`→Number.
+- **Export CSV [Py]:** if any rows are checked, it asks "Export only checked rows?" (default Yes). Booleans are written as `TRUE`/`FALSE`, and the files default to the Downloads folder.
+- **Export JSON [New]:** the whole file in a documented format.
+
+### 9.1 Markdown / Obsidian export (planned, long-term) [New]
+Each row is exported as one `.md` note that can go straight into an Obsidian vault.
+- **Per-column export setting** (in the column Edit dialog, "Markdown export" section):
+  | Mode | Output |
+  |---|---|
+  | **Property** | YAML frontmatter key: text → string, number → number, date → date, checkbox → boolean, dropdown → its text |
+  | **Section** (default for text columns) | `## <Column name>` followed by the cell content as-is (cells are already markdown) |
+  | **Skip** | not exported |
+
+  There's also an optional *property name* override, e.g. "Author(s)" → `authors`.
+- **Export dialog:**
+  - **Scope:** checked rows, the current tab, or everything.
+  - **Target folder:** e.g. a vault folder; remembered per file.
+  - **File name:** from a chosen column (default: first text column), made filename-safe and de-duplicated, e.g. `Title (2).md`.
+  - **If the file exists:** skip, overwrite, or overwrite only notes this app created.
+  - **Extra properties (optional):** `tags` from the tab names the row belongs to, and the source `.review` file name.
+- **Example output:**
+  ```markdown
+  ---
+  title: Pacing in age-group swimmers
+  year: 2016
+  study-type: Cohort
+  read: true
+  tags: [Pacing]
+  ---
+  ## Notes
+  …cell content…
+  ```
+- One-way only: exporting never reads back from the vault. Two-way sync is out of scope.
+
+---
+## 10. Assistant (per tab, read-only)
+- **Turning it on:** use the tab's right-click menu. Whether the assistant is on, and the conversation itself, are saved per tab in the file **[Py → New: conversations are now saved]**. The main tab has one too.
+- **Context chips (shown above the input):**
+  - **"This tab (n rows)"** is attached automatically. It contains the rows currently shown (after filters) with all columns, and can be removed for one message **[New]**.
+  - **"+"** attaches files: .txt and .md **[Py]**, and **[New]** PDFs (text is extracted locally). File chips are cleared after sending, and a "📎 n files referenced" note is added to the chat **[Py]**.
+  - A **token meter** shows the estimated size. If it's too large, sending is blocked and the message says why **[New]**.
+- **Input:** Enter sends and Shift+Enter adds a new line **[Py]**. The input box grows up to about 250 px **[Py]**. Replies are rendered as markdown and can be selected **[Py]**.
+- **Prompting:** rows and files are wrapped in tags, and the system prompt says their contents are data, not instructions **[Py]**.
+- **Read-only:** the model gets no tools that can write. Any future tools will be read-only.
+- **Provider:** OpenRouter by default **[Py]**, plus any OpenAI-compatible endpoint and Ollama **[New]**. The model is chosen in Settings (the PySide app hardcoded `openai/gpt-4o-mini`). The key is stored with `safeStorage` instead of `.env` **[New]**.
+- **Key check** at startup uses a free endpoint (e.g. OpenRouter's key-info call) rather than a chat request **[New]**. Without a working key, the assistant options are hidden **[Py]**.
+
+---
+## 11. Synthesis tabs (late milestone)
+Based on the disabled `SynthesisWidget` in the PySide app **[Py]**:
+- **Top:** a read-only table of the tab's rows.
+- **Bottom strip:** one panel per column. Each panel has an **include** checkbox and an editable text box for that column's synthesis. Panels for excluded columns are greyed out.
+- **Controls:** a "custom instructions" line and a **Synthesise** button (Enter in the instructions line also runs it). For each included column, the LLM summarises that column across all the tab's rows. Panels show "Synthesising…" while they wait. Results stay editable and are saved.
+- Synthesis text belongs to the tab. It never writes into article data.
+- Since this may still change, the details are revisited before the milestone starts.
+
+---
+## 12. Settings (app-wide, stored in the user-data folder) [Py]
+| Setting | Values |
+|---|---|
+| Theme | Light / Dark / System |
+| Spellcheck language | en_AU … en_ZW (same list as the PySide app); default en_GB |
+| Markdown colour | colour picker; default `#0E80A3` |
+| Hotkeys | New row (Ctrl+N) and New column (Ctrl+Shift+N), set by pressing the key combination; **[New]** Save As (Ctrl+Shift+S) |
+| Assistant **[New]** | provider, API key, model, test button |
+| Reset to defaults | ✓ |
+
+- **Logs:** a rotating log in the user-data `Logs/` folder (5 MB × 3) **[Py]**.
+- **Dropped:** the PySide "Style" setting (Default/Fusion) and the loading overlay; with autosave there's no long save to wait for.

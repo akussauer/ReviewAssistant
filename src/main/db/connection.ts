@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
 import { migrations } from './migrations'
+import { log } from '../log'
 
 let db: Database.Database | null = null
 
@@ -12,7 +13,7 @@ export function getDb(): Database.Database {
 
 export function initDb(): void {
   const path = join(app.getPath('userData'), 'articles.db')
-  console.log('DB at', path)
+  log.info(`DB at ${path}`)
   db = new Database(path)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')

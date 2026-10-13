@@ -1,22 +1,28 @@
-import { app, shell, BrowserWindow } from 'electron'
+import { app, shell, BrowserWindow, Menu, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { initDb } from './db/connection'
 import { seedIfEmpty } from './db/seed'
 import { registerIpc } from './ipc'
+import { initLog, log } from './log'
+import { buildMenu } from './menu'
 
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 1200,
+    height: 800,
     show: false,
-    autoHideMenuBar: true,
+    title: 'Review Assistant',
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      // Security defaults, stated explicitly: the page runs in Chromium's sandbox with no
+      // Node.js access, and the preload runs in its own isolated JavaScript world.
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false
     }
   })
 
@@ -38,13 +44,28 @@ function createWindow(): void {
   }
 }
 
+initLog(join(app.getPath('userData'), 'Logs'))
+log.info('Application started.')
+
+// A crash in main leaves the app in an unknown state, and every edit autosaves, so
+// log the error, tell the user, and quit rather than carry on.
+const fatal = (err: unknown): void => {
+  const text = err instanceof Error ? (err.stack ?? err.message) : String(err)
+  log.error(`Fatal: ${text}`)
+  dialog.showErrorBox('Review Assistant crashed', text)
+  app.exit(1)
+}
+process.on('uncaughtException', fatal)
+process.on('unhandledRejection', fatal)
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.mps.reviewassistant')
 
+  Menu.setApplicationMenu(buildMenu())
   initDb()
   seedIfEmpty()
   registerIpc()

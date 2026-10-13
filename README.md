@@ -1,36 +1,24 @@
-# ReviewAssistant
+# Review Assistant
 
-An Electron application with React and TypeScript
+Desktop app for writing notes on many academic articles and analysing sub-groups.
+See [docs/spec.md](docs/spec.md) (what it does) and [docs/plan.md](docs/plan.md) (how it's built).
 
-## Recommended IDE Setup
-
-- [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
-
-## Project Setup
-
-### Install
+## Commands
 
 ```bash
-$ npm install
+npm install        # also rebuilds better-sqlite3 for Electron
+npm run dev        # run the app with hot reload
+npm run typecheck
+npm run lint
+npm test           # Vitest, run inside Electron's Node (see scripts/test.mjs)
+npm run build:win  # Windows installer
 ```
 
-### Development
+## Where things live at runtime
 
-```bash
-$ npm run dev
-```
+- Logs: `%APPDATA%\ReviewAssistant\Logs\app.log` (rotates at 5 MB, 3 files kept)
+- Prototype data (until M2): `%APPDATA%\ReviewAssistant\articles.db`
 
-### Build
+## Adding shadcn/ui components
 
-```bash
-# For windows
-$ npm run build:win
-
-# For macOS
-$ npm run build:mac
-
-# For Linux
-$ npm run build:linux
-```
-
-Table exists in "C:\Users\akuss\AppData\Roaming\ReviewAssistant\articles.db"
+`npx shadcn@latest add <component>` writes into `src/renderer/src/components/ui/`.

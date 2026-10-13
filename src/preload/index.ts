@@ -1,30 +1,15 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
-import { Api } from '../shared/types'
+import { IPC, type Api } from '../shared/ipc'
 
-// Custom APIs for renderer
+// The preload script is the only bridge between the web page (renderer) and Node/Electron.
+// contextBridge copies `api` into the page as `window.api`; the page gets these few
+// functions and nothing else: no ipcRenderer, no require, no filesystem.
 const api: Api = {
-  ping: (name) => ipcRenderer.invoke('ping', name),
-  columns: { list: () => ipcRenderer.invoke('columns:list') },
+  columns: { list: () => ipcRenderer.invoke(IPC.columnsList) },
   articles: {
-    list: () => ipcRenderer.invoke('articles:list'),
-    update: (id, patch) => ipcRenderer.invoke('articles:update', { id, patch })
-}
+    list: () => ipcRenderer.invoke(IPC.articlesList),
+    update: (id, patch) => ipcRenderer.invoke(IPC.articlesUpdate, { id, patch })
+  }
 }
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
-if (process.contextIsolated) {
-  try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
-  } catch (error) {
-    console.error(error)
-  }
-} else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
-}
+contextBridge.exposeInMainWorld('api', api)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Article, Column } from '../../shared/types'
+import type { Article, Column } from '../../shared/ipc'
 import { ArticleTable } from './components/ArticleTable/ArticleTable'
 
 function App(): React.JSX.Element {

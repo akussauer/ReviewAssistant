@@ -1,5 +1,5 @@
 import { getDb } from './connection'
-import type { Article, ArticlePatch } from '../../shared/types'
+import type { Article, ArticlePatch } from '../../shared/ipc'
 
 export function updateArticle(id: number, patch: ArticlePatch): Article {
   const db = getDb()
@@ -12,8 +12,7 @@ export function updateArticle(id: number, patch: ArticlePatch): Article {
   }
 
   const row = db.prepare('SELECT data FROM articles WHERE id = ?').get(id) as
-    | { data: string }
-    | undefined
+    { data: string } | undefined
   if (!row) throw new Error(`Article ${id} not found`)
 
   const data = { ...JSON.parse(row.data), ...patch }
