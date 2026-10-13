@@ -1,8 +1,10 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import type { Column, Row } from '../../../../shared/ipc'
 import { reviewStore } from '../../store'
 import { Cell } from './Cell'
+import { ContextMenu, ContextMenuTrigger } from '../ui/context-menu'
 import { ROW_HEADER_WIDTH } from './layout'
+import { RowMenu } from './RowMenu'
 
 type Props = {
   row: Row
@@ -36,6 +38,9 @@ export const TableRow = memo(function TableRow({ row, columns, widths, top, live
 // The narrow strip on the left: the row's checkbox, plus a handle along the bottom edge
 // to drag the row taller or shorter (like the row header in the reference app).
 function RowHeader({ row }: { row: Row }): React.JSX.Element {
+  // The menu (spec §5) is only built while open.
+  const [menuOpen, setMenuOpen] = useState(false)
+
   const startDrag = (e: React.PointerEvent<HTMLDivElement>): void => {
     e.preventDefault()
     const handle = e.currentTarget
@@ -62,21 +67,27 @@ function RowHeader({ row }: { row: Row }): React.JSX.Element {
   }
 
   return (
-    <div
-      className="sticky left-0 z-10 flex shrink-0 items-start justify-center border-r bg-muted pt-2"
-      style={{ width: ROW_HEADER_WIDTH }}
-    >
-      <input
-        type="checkbox"
-        checked={row.checked}
-        aria-label="Check row"
-        onChange={(e) => void reviewStore.getState().setChecked([row.id], e.target.checked)}
-      />
-      <div
-        className="absolute inset-x-0 bottom-0 h-1.5 cursor-row-resize"
-        title="Drag to resize the row"
-        onPointerDown={startDrag}
-      />
-    </div>
+    <ContextMenu onOpenChange={setMenuOpen}>
+      <ContextMenuTrigger asChild>
+        <div
+          title="Right-click for row options"
+          className="sticky left-0 z-10 flex shrink-0 items-start justify-center border-r bg-muted pt-2"
+          style={{ width: ROW_HEADER_WIDTH }}
+        >
+          <input
+            type="checkbox"
+            checked={row.checked}
+            aria-label="Check row"
+            onChange={(e) => void reviewStore.getState().setChecked([row.id], e.target.checked)}
+          />
+          <div
+            className="absolute inset-x-0 bottom-0 h-1.5 cursor-row-resize"
+            title="Drag to resize the row"
+            onPointerDown={startDrag}
+          />
+        </div>
+      </ContextMenuTrigger>
+      {menuOpen && <RowMenu rowId={row.id} />}
+    </ContextMenu>
   )
 }

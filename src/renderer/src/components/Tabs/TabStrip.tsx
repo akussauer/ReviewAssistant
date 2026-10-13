@@ -1,0 +1,149 @@
+import { Plus, X } from 'lucide-react'
+import { useState } from 'react'
+import { MAIN_TAB_ID, type Tab } from '../../../../shared/ipc'
+import { moveItem } from '../../lib/columns'
+import { reviewStore, useReview } from '../../store'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '../ui/alert-dialog'
+import { Button } from '../ui/button'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger
+} from '../ui/context-menu'
+import { TabDialog, type TabDialogMode } from './TabDialog'
+
+// The tab strip (spec §8): Main first, without ×; user tabs with × (asks first; removes
+// the tab, not its rows); + for a new tab; right-click → Edit Tab; drag to reorder.
+export function TabStrip(): React.JSX.Element {
+  const tabs = useReview((s) => s.tabs)
+  const activeTabId = useReview((s) => s.activeTabId)
+  const [dialog, setDialog] = useState<TabDialogMode | null>(null)
+  const [closing, setClosing] = useState<Tab | null>(null)
+  const [dragFrom, setDragFrom] = useState<number | null>(null)
+
+  const userTabs = tabs.filter((t) => t.id !== MAIN_TAB_ID)
+
+  const drop = (target: number): void => {
+    if (dragFrom === null || dragFrom === target) return setDragFrom(null)
+    const from = userTabs.findIndex((t) => t.id === dragFrom)
+    const to = userTabs.findIndex((t) => t.id === target)
+    setDragFrom(null)
+    const order = moveItem(userTabs, from, to).map((t) => t.id)
+    reviewStore
+      .getState()
+      .reorderTabs(order)
+      .catch((err) => reviewStore.getState().reportError('Reordering tabs', err))
+  }
+
+  return (
+    <div
+      role="tablist"
+      className="flex items-end gap-0.5 overflow-x-auto border-b bg-muted/40 px-2 pt-1"
+    >
+      {tabs.map((tab) => {
+        const active = tab.id === activeTabId
+        const isMain = tab.id === MAIN_TAB_ID
+        const button = (
+          <div
+            role="tab"
+            aria-selected={active}
+            tabIndex={0}
+            draggable={!isMain}
+            onClick={() => reviewStore.getState().setActiveTab(tab.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') reviewStore.getState().setActiveTab(tab.id)
+            }}
+            onDragStart={() => setDragFrom(tab.id)}
+            onDragEnd={() => setDragFrom(null)}
+            onDragOver={(e) => !isMain && dragFrom !== null && e.preventDefault()}
+            onDrop={() => !isMain && drop(tab.id)}
+            className={`group flex shrink-0 cursor-pointer items-center gap-1 rounded-t-md border border-b-0 px-3 py-1 text-sm select-none ${
+              active
+                ? 'bg-background font-medium'
+                : 'border-transparent text-muted-foreground hover:bg-background/60'
+            }`}
+            title={isMain ? 'All rows' : `${tab.label} (${tab.rowIds.length} rows)`}
+          >
+            <span className="max-w-48 truncate">{tab.label}</span>
+            {tab.type === 'synthesis' && <span className="text-xs text-muted-foreground">Σ</span>}
+            {!isMain && (
+              <button
+                aria-label={`Close ${tab.label}`}
+                className="ml-1 rounded-sm p-0.5 opacity-60 hover:bg-accent hover:opacity-100"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setClosing(tab)
+                }}
+                onKeyDown={(e) => e.stopPropagation()}
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+        )
+        if (isMain) return <div key={tab.id}>{button}</div>
+        return (
+          <ContextMenu key={tab.id}>
+            <ContextMenuTrigger asChild>{button}</ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem onSelect={() => setDialog({ kind: 'edit', tab })}>
+                Edit Tab…
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
+        )
+      })}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="mb-0.5"
+        aria-label="New tab"
+        title="New tab"
+        onClick={() => setDialog({ kind: 'create', rowIds: [] })}
+      >
+        <Plus />
+      </Button>
+
+      {dialog && (
+        <TabDialog key={JSON.stringify(dialog)} mode={dialog} onClose={() => setDialog(null)} />
+      )}
+
+      {closing && (
+        <AlertDialog open onOpenChange={(open) => !open && setClosing(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {closing.label}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <i>{closing.label}</i>? Its rows stay in the main
+                table.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>No</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() =>
+                  reviewStore
+                    .getState()
+                    .deleteTab(closing.id)
+                    .catch((err) => reviewStore.getState().reportError('Deleting the tab', err))
+                }
+              >
+                Yes
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+    </div>
+  )
+}

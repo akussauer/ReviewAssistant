@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { Api, Column, ReviewSnapshot, Row, Settings } from '../../../shared/ipc'
 import { checkState, createReviewStore, tabRowIds } from './review'
 
@@ -57,16 +57,38 @@ type FakeApi = {
   file: { load: Mock<() => Promise<ReviewSnapshot>> }
   settings: { get: Mock<() => Promise<Settings>> }
   columns: { create: Mock; update: Mock; delete: Mock; reorder: Mock }
-  rows: { setHeight: Mock; setChecked: Mock; updateCell: Mock }
-  tabs: { update: Mock }
+  rows: { setHeight: Mock; setChecked: Mock; updateCell: Mock; create: Mock; delete: Mock }
+  tabs: {
+    update: Mock
+    create: Mock
+    delete: Mock
+    reorder: Mock
+    addRows: Mock
+    removeRows: Mock
+    setActive: Mock
+  }
 }
 function fakeApi(): FakeApi {
   return {
     file: { load: vi.fn(async () => snapshot()) },
     settings: { get: vi.fn(async () => SETTINGS) },
     columns: { create: vi.fn(), update: vi.fn(), delete: vi.fn(), reorder: vi.fn() },
-    rows: { setHeight: vi.fn(), setChecked: vi.fn(), updateCell: vi.fn() },
-    tabs: { update: vi.fn() }
+    rows: {
+      setHeight: vi.fn(),
+      setChecked: vi.fn(),
+      updateCell: vi.fn(),
+      create: vi.fn(),
+      delete: vi.fn()
+    },
+    tabs: {
+      update: vi.fn(async () => {}),
+      create: vi.fn(),
+      delete: vi.fn(),
+      reorder: vi.fn(),
+      addRows: vi.fn(),
+      removeRows: vi.fn(),
+      setActive: vi.fn(async () => {})
+    }
   }
 }
 
@@ -186,6 +208,113 @@ describe('review store', () => {
     api.columns.reorder.mockResolvedValueOnce([col(2, 0), col(1, 1)])
     await store.getState().reorderColumns([2, 1])
     expect(store.getState().columns.map((c) => c.id)).toEqual([2, 1])
+  })
+})
+
+describe('rows and tabs', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('adds a new row in manual order, to the tab, and keeps it visible', async () => {
+    // A tab's rows are always in main-table order (as main returns them).
+    store.setState((st) => ({
+      tabs: st.tabs.map((t) => (t.id === 2 ? { ...t, rowIds: [1, 3] } : t))
+    }))
+    api.rows.create.mockResolvedValueOnce({ ...row(7), position: 1.5 })
+    await store.getState().createRow({ after: 1, tabId: 2 })
+    const s = store.getState()
+    expect(s.rowOrder).toEqual([1, 7, 2, 3])
+    expect(tabRowIds(s, 2)).toEqual([1, 7, 3])
+    expect(s.keptRowIds).toEqual([7])
+    expect(s.lastCreatedRowId).toBe(7)
+  })
+
+  it('deleting rows removes them from every tab and adds the replacement row', async () => {
+    api.rows.delete.mockResolvedValueOnce({ deletedIds: [1, 3], replacement: null })
+    await store.getState().deleteRows([1, 3])
+    const s = store.getState()
+    expect(s.rowOrder).toEqual([2])
+    expect(s.rowsById[1]).toBeUndefined()
+    expect(tabRowIds(s, 2)).toEqual([])
+
+    api.rows.delete.mockResolvedValueOnce({ deletedIds: [2], replacement: row(9) })
+    await store.getState().deleteRows([2])
+    expect(store.getState().rowOrder).toEqual([9])
+  })
+
+  it('shows filters at once, saves them shortly after, and forgets kept rows', async () => {
+    vi.useFakeTimers()
+    store.setState({ keptRowIds: [3] })
+    store.getState().setView(2, { search: 'pac' })
+    store.getState().setView(2, { search: 'pacing' })
+    expect(store.getState().tabs[1].view.search).toBe('pacing')
+    expect(store.getState().keptRowIds).toEqual([])
+    expect(api.tabs.update).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(500)
+    expect(api.tabs.update).toHaveBeenCalledTimes(1)
+    expect(api.tabs.update).toHaveBeenCalledWith({ id: 2, view: { search: 'pacing' } })
+  })
+
+  it('creates a tab and switches to it; deleting it returns to Main', async () => {
+    const tab = {
+      id: 5,
+      label: 'New',
+      type: 'review',
+      position: 2,
+      assistantEnabled: false,
+      view: {},
+      rowIds: []
+    }
+    api.tabs.create.mockResolvedValueOnce(tab)
+    await store.getState().createTab({ label: 'New', type: 'review' })
+    expect(store.getState().activeTabId).toBe(5)
+    expect(api.tabs.setActive).toHaveBeenCalledWith(5)
+    await store.getState().deleteTab(5)
+    expect(store.getState().activeTabId).toBe(1)
+    expect(store.getState().tabs.map((t) => t.id)).toEqual([1, 2])
+  })
+
+  it("keeps this window's view when main sends a tab back", async () => {
+    vi.useFakeTimers()
+    store.getState().setView(2, { search: 'typed just now' })
+    // Main's copy still has the old (empty) view: the save hasn't happened yet.
+    api.tabs.removeRows.mockResolvedValueOnce({ ...snapshot().tabs[1], rowIds: [3] })
+    await store.getState().removeRowsFromTab(2, [1])
+    expect(store.getState().tabs[1]).toMatchObject({
+      rowIds: [3],
+      view: { search: 'typed just now' }
+    })
+  })
+
+  it('switching tabs saves waiting view changes and forgets kept/new rows', async () => {
+    vi.useFakeTimers()
+    store.setState({ keptRowIds: [3], lastCreatedRowId: 3 })
+    store.getState().setView(1, { search: 'x' })
+    store.getState().setActiveTab(2)
+    expect(api.tabs.update).toHaveBeenCalledWith({ id: 1, view: { search: 'x' } }) // no wait
+    expect(store.getState()).toMatchObject({ keptRowIds: [], lastCreatedRowId: null })
+  })
+
+  it('drops the filter of a deleted column', async () => {
+    store.getState().setView(2, { filters: { '1': 'pacing', '2': 'x' } })
+    await store.getState().deleteColumn(1)
+    expect(store.getState().tabs.find((t) => t.id === 2)?.view.filters).toEqual({ '2': 'x' })
+  })
+
+  it('undoes a failed tab reorder and shows the error', async () => {
+    const extra = { ...snapshot().tabs[1], id: 3, label: 'U' }
+    store.setState((s) => ({ tabs: [...s.tabs, extra] }))
+    api.tabs.reorder.mockRejectedValueOnce(new Error('disk full'))
+    await expect(store.getState().reorderTabs([3, 2])).rejects.toThrow()
+    expect(store.getState().tabs.map((t) => t.id)).toEqual([1, 2, 3])
+    store.getState().reportError('Reordering tabs', new Error('disk full'))
+    expect(store.getState().notice).toBe('Reordering tabs failed: disk full')
+  })
+
+  it('passes errors on, for dialogs to show', async () => {
+    api.tabs.create.mockRejectedValueOnce(new Error('A tab named "T" already exists'))
+    await expect(store.getState().createTab({ label: 'T', type: 'review' })).rejects.toThrow(
+      /already exists/
+    )
   })
 })
 

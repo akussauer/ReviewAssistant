@@ -115,7 +115,15 @@ export type TabType = 'main' | 'review' | 'synthesis'
 // A tab's saved view state. M3 stores the sort; M5 adds filters and search.
 // Unknown keys are kept, so older/newer files don't lose each other's settings.
 export type SortSpec = { columnId: number; desc: boolean }
-export type TabView = { sort?: SortSpec | null; [key: string]: unknown }
+// filters: per column id, what's typed in the filter box. Text/number/date: a query or
+// comparison (">2015", "2010..2020"); dropdown: an option id; checkbox: 'checked' |
+// 'unchecked'. Missing or '' = no filter.
+export type TabView = {
+  sort?: SortSpec | null
+  search?: string
+  filters?: Record<string, string>
+  [key: string]: unknown
+}
 
 export type Tab = {
   id: number

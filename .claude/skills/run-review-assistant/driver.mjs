@@ -50,14 +50,14 @@ const sel = {
   header: (label) => `[title="${label}: click to sort, drag to move"]`,
   rows: '.absolute.top-0.left-0.flex.border-b',
   rowHandle: '[title="Drag to resize the row"]',
-  corner: '[aria-label="Check all rows in this tab"]',
+  corner: '[aria-label="Check all rows shown in this tab"]',
   rowCheck: '[aria-label="Check row"]',
   scroller: '.overflow-auto'
 }
 
 async function waitForApp() {
   // Ready = welcome screen or the table's status bar.
-  await page.waitForSelector('text=/New review|rows ·/', { timeout: 30000 })
+  await page.waitForSelector('text=/New review|rows( shown)? ·/', { timeout: 30000 })
 }
 
 const COMMANDS = {
@@ -128,7 +128,7 @@ const COMMANDS = {
 
   async status() {
     need()
-    out('status:', (await page.locator('text=/rows ·/').textContent().catch(() => null)) ?? '(no table: welcome screen?)')
+    out('status:', (await page.locator('text=/rows( shown)? ·/').textContent().catch(() => null)) ?? '(no table: welcome screen?)')
   },
 
   async headers() {
@@ -272,6 +272,36 @@ const COMMANDS = {
     need()
     await page.click(css)
     out('clicked', css)
+  },
+  // menu <item text>: click an item in the open context menu or submenu (exact text, or
+  // starting with it, e.g. `menu Add checked rows`). Opens submenus too.
+  async menu(text) {
+    need()
+    const items = page.getByRole('menuitem')
+    const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const exact = items.filter({ hasText: new RegExp(`^\\s*${escaped}`) })
+    await exact.first().click()
+    out('menu', text)
+  },
+  // tab <label>: switch to a tab in the tab strip.
+  async tab(label) {
+    need()
+    await page.getByRole('tab', { name: label, exact: false }).filter({ hasText: label }).first().click()
+    await page.waitForTimeout(200)
+    out('tab', label)
+  },
+  // drag <x1> <y1> <x2> <y2>: press at one point and move to another in small steps
+  // (real HTML drag-and-drop needs the steps; synthetic DragEvents all fire in one tick).
+  async drag(arg) {
+    need()
+    const [x1, y1, x2, y2] = arg.split(/\s+/).map(Number)
+    await page.mouse.move(x1, y1)
+    await page.mouse.down()
+    await page.mouse.move(x1 + 5, y1, { steps: 3 })
+    await page.mouse.move(x2, y2, { steps: 12 })
+    await page.mouse.up()
+    await page.waitForTimeout(400)
+    out('dragged', arg)
   },
   // rclick <css>: right-click (opens the column menu on a header, the edit menu in a cell).
   async rclick(css) {

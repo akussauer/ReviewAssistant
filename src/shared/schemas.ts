@@ -71,7 +71,9 @@ export const CheckAllSchema = z.boolean()
 
 const TabType = z.enum(['review', 'synthesis'])
 const View = z.looseObject({
-  sort: z.object({ columnId: Id, desc: z.boolean() }).nullable().optional()
+  sort: z.object({ columnId: Id, desc: z.boolean() }).nullable().optional(),
+  search: z.string().max(2000).optional(),
+  filters: z.record(z.string(), z.string().max(2000)).optional()
 }) satisfies z.ZodType<TabView>
 
 export const TabCreateSchema = z.object({

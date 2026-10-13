@@ -81,6 +81,9 @@ review is `%TEMP%\ra-driver\test.review`. Open the PNGs and look at them.
 | `check <i>` / `check all` | tick visible row i / click the corner check-all box |
 | `scroll-perf` | scroll the whole table, report frame times and rendered row count |
 | `ss [name]` | screenshot |
+| `tab <label>` | switch tabs in the tab strip |
+| `menu <item>` | click an item in the open context menu/submenu (text start), e.g. `menu Add checked rows`, then `menu Tab 2` |
+| `drag <x1> <y1> <x2> <y2>` | real mouse drag in steps, e.g. to reorder tabs (get centres with `eval` + `getBoundingClientRect`) |
 | `rclick <css>` | right-click, e.g. a header (`[title="Year: click to sort, drag to move"]`) for the column menu |
 | `select <css> > <label>` | pick an option in a `<select>`, e.g. `select #col-type > Dropdown` in the column dialog |
 | `wheel <css> <dy>` | hover and turn the mouse wheel; prints the value before/after (cells must ignore it) |
@@ -126,6 +129,17 @@ are the checks.
 - **The spelling/clipboard right-click menu is a native Electron menu**: it doesn't show in
   page screenshots and Playwright can't click it. Check spellcheck by looking for the red
   underline in a screenshot (the dictionary downloads on first use; allow a few seconds).
+- **Use `menu`, not `click-text`, inside context menus.** While a Radix menu is open the
+  rest of the page ignores the pointer, and `click-text Tab 2` hits the tab strip's "Tab 2"
+  first, so it times out. Row menu: `rclick :nth-match([title="Right-click for row options"], 1)`.
+- **Status reads "N rows · …" or "X of N rows shown · …"** when filters/search are on.
+  `status` and the launch readiness check accept both.
+- **Search/filter boxes apply 150 ms after typing stops** and save ~400 ms later; `sleep 500`
+  before reading `status`. Focus the box (`click [aria-label="Search this tab"]`) before
+  `press Control+A`, or the keys go to whatever had focus last.
+- **Synthetic `DragEvent`s don't work for React drag-and-drop.** Dispatching dragstart →
+  drop in one `eval` runs before React stores which item is dragged, so nothing moves. Use
+  `drag` (a real stepwise mouse drag) instead.
 - **Rows have no ids in the DOM.** Commands address visible rows by index
   (`.absolute.top-0.left-0.flex.border-b`); after a sort, index 0 is the first sorted row.
 - **Dev mode is slower.** `scroll-perf` with 2,000 rows: built ≈ 10 ms median / 12 ms p95;

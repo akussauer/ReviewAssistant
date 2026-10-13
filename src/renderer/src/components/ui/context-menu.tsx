@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { ContextMenu as ContextMenuPrimitive } from 'radix-ui'
+import { ChevronRightIcon } from 'lucide-react'
 import { cn } from 'cn'
 
 // shadcn/ui ContextMenu: the menu that opens on right-click of its trigger.
@@ -66,7 +67,54 @@ function ContextMenuSeparator({
   )
 }
 
+function ContextMenuSub(
+  props: React.ComponentProps<typeof ContextMenuPrimitive.Sub>
+): React.JSX.Element {
+  return <ContextMenuPrimitive.Sub data-slot="context-menu-sub" {...props} />
+}
+
+function ContextMenuSubTrigger({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof ContextMenuPrimitive.SubTrigger>): React.JSX.Element {
+  return (
+    <ContextMenuPrimitive.SubTrigger
+      data-slot="context-menu-sub-trigger"
+      className={cn(
+        'flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm outline-hidden select-none focus:bg-accent data-[disabled]:opacity-50 data-[state=open]:bg-accent',
+        className
+      )}
+      {...props}
+    >
+      {children}
+      <ChevronRightIcon className="ml-auto size-4" />
+    </ContextMenuPrimitive.SubTrigger>
+  )
+}
+
+function ContextMenuSubContent({
+  className,
+  ...props
+}: React.ComponentProps<typeof ContextMenuPrimitive.SubContent>): React.JSX.Element {
+  return (
+    <ContextMenuPrimitive.Portal>
+      <ContextMenuPrimitive.SubContent
+        data-slot="context-menu-sub-content"
+        className={cn(
+          'z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg',
+          className
+        )}
+        {...props}
+      />
+    </ContextMenuPrimitive.Portal>
+  )
+}
+
 export {
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,

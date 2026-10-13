@@ -4,6 +4,9 @@ import { createReviewStore, type ReviewState } from './review'
 // The app's single store, talking to main through window.api.
 export const reviewStore = createReviewStore(window.api)
 
+// Closing or reloading the window: save view changes (search/filters) still waiting.
+window.addEventListener('beforeunload', () => reviewStore.getState().flushViews())
+
 // React hook: `useReview((s) => s.columns)` re-renders the component only when the
 // selected value changes. Selectors that build new arrays/objects need `useShallow`.
 export function useReview<T>(selector: (state: ReviewState) => T): T {
