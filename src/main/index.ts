@@ -89,7 +89,9 @@ app.whenReady().then(() => {
 
   reopenLast()
   refreshMenu()
-  registerIpc()
+  // import.meta.env.DEV is true only under `npm run dev`; a built app, even unpackaged,
+  // never gets the dev-only channels.
+  registerIpc({ dev: import.meta.env.DEV })
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

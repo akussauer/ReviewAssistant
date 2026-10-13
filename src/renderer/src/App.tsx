@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { CellValue, FileInfo, ReviewSnapshot } from '../../shared/ipc'
-import { ArticleTable } from './components/ArticleTable/ArticleTable'
+import { useEffect, useState } from 'react'
+import { MAIN_TAB_ID, type FileInfo } from '../../shared/ipc'
+import { ReviewTable } from './components/ReviewTable/ReviewTable'
+import { Button } from './components/ui/button'
 import { Welcome } from './components/Welcome/Welcome'
+import { reviewStore, useReview } from './store'
 
 function App(): React.JSX.Element | null {
   // undefined = still asking main; null = no file open.
@@ -27,30 +29,59 @@ function App(): React.JSX.Element | null {
   return <ReviewView key={`${file.path}#${file.generation}`} />
 }
 
-// Temporary until M3 brings the Zustand store and the real table.
+// The open review. Loads the file into the store, then shows the main table.
+// (The tab strip arrives in M5; until then only the main tab is shown.)
 function ReviewView(): React.JSX.Element | null {
-  const [snapshot, setSnapshot] = useState<ReviewSnapshot | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const status = useReview((s) => s.status)
+  const error = useReview((s) => s.error)
 
   useEffect(() => {
-    window.api.file
-      .load()
-      .then(setSnapshot)
-      .catch((err) => setError(String(err)))
+    void reviewStore.getState().load()
   }, [])
 
-  const handleUpdate = useCallback(async (rowId: number, columnId: number, value: CellValue) => {
+  if (status === 'error') {
+    return <p className="p-4 text-sm text-destructive">Could not load the file: {error}</p>
+  }
+  if (status === 'loading') return null
+  return (
+    <div className="flex h-screen flex-col">
+      <StatusBar />
+      <ReviewTable tabId={MAIN_TAB_ID} />
+    </div>
+  )
+}
+
+function StatusBar(): React.JSX.Element {
+  const rowCount = useReview((s) => s.rowOrder.length)
+  const checkedCount = useReview((s) => s.rowOrder.filter((id) => s.rowsById[id]?.checked).length)
+  const [seeding, setSeeding] = useState(false)
+
+  // Development only (import.meta.env.DEV is false in a packaged build, and main doesn't
+  // register the channel there): adds 2,000 random rows to test scrolling performance.
+  const seed = async (): Promise<void> => {
+    setSeeding(true)
     try {
-      const updated = await window.api.rows.updateCell(rowId, columnId, value)
-      setSnapshot((s) => s && { ...s, rows: s.rows.map((r) => (r.id === rowId ? updated : r)) })
+      await window.api.dev?.seed(2000)
+      await reviewStore.getState().load()
     } catch (err) {
-      console.error('Update failed', err)
+      console.error('Seeding failed', err)
+    } finally {
+      setSeeding(false)
     }
-  }, [])
+  }
 
-  if (error) return <p className="p-4 text-sm text-destructive">Could not load the file: {error}</p>
-  if (!snapshot) return null
-  return <ArticleTable columns={snapshot.columns} rows={snapshot.rows} onUpdate={handleUpdate} />
+  return (
+    <div className="flex items-center gap-3 border-b px-3 py-1.5 text-xs text-muted-foreground">
+      <span>
+        {rowCount} rows · {checkedCount} checked
+      </span>
+      {window.api.dev && (
+        <Button size="xs" variant="outline" className="ml-auto" disabled={seeding} onClick={seed}>
+          {seeding ? 'Seeding…' : 'Dev: seed 2,000 rows'}
+        </Button>
+      )}
+    </div>
+  )
 }
 
 export default App

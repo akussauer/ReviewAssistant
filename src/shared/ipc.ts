@@ -28,6 +28,7 @@ export const IPC = {
   tabsAddRows: 'tabs:add-rows',
   tabsRemoveRows: 'tabs:remove-rows',
   tabsSetActive: 'tabs:set-active',
+  devSeed: 'dev:seed', // only registered in development builds
   // Events (main -> renderer, pushed without a request)
   fileChanged: 'file:changed'
 } as const
@@ -109,13 +110,18 @@ export type TabUsage = { rows: number; tabs: number }
 export const MAIN_TAB_ID = 1
 export type TabType = 'main' | 'review' | 'synthesis'
 
+// A tab's saved view state. M3 stores the sort; M5 adds filters and search.
+// Unknown keys are kept, so older/newer files don't lose each other's settings.
+export type SortSpec = { columnId: number; desc: boolean }
+export type TabView = { sort?: SortSpec | null; [key: string]: unknown }
+
 export type Tab = {
   id: number
   label: string
   type: TabType
   position: number
   assistantEnabled: boolean
-  view: Record<string, unknown> // per-tab sort/filters/search (shape defined in M5)
+  view: TabView
   rowIds: number[] // in main-table order; always empty for the main tab
 }
 
@@ -126,7 +132,7 @@ export type TabUpdateInput = {
   label?: string
   type?: 'review' | 'synthesis'
   assistantEnabled?: boolean
-  view?: Record<string, unknown>
+  view?: TabView
 }
 
 // ---- Files --------------------------------------------------------------------
@@ -184,5 +190,9 @@ export type Api = {
     addRows(tabId: number, rowIds: number[]): Promise<Tab>
     removeRows(tabId: number, rowIds: number[]): Promise<Tab>
     setActive(tabId: number): Promise<void>
+  }
+  // Only under `npm run dev`: undefined in a built app, and main doesn't register it.
+  dev?: {
+    seed(count: number): Promise<void>
   }
 }

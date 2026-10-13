@@ -10,6 +10,7 @@ import {
   type ColumnUpdateInput,
   type RowCreateInput,
   type TabCreateInput,
+  type TabView,
   type TabUpdateInput
 } from './ipc'
 
@@ -63,7 +64,9 @@ export const SetCheckedSchema = z.object({ rowIds: IdList, checked: z.boolean() 
 export const CheckAllSchema = z.boolean()
 
 const TabType = z.enum(['review', 'synthesis'])
-const View = z.record(z.string(), z.unknown())
+const View = z.looseObject({
+  sort: z.object({ columnId: Id, desc: z.boolean() }).nullable().optional()
+}) satisfies z.ZodType<TabView>
 
 export const TabCreateSchema = z.object({
   label: Label,
@@ -78,5 +81,7 @@ export const TabUpdateSchema = z.object({
   assistantEnabled: z.boolean().optional(),
   view: View.optional()
 }) satisfies z.ZodType<TabUpdateInput>
+
+export const SeedCountSchema = z.number().int().min(1).max(100_000)
 
 export const TabRowsSchema = z.object({ tabId: Id, rowIds: IdList })

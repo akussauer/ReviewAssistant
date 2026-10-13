@@ -1,0 +1,9 @@
+{
+  "name": "run-review-assistant-driver",
+  "private": true,
+  "description": "Agent tooling only: Playwright driver for the Review Assistant app. Not an app dependency.",
+  "type": "module",
+  "dependencies": {
+    "playwright-core": "1.48.2"
+  }
+}

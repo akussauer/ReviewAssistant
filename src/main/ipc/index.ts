@@ -8,6 +8,7 @@ import {
   NoInput,
   PathInput,
   RowCreateSchema,
+  SeedCountSchema,
   SetCheckedSchema,
   SetHeightSchema,
   TabCreateSchema,
@@ -45,6 +46,7 @@ import {
   setActiveTabId,
   updateTab
 } from '../db/tabs'
+import { seedRows } from '../db/dev-seed'
 import {
   currentFile,
   destructive,
@@ -56,7 +58,7 @@ import {
 } from '../review'
 import { handle } from './handle'
 
-export function registerIpc(): void {
+export function registerIpc({ dev }: { dev: boolean }): void {
   // ---- Files
   handle(IPC.fileCurrent, NoInput, currentFile)
   handle(IPC.fileNew, NoInput, newReviewDialog)
@@ -113,4 +115,7 @@ export function registerIpc(): void {
     removeRowsFromTab(getDb(), tabId, rowIds)
   )
   handle(IPC.tabsSetActive, Id, (id) => setActiveTabId(getDb(), id))
+
+  // ---- Development only
+  if (dev) handle(IPC.devSeed, SeedCountSchema, (count) => seedRows(getDb(), count))
 }

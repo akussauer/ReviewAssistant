@@ -45,7 +45,9 @@ const api: Api = {
     addRows: (tabId, rowIds) => invoke(IPC.tabsAddRows, { tabId, rowIds }),
     removeRows: (tabId, rowIds) => invoke(IPC.tabsRemoveRows, { tabId, rowIds }),
     setActive: (tabId) => invoke(IPC.tabsSetActive, tabId)
-  }
+  },
+  // Only present under `npm run dev` (see Api.dev).
+  ...(import.meta.env.DEV ? { dev: { seed: (count: number) => invoke(IPC.devSeed, count) } } : {})
 }
 
 contextBridge.exposeInMainWorld('api', api)
