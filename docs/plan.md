@@ -215,6 +215,12 @@ The main tab shows all rows, so it has no `tab_rows` entries.
 
 **Accept:** editing a row inside a tab updates the main table and every other tab immediately; *Remove* leaves the row in the main table; *Delete* warns about tab membership; filters reproduce `Proxy.filterAcceptsRow` semantics (unit tests).
 
+### M5a - Rows, checked
+- Top banner that shows the amount of rows and checked rows should be moved to the bottom of the page (right now it is at the top)
+- Right-click on row-index + "add row" below or above should be enabled (right now the only way to add a row is "CTRL + N")
+- Check/uncheck all right-click menu options (when clicking row index) can be removed as there is a checkbox in the top left that allows the same functionality
+- column resizing triggers a dark grey highlight at the same time the cursor changes, the highlight should be removed so the function matches the row height change interaction
+
 ### M6 – File menu, import/export, settings
 - Save As (with "only checked rows?"), Export CSV (checked-only prompt, TRUE/FALSE, Downloads default), Export JSON
 - **Importer for PySide JSON (v1 and v2), tested on your real file**
@@ -253,12 +259,12 @@ The main tab shows all rows, so it has no `tab_rows` entries.
 
 ---
 ## 7. Progress
-- [ ] Setup
-- [ ] M1 Align scaffold
-- [ ] M2 Files and data layer
-- [ ] M3 Table
-- [ ] M4 Cells and columns
-- [ ] M5 Rows, tabs, filters
+- [X] Setup
+- [X] M1 Align scaffold
+- [X] M2 Files and data layer
+- [X] M3 Table
+- [X] M4 Cells and columns
+- [X] M5 Rows, tabs, filters
 - [ ] M6 File menu, import/export, settings
 - [ ] M7 Assistant
 - [ ] M8 Synthesis
