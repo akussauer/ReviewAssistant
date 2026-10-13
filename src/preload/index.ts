@@ -22,6 +22,9 @@ const api: Api = {
       return () => ipcRenderer.removeListener(IPC.fileChanged, listener)
     }
   },
+  settings: {
+    get: () => invoke(IPC.settingsGet)
+  },
   columns: {
     create: (input) => invoke(IPC.columnsCreate, input),
     update: (input) => invoke(IPC.columnsUpdate, input),
@@ -30,7 +33,8 @@ const api: Api = {
   },
   rows: {
     create: (input) => invoke(IPC.rowsCreate, input),
-    updateCell: (rowId, columnId, value) => invoke(IPC.rowsUpdateCell, { rowId, columnId, value }),
+    updateCell: (rowId, columnId, value, generation) =>
+      invoke(IPC.rowsUpdateCell, { rowId, columnId, value, generation }),
     setHeight: (rowId, height) => invoke(IPC.rowsSetHeight, { rowId, height }),
     setChecked: (rowIds, checked) => invoke(IPC.rowsSetChecked, { rowIds, checked }),
     checkAll: (checked) => invoke(IPC.rowsCheckAll, checked),

@@ -1,35 +1,36 @@
 import { memo } from 'react'
 import type { CellValue, Column } from '../../../../shared/ipc'
-import { displayValue } from '../../lib/sort'
-import { reviewStore } from '../../store'
-import { EditableCell } from './EditableCell'
+import { CheckboxCell, DateCell, DropdownCell, NumberCell } from './cells/FieldCells'
+import { TextCell } from './cells/TextCell'
 
-type Props = { rowId: number; column: Column; value: CellValue | undefined }
+type Props = {
+  rowId: number
+  column: Column
+  value: CellValue | undefined
+  live: boolean // false while the table scrolls (see TextCell)
+}
 
-// One cell. Display only for dropdowns and checkboxes until M4 adds their editors.
+// One always-editable cell, picked by column type (spec §4.1).
 // memo: a cell re-renders only when its own value or column changes.
-export const Cell = memo(function Cell({ rowId, column, value }: Props): React.JSX.Element {
+export const Cell = memo(function Cell({ rowId, column, value, live }: Props): React.JSX.Element {
   switch (column.type) {
-    case 'checkbox':
+    case 'text':
       return (
-        <input
-          type="checkbox"
-          className="pointer-events-none mt-1"
-          checked={value === true}
-          readOnly
-          tabIndex={-1}
-          aria-label={column.label}
+        <TextCell
+          rowId={rowId}
+          columnId={column.id}
+          label={column.label}
+          value={value}
+          live={live}
         />
       )
     case 'dropdown':
-      return <div className="truncate">{displayValue(column, value)}</div>
-    default:
-      return (
-        <EditableCell
-          value={value}
-          type={column.type}
-          onCommit={(v) => reviewStore.getState().updateCell(rowId, column.id, v)}
-        />
-      )
+      return <DropdownCell rowId={rowId} column={column} value={value} />
+    case 'checkbox':
+      return <CheckboxCell rowId={rowId} column={column} value={value} />
+    case 'date':
+      return <DateCell rowId={rowId} column={column} value={value} />
+    case 'number':
+      return <NumberCell rowId={rowId} column={column} value={value} />
   }
 })

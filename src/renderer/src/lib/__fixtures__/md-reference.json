@@ -1,0 +1,396 @@
+[
+  {
+    "line": "# Heading one",
+    "format": [
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false]
+    ]
+  },
+  {
+    "line": "###### Six",
+    "format": [
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false]
+    ]
+  },
+  {
+    "line": "#NoSpace",
+    "format": [null, null, null, null, null, null, null, null]
+  },
+  {
+    "line": "Some **bold** text",
+    "format": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [true, false],
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  {
+    "line": "Some *italic* text",
+    "format": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  {
+    "line": "**bold** and *it*",
+    "format": [
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      null,
+      null,
+      null
+    ]
+  },
+  {
+    "line": "~~gone~~ here",
+    "format": [
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  {
+    "line": "1. first",
+    "format": [[false, false], [false, false], null, null, null, null, null, null]
+  },
+  {
+    "line": "10. tenth",
+    "format": [[false, false], [false, false], [false, false], null, null, null, null, null, null]
+  },
+  {
+    "line": "- item",
+    "format": [[false, false], [false, false], null, null, null, null]
+  },
+  {
+    "line": "* star item",
+    "format": [[false, false], [false, false], null, null, null, null, null, null, null, null, null]
+  },
+  {
+    "line": "Use `code` here",
+    "format": [
+      null,
+      null,
+      null,
+      null,
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  {
+    "line": "> quoted line",
+    "format": [
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false]
+    ]
+  },
+  {
+    "line": "line<br>break<br/>x",
+    "format": [
+      null,
+      null,
+      null,
+      null,
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      null,
+      null,
+      null,
+      null,
+      null,
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      null
+    ]
+  },
+  {
+    "line": "- [ ] todo",
+    "format": [
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  {
+    "line": "- [x] done",
+    "format": [
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  {
+    "line": "see [link](http://a.b) now",
+    "format": [
+      null,
+      null,
+      null,
+      null,
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  {
+    "line": "---",
+    "format": [
+      [false, false],
+      [false, false],
+      [false, false]
+    ]
+  },
+  {
+    "line": "***",
+    "format": [
+      [false, false],
+      [false, false],
+      [false, false]
+    ]
+  },
+  {
+    "line": "plain words only",
+    "format": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  {
+    "line": "**unclosed bold",
+    "format": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  {
+    "line": "a * b * c",
+    "format": [
+      null,
+      null,
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      null,
+      null
+    ]
+  },
+  {
+    "line": "- [ ] **bold task** with `code`",
+    "format": [
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true],
+      [true, false],
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false]
+    ]
+  },
+  {
+    "line": "> *quote italic*",
+    "format": [
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false]
+    ]
+  },
+  {
+    "line": "",
+    "format": []
+  }
+]

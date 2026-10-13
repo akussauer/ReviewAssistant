@@ -7,11 +7,14 @@ import {
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Row } from '../../../../shared/ipc'
+import type { Column, Row } from '../../../../shared/ipc'
+import { matchesHotkey } from '../../lib/hotkeys'
 import { moveColumn } from '../../lib/columns'
 import { nextSort, sortRowIds } from '../../lib/sort'
 import { reviewStore, useReview } from '../../store'
 import { checkState, MIN_COLUMN_WIDTH, tabRowIds } from '../../store/review'
+import { ColumnDialog, type ColumnDialogMode } from './ColumnDialog'
+import { DeleteColumnDialog } from './DeleteColumnDialog'
 import { HeaderCell } from './HeaderCell'
 import { HEADER_HEIGHT, ROW_HEADER_WIDTH } from './layout'
 import { TableRow } from './TableRow'
@@ -104,6 +107,23 @@ export function ReviewTable({ tabId }: { tabId: number }): React.JSX.Element {
   // ---- Column drag-to-reorder
   const [dragging, setDragging] = useState<number | null>(null)
 
+  // ---- Column dialogs: header menu and the new-column hotkey (Ctrl+Shift+N)
+  const [columnDialog, setColumnDialog] = useState<ColumnDialogMode | null>(null)
+  const [deleting, setDeleting] = useState<Column | null>(null)
+  const newColumnKey = useReview((s) => s.settings?.hotkeys.newColumn ?? 'CmdOrCtrl+Shift+N')
+  const columnCount = columns.length
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!matchesHotkey(e, newColumnKey, navigator.platform.startsWith('Mac'))) return
+      if (document.querySelector('[role=dialog], [role=alertdialog]')) return // one dialog at a time
+      e.preventDefault()
+      setColumnDialog({ kind: 'create', index: columnCount })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [newColumnKey, columnCount])
+  const markdownColour = useReview((s) => s.settings?.markdownColour)
+
   // ---- Virtual rows (TanStack Virtual)
   const scrollRef = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizer({
@@ -117,7 +137,12 @@ export function ReviewTable({ tabId }: { tabId: number }): React.JSX.Element {
   useEffect(() => virtualizer.measure(), [virtualizer, ids, rowsById])
 
   return (
-    <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-auto">
+    <div
+      ref={scrollRef}
+      className="relative min-h-0 flex-1 overflow-auto"
+      // Text cells colour markdown with this (Settings > Markdown colour).
+      style={{ '--md-colour': markdownColour } as React.CSSProperties}
+    >
       <div
         className="relative"
         style={{ width: totalWidth, height: virtualizer.getTotalSize() + HEADER_HEIGHT }}
@@ -155,6 +180,12 @@ export function ReviewTable({ tabId }: { tabId: number }): React.JSX.Element {
                   setDragging(null)
                   void reviewStore.getState().reorderColumns(order)
                 }}
+                onMenu={(action) => {
+                  if (action === 'insert-before') setColumnDialog({ kind: 'create', index: i })
+                  if (action === 'insert-after') setColumnDialog({ kind: 'create', index: i + 1 })
+                  if (action === 'edit') setColumnDialog({ kind: 'edit', column })
+                  if (action === 'delete') setDeleting(column)
+                }}
               />
             )
           })}
@@ -170,10 +201,21 @@ export function ReviewTable({ tabId }: { tabId: number }): React.JSX.Element {
               columns={columns}
               widths={stableWidths}
               top={item.start + HEADER_HEIGHT}
+              live={!virtualizer.isScrolling}
             />
           )
         })}
       </div>
+
+      {columnDialog && (
+        <ColumnDialog
+          // A new key per opening resets the form.
+          key={JSON.stringify(columnDialog)}
+          mode={columnDialog}
+          onClose={() => setColumnDialog(null)}
+        />
+      )}
+      {deleting && <DeleteColumnDialog column={deleting} onClose={() => setDeleting(null)} />}
     </div>
   )
 }

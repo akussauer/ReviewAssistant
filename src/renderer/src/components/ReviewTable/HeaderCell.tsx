@@ -3,6 +3,15 @@ import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useState } from 'react'
 import type { Column, Row } from '../../../../shared/ipc'
 import type { DropSide } from '../../lib/columns'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger
+} from '../ui/context-menu'
+
+export type ColumnMenuAction = 'insert-before' | 'insert-after' | 'edit' | 'delete'
 
 type Props = {
   header: Header<Row, unknown>
@@ -14,10 +23,11 @@ type Props = {
   onDragStart: () => void
   onDragEnd: () => void
   onDrop: (side: DropSide) => void
+  onMenu: (action: ColumnMenuAction) => void
 }
 
-// One column header: click the name to sort, drag the name to move the column, and drag
-// the right-hand divider to resize it.
+// One column header: click the name to sort, drag the name to move the column, drag the
+// right-hand divider to resize it, right-click for the column menu (spec §4.2).
 export function HeaderCell(props: Props): React.JSX.Element {
   const { header, column, sortDir, dragging } = props
   const [dropSide, setDropSide] = useState<DropSide | null>(null)
@@ -29,55 +39,72 @@ export function HeaderCell(props: Props): React.JSX.Element {
   }
 
   return (
-    <div
-      className="relative flex shrink-0 items-center border-r border-b bg-muted text-sm font-medium"
-      style={{ width: header.getSize() }}
-      onDragOver={(e) => {
-        if (!canDrop) return
-        e.preventDefault() // allows dropping here
-        setDropSide(sideOf(e))
-      }}
-      onDragLeave={() => setDropSide(null)}
-      onDrop={(e) => {
-        if (!canDrop) return
-        e.preventDefault()
-        setDropSide(null)
-        props.onDrop(sideOf(e))
-      }}
-    >
-      {/* Drop indicator: a bar on the side where the column will land. */}
-      {dropSide && (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
         <div
-          className={`absolute inset-y-0 w-0.5 bg-primary ${dropSide === 'before' ? 'left-0' : 'right-0'}`}
-        />
-      )}
+          className="relative flex shrink-0 items-center border-r border-b bg-muted text-sm font-medium"
+          style={{ width: header.getSize() }}
+          onDragOver={(e) => {
+            if (!canDrop) return
+            e.preventDefault() // allows dropping here
+            setDropSide(sideOf(e))
+          }}
+          onDragLeave={() => setDropSide(null)}
+          onDrop={(e) => {
+            if (!canDrop) return
+            e.preventDefault()
+            setDropSide(null)
+            props.onDrop(sideOf(e))
+          }}
+        >
+          {/* Drop indicator: a bar on the side where the column will land. */}
+          {dropSide && (
+            <div
+              className={`absolute inset-y-0 w-0.5 bg-primary ${dropSide === 'before' ? 'left-0' : 'right-0'}`}
+            />
+          )}
 
-      <div
-        className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-1 px-2 select-none"
-        draggable
-        title={`${column.label}: click to sort, drag to move`}
-        onClick={props.onSort}
-        onDragStart={(e) => {
-          e.dataTransfer.effectAllowed = 'move'
-          e.dataTransfer.setData('text/plain', column.label)
-          props.onDragStart()
-        }}
-        onDragEnd={props.onDragEnd}
-      >
-        <span className="truncate">{column.label}</span>
-        {sortDir === 'asc' && <ArrowUp className="size-3.5 shrink-0" />}
-        {sortDir === 'desc' && <ArrowDown className="size-3.5 shrink-0" />}
-      </div>
+          <div
+            className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-1 px-2 select-none"
+            draggable
+            title={`${column.label}: click to sort, drag to move`}
+            onClick={props.onSort}
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = 'move'
+              e.dataTransfer.setData('text/plain', column.label)
+              props.onDragStart()
+            }}
+            onDragEnd={props.onDragEnd}
+          >
+            <span className="truncate">{column.label}</span>
+            {sortDir === 'asc' && <ArrowUp className="size-3.5 shrink-0" />}
+            {sortDir === 'desc' && <ArrowDown className="size-3.5 shrink-0" />}
+          </div>
 
-      {/* Resize handle on the right edge; TanStack Table tracks the drag. */}
-      <div
-        className={`absolute top-0 -right-1 z-10 h-full w-2 cursor-col-resize touch-none select-none ${
-          header.column.getIsResizing() ? 'bg-primary/40' : 'hover:bg-primary/20'
-        }`}
-        onMouseDown={header.getResizeHandler()}
-        onTouchStart={header.getResizeHandler()}
-        onDoubleClick={(e) => e.stopPropagation()}
-      />
-    </div>
+          {/* Resize handle on the right edge; TanStack Table tracks the drag. */}
+          <div
+            className={`absolute top-0 -right-1 z-10 h-full w-2 cursor-col-resize touch-none select-none ${
+              header.column.getIsResizing() ? 'bg-primary/40' : 'hover:bg-primary/20'
+            }`}
+            onMouseDown={header.getResizeHandler()}
+            onTouchStart={header.getResizeHandler()}
+            onDoubleClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => props.onMenu('insert-before')}>
+          Insert column before
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => props.onMenu('insert-after')}>
+          Insert column after
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => props.onMenu('edit')}>Edit…</ContextMenuItem>
+        <ContextMenuItem variant="destructive" onSelect={() => props.onMenu('delete')}>
+          Delete…
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }

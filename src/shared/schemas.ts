@@ -49,6 +49,7 @@ export const ColumnCreateSchema = z.object({
 export const ColumnUpdateSchema = z.object({
   id: Id,
   label: Label.optional(),
+  type: z.enum(COLUMN_TYPES).optional(),
   options: ColumnOptionsInputSchema.optional(),
   width: z.number().int().min(20).max(5000).optional()
 }) satisfies z.ZodType<ColumnUpdateInput>
@@ -58,7 +59,12 @@ export const RowCreateSchema = z
   .refine((v) => v.before === undefined || v.after === undefined, 'Use before or after, not both')
   .optional() satisfies z.ZodType<RowCreateInput | undefined>
 
-export const UpdateCellSchema = z.object({ rowId: Id, columnId: Id, value: CellValueSchema })
+export const UpdateCellSchema = z.object({
+  rowId: Id,
+  columnId: Id,
+  value: CellValueSchema,
+  generation: z.number().int().optional()
+})
 export const SetHeightSchema = z.object({ rowId: Id, height: z.number().int().min(16).max(5000) })
 export const SetCheckedSchema = z.object({ rowIds: IdList, checked: z.boolean() })
 export const CheckAllSchema = z.boolean()

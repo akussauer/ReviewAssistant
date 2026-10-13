@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { Api, Column, ReviewSnapshot, Row } from '../../../shared/ipc'
+import type { Api, Column, ReviewSnapshot, Row, Settings } from '../../../shared/ipc'
 import { checkState, createReviewStore, tabRowIds } from './review'
 
 const col = (id: number, position: number): Column => ({
@@ -45,17 +45,26 @@ const snapshot = (): ReviewSnapshot => ({
   activeTabId: 1
 })
 
+const SETTINGS: Settings = {
+  theme: 'system',
+  spellcheckLanguage: 'en_GB',
+  markdownColour: '#0E80A3',
+  hotkeys: { newRow: 'CmdOrCtrl+N', newColumn: 'CmdOrCtrl+Shift+N', saveAs: 'CmdOrCtrl+Shift+S' }
+}
+
 // A fake window.api: only the methods the store uses, as Vitest mock functions.
 type FakeApi = {
   file: { load: Mock<() => Promise<ReviewSnapshot>> }
-  columns: { update: Mock; reorder: Mock }
+  settings: { get: Mock<() => Promise<Settings>> }
+  columns: { create: Mock; update: Mock; delete: Mock; reorder: Mock }
   rows: { setHeight: Mock; setChecked: Mock; updateCell: Mock }
   tabs: { update: Mock }
 }
 function fakeApi(): FakeApi {
   return {
     file: { load: vi.fn(async () => snapshot()) },
-    columns: { update: vi.fn(), reorder: vi.fn() },
+    settings: { get: vi.fn(async () => SETTINGS) },
+    columns: { create: vi.fn(), update: vi.fn(), delete: vi.fn(), reorder: vi.fn() },
     rows: { setHeight: vi.fn(), setChecked: vi.fn(), updateCell: vi.fn() },
     tabs: { update: vi.fn() }
   }
@@ -155,6 +164,22 @@ describe('review store', () => {
       view: { sort: { columnId: 1, desc: true } }
     })
     expect(store.getState().tabs[1].view.sort).toEqual({ columnId: 1, desc: true })
+  })
+
+  it('reloads rows after a column change, and passes errors to the caller', async () => {
+    api.file.load.mockResolvedValueOnce({ ...snapshot(), rows: [row(1), row(9)] })
+    await store.getState().createColumn({ label: 'X', type: 'text', options: {} })
+    expect(store.getState().rowOrder).toEqual([1, 9])
+    expect(store.getState().status).toBe('ready')
+
+    api.columns.update.mockRejectedValueOnce(new Error('A column named "X" already exists'))
+    await expect(store.getState().updateColumn({ id: 1, label: 'X' })).rejects.toThrow(
+      /already exists/
+    )
+  })
+
+  it('loads the settings with the file', () => {
+    expect(store.getState().settings?.markdownColour).toBe('#0E80A3')
   })
 
   it('reorders columns', async () => {

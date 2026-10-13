@@ -1,3 +1,4 @@
+import { isValidDate } from '../../shared/conversion'
 import type { CellValue, Column } from '../../shared/ipc'
 
 // JSON path to a column's value in rows.data, e.g. $."12". Built here rather than in SQL:
@@ -27,17 +28,6 @@ export function defaultValue(
     case 'date':
       return today
   }
-}
-
-const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/
-
-export function isValidDate(s: string): boolean {
-  const m = DATE_RE.exec(s)
-  if (!m) return false
-  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])]
-  const date = new Date(Date.UTC(y, mo - 1, d))
-  // Rejects e.g. 2021-02-30, which Date would silently roll over to March.
-  return date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d
 }
 
 // Checks that `value` is allowed in `column` and returns it, or throws a readable error.

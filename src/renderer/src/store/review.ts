@@ -1,5 +1,17 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import type { Api, CellValue, Column, FileInfo, Row, SortSpec, Tab } from '../../../shared/ipc'
+import type {
+  Api,
+  CellValue,
+  Column,
+  ColumnCreateInput,
+  ColumnUpdateInput,
+  FileInfo,
+  Row,
+  ReviewSnapshot,
+  Settings,
+  SortSpec,
+  Tab
+} from '../../../shared/ipc'
 
 // The renderer's copy of the open review, kept normalised (CLAUDE.md): each row is stored
 // once in rowsById, and the main table and each tab refer to rows by id.
@@ -16,6 +28,7 @@ export type ReviewState = {
   rowOrder: number[] // manual order of all rows (the main table)
   tabs: Tab[]
   activeTabId: number
+  settings: Settings | null
 
   load(): Promise<void>
   setColumnWidth(columnId: number, width: number): Promise<void>
@@ -25,6 +38,11 @@ export type ReviewState = {
   setChecked(rowIds: number[], checked: boolean): Promise<void>
   updateCell(rowId: number, columnId: number, value: CellValue): Promise<void>
   setSort(tabId: number, sort: SortSpec | null): Promise<void>
+  // Column changes can also change rows (new defaults, conversions, removed values), so
+  // these reload the whole file afterwards. They throw on failure, for the dialog to show.
+  createColumn(input: ColumnCreateInput): Promise<void>
+  updateColumn(input: ColumnUpdateInput): Promise<void>
+  deleteColumn(columnId: number): Promise<void>
 }
 
 export const MIN_COLUMN_WIDTH = 20 // as in the reference app
@@ -57,6 +75,9 @@ export function createReviewStore(api: Api): ReviewStore {
     const putTab = (tab: Tab): void =>
       set((s) => ({ tabs: s.tabs.map((t) => (t.id === tab.id ? tab : t)) }))
 
+    // Re-reads the open file without showing the loading state (after column changes).
+    const refresh = async (): Promise<void> => set(fromSnapshot(await api.file.load()))
+
     // Row heights from before a drag started, to put back if saving the new one fails.
     const heightBeforeDrag = new Map<number, number>()
 
@@ -69,23 +90,31 @@ export function createReviewStore(api: Api): ReviewStore {
       rowOrder: [],
       tabs: [],
       activeTabId: 1,
+      settings: null,
 
       async load() {
         set({ status: 'loading', error: null })
         try {
-          const snap = await api.file.load()
-          set({
-            status: 'ready',
-            file: snap.file,
-            columns: snap.columns,
-            rowsById: Object.fromEntries(snap.rows.map((r) => [r.id, r])),
-            rowOrder: snap.rows.map((r) => r.id),
-            tabs: snap.tabs,
-            activeTabId: snap.activeTabId
-          })
+          const [snap, settings] = await Promise.all([api.file.load(), api.settings.get()])
+          set({ status: 'ready', settings, ...fromSnapshot(snap) })
         } catch (err) {
           set({ status: 'error', error: err instanceof Error ? err.message : String(err) })
         }
+      },
+
+      async createColumn(input) {
+        await api.columns.create(input)
+        await refresh()
+      },
+
+      async updateColumn(input) {
+        await api.columns.update(input)
+        await refresh()
+      },
+
+      async deleteColumn(columnId) {
+        await api.columns.delete(columnId)
+        await refresh()
       },
 
       async setColumnWidth(columnId, width) {
@@ -180,7 +209,7 @@ export function createReviewStore(api: Api): ReviewStore {
         setCell(value)
         try {
           // Main returns the saved row; take its value for this cell (it may be normalised).
-          const saved = (await api.rows.updateCell(rowId, columnId, value)).data[key]
+          const saved = (await api.rows.updateCell(rowId, columnId, value, gen)).data[key]
           undo(gen, () => setCell(saved))
         } catch (err) {
           undo(gen, () => setCell(before.data[key]))
@@ -202,6 +231,17 @@ export function createReviewStore(api: Api): ReviewStore {
       }
     }
   })
+}
+
+function fromSnapshot(snap: ReviewSnapshot): Partial<ReviewState> {
+  return {
+    file: snap.file,
+    columns: snap.columns,
+    rowsById: Object.fromEntries(snap.rows.map((r) => [r.id, r])),
+    rowOrder: snap.rows.map((r) => r.id),
+    tabs: snap.tabs,
+    activeTabId: snap.activeTabId
+  }
 }
 
 // ---- Derived data (pure functions, so components can memoise them) ----

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { moveColumn } from './columns'
+import { moveColumn, moveItem } from './columns'
 
 describe('moveColumn', () => {
   it('moves a column before or after the drop target', () => {
@@ -12,5 +12,13 @@ describe('moveColumn', () => {
     expect(moveColumn([1, 2, 3], 2, 2, 'before')).toEqual([1, 2, 3])
     expect(moveColumn([1, 2, 3], 9, 2, 'before')).toEqual([1, 2, 3])
     expect(moveColumn([1, 2, 3], 1, 9, 'before')).toEqual([1, 2, 3])
+  })
+})
+
+describe('moveItem', () => {
+  it('moves an item to a new position', () => {
+    expect(moveItem(['a', 'b', 'c', 'd'], 0, 2)).toEqual(['b', 'c', 'a', 'd'])
+    expect(moveItem(['a', 'b', 'c', 'd'], 3, 0)).toEqual(['d', 'a', 'b', 'c'])
+    expect(moveItem(['a', 'b'], 0, 5)).toEqual(['a', 'b'])
   })
 })

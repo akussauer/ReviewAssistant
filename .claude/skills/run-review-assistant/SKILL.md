@@ -81,7 +81,10 @@ review is `%TEMP%\ra-driver\test.review`. Open the PNGs and look at them.
 | `check <i>` / `check all` | tick visible row i / click the corner check-all box |
 | `scroll-perf` | scroll the whole table, report frame times and rendered row count |
 | `ss [name]` | screenshot |
-| `click <css>` / `click-text <text>` / `type <text>` / `press <key>` / `wait <css>` | generic input |
+| `rclick <css>` | right-click, e.g. a header (`[title="Year: click to sort, drag to move"]`) for the column menu |
+| `select <css> > <label>` | pick an option in a `<select>`, e.g. `select #col-type > Dropdown` in the column dialog |
+| `wheel <css> <dy>` | hover and turn the mouse wheel; prints the value before/after (cells must ignore it) |
+| `click <css>` / `click-text <text>` / `type <text>` / `press <key>` / `wait <css>` | generic input; `click-text` prefers an exact match |
 | `eval <js>` | evaluate in the page (e.g. `eval window.api.file.current()`) |
 | `main <js>` | evaluate in the main process, built mode only (e.g. `main ({ app }) => app.getPath('userData')`) |
 | `reload` / `sleep [ms]` / `quit` | — |
@@ -112,6 +115,17 @@ are the checks.
   and then grabs the neighbouring header (we saw "Spin" move instead of "Notes"). The
   driver drags by hand, scrolls the target into view mid-drag, and aims right of the
   sticky 32 px checkbox strip, which covers the left edge of a scrolled header.
+- **Text cells are CodeMirror editors only once scrolling stops.** While the table
+  scrolls (and ~150 ms after), newly visible text cells are lightweight placeholders
+  (`[role=textbox]:not(.cm-content)`); clicking one creates the editor with the cursor at
+  the click. To type into a text cell: `click .cm-content` (or a placeholder), then `type`.
+  Cells are labelled by column: `[aria-label="Year"]`, `[aria-label="Study Type"]`, …
+- **`click-text` substring matches are case-insensitive** ("OK" hits "Cohort"), so the
+  driver tries an exact match first. For dialog buttons with icons/ellipses, prefer CSS:
+  `click [role=alertdialog] button.bg-destructive` confirms a column delete.
+- **The spelling/clipboard right-click menu is a native Electron menu**: it doesn't show in
+  page screenshots and Playwright can't click it. Check spellcheck by looking for the red
+  underline in a screenshot (the dictionary downloads on first use; allow a few seconds).
 - **Rows have no ids in the DOM.** Commands address visible rows by index
   (`.absolute.top-0.left-0.flex.border-b`); after a sort, index 0 is the first sorted row.
 - **Dev mode is slower.** `scroll-perf` with 2,000 rows: built ≈ 10 ms median / 12 ms p95;

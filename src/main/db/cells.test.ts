@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Column } from '../../shared/ipc'
-import { defaultValue, isValidDate, todayLocal, validateCell } from './cells'
+import { isValidDate } from '../../shared/conversion'
+import { defaultValue, todayLocal, validateCell } from './cells'
 
 const col = (type: Column['type'], options: Column['options'] = {}): Column => ({
   id: 1,

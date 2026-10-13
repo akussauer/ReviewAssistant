@@ -28,6 +28,7 @@ export const IPC = {
   tabsAddRows: 'tabs:add-rows',
   tabsRemoveRows: 'tabs:remove-rows',
   tabsSetActive: 'tabs:set-active',
+  settingsGet: 'settings:get',
   devSeed: 'dev:seed', // only registered in development builds
   // Events (main -> renderer, pushed without a request)
   fileChanged: 'file:changed'
@@ -68,10 +69,11 @@ export type ColumnCreateInput = {
   index?: number // 0-based place to insert; default = at the end
 }
 
-// Changing a column's type (with conversion) arrives in M4.
+// A new `type` converts every value (shared/conversion.ts); main backs up first.
 export type ColumnUpdateInput = {
   id: number
   label?: string
+  type?: ColumnType
   options?: ColumnOptionsInput
   width?: number
 }
@@ -153,6 +155,14 @@ export type ReviewSnapshot = {
   activeTabId: number
 }
 
+// App-wide settings the renderer may read (spec §12). Editing them arrives in M6.
+export type Settings = {
+  theme: 'light' | 'dark' | 'system'
+  spellcheckLanguage: string // e.g. en_GB
+  markdownColour: string // e.g. #0E80A3
+  hotkeys: { newRow: string; newColumn: string; saveAs: string }
+}
+
 export type Unsubscribe = () => void
 
 export type Api = {
@@ -167,6 +177,9 @@ export type Api = {
     load(): Promise<ReviewSnapshot>
     onChanged(cb: (file: FileInfo | null) => void): Unsubscribe
   }
+  settings: {
+    get(): Promise<Settings>
+  }
   columns: {
     create(input: ColumnCreateInput): Promise<Column[]>
     update(input: ColumnUpdateInput): Promise<Column>
@@ -175,7 +188,9 @@ export type Api = {
   }
   rows: {
     create(input?: RowCreateInput): Promise<Row>
-    updateCell(rowId: number, columnId: number, value: CellValue): Promise<Row>
+    // `generation` (FileInfo.generation when the edit was made) makes main refuse a late
+    // save that arrives after another file was opened, since ids repeat between files.
+    updateCell(rowId: number, columnId: number, value: CellValue, generation?: number): Promise<Row>
     setHeight(rowId: number, height: number): Promise<void>
     setChecked(rowIds: number[], checked: boolean): Promise<void>
     checkAll(checked: boolean): Promise<void>

@@ -1,4 +1,4 @@
-import { IPC, type ReviewSnapshot } from '../../shared/ipc'
+import { IPC, type ReviewSnapshot, type Settings } from '../../shared/ipc'
 import {
   CheckAllSchema,
   ColumnCreateSchema,
@@ -21,7 +21,7 @@ import {
   deleteColumn,
   getColumn,
   listColumns,
-  removedChoiceIds,
+  backupReason,
   reorderColumns,
   updateColumn
 } from '../db/columns'
@@ -48,6 +48,7 @@ import {
 } from '../db/tabs'
 import { seedRows } from '../db/dev-seed'
 import {
+  config,
   currentFile,
   destructive,
   getDb,
@@ -76,13 +77,18 @@ export function registerIpc({ dev }: { dev: boolean }): void {
     }
   })
 
+  // ---- Settings (read-only for now; the Preferences dialog arrives in M6)
+  handle(IPC.settingsGet, NoInput, (): Settings => {
+    const { theme, spellcheckLanguage, markdownColour, hotkeys } = config.get()
+    return { theme, spellcheckLanguage, markdownColour, hotkeys }
+  })
+
   // ---- Columns
   handle(IPC.columnsCreate, ColumnCreateSchema, (input) => createColumn(getDb(), input))
   handle(IPC.columnsUpdate, ColumnUpdateSchema, (input) => {
-    // Removing dropdown options clears the cells that used them, so back up first.
-    const removes = removedChoiceIds(getColumn(getDb(), input.id), input).length > 0
-    return removes
-      ? destructive('edit-column', (db) => updateColumn(db, input))
+    const reason = backupReason(getColumn(getDb(), input.id), input)
+    return reason
+      ? destructive(reason, (db) => updateColumn(db, input))
       : updateColumn(getDb(), input)
   })
   handle(IPC.columnsDelete, Id, (id) => destructive('delete-column', (db) => deleteColumn(db, id)))
@@ -90,9 +96,12 @@ export function registerIpc({ dev }: { dev: boolean }): void {
 
   // ---- Rows
   handle(IPC.rowsCreate, RowCreateSchema, (input) => createRow(getDb(), input))
-  handle(IPC.rowsUpdateCell, UpdateCellSchema, ({ rowId, columnId, value }) =>
-    updateCell(getDb(), rowId, columnId, value)
-  )
+  handle(IPC.rowsUpdateCell, UpdateCellSchema, ({ rowId, columnId, value, generation }) => {
+    if (generation !== undefined && generation !== currentFile()?.generation) {
+      throw new Error('Edit not saved: a different file was opened before it arrived')
+    }
+    return updateCell(getDb(), rowId, columnId, value)
+  })
   handle(IPC.rowsSetHeight, SetHeightSchema, ({ rowId, height }) =>
     setRowHeight(getDb(), rowId, height)
   )

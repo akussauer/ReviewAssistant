@@ -273,9 +273,36 @@ const COMMANDS = {
     await page.click(css)
     out('clicked', css)
   },
+  // rclick <css>: right-click (opens the column menu on a header, the edit menu in a cell).
+  async rclick(css) {
+    need()
+    await page.click(css, { button: 'right' })
+    out('right-clicked', css)
+  },
+  // select <css> > <option label>: choose an option in a <select>.
+  async select(arg) {
+    need()
+    const [css, label] = arg.split('>').map((s) => s.trim())
+    await page.selectOption(css, { label })
+    out('selected', label)
+  },
+  // wheel <css> <dy>: hover an element and turn the mouse wheel (e.g. to check that
+  // dropdown/date/number cells ignore it). Prints the element's value before and after.
+  async wheel(arg) {
+    need()
+    const [css, dy] = splitLast(arg)
+    const el = page.locator(css).first()
+    const before = await el.inputValue().catch(() => null)
+    await el.hover()
+    await page.mouse.wheel(0, Number(dy))
+    await page.waitForTimeout(200)
+    out('value before/after wheel:', before, await el.inputValue().catch(() => null))
+  },
   async 'click-text'(text) {
     need()
-    await page.getByText(text, { exact: false }).first().click()
+    // Exact text first: a substring match is case-insensitive, so "OK" would also hit "Cohort".
+    const exact = page.getByText(text, { exact: true })
+    await ((await exact.count()) ? exact : page.getByText(text)).first().click()
     out('clicked text', text)
   },
   async type(text) {

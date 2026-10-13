@@ -9,10 +9,11 @@ type Props = {
   columns: Column[]
   widths: number[] // current width of each column, live while resizing
   top: number
+  live: boolean // false while the table scrolls
 }
 
 // One table row, absolutely positioned by the virtualiser (only visible rows exist).
-export const TableRow = memo(function TableRow({ row, columns, widths, top }: Props) {
+export const TableRow = memo(function TableRow({ row, columns, widths, top, live }: Props) {
   return (
     <div
       className="absolute top-0 left-0 flex border-b"
@@ -25,7 +26,7 @@ export const TableRow = memo(function TableRow({ row, columns, widths, top }: Pr
           className="shrink-0 overflow-hidden border-r px-2 py-1 text-sm"
           style={{ width: widths[i] }}
         >
-          <Cell rowId={row.id} column={column} value={row.data[String(column.id)]} />
+          <Cell rowId={row.id} column={column} value={row.data[String(column.id)]} live={live} />
         </div>
       ))}
     </div>

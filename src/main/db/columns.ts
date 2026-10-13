@@ -7,6 +7,7 @@ import type {
   ColumnType,
   ColumnUpdateInput
 } from '../../shared/ipc'
+import { convertValue } from '../../shared/conversion'
 import { cellPath, defaultValue } from './cells'
 import type { DB } from './types'
 import { regenerateViews } from './views'
@@ -115,9 +116,40 @@ export function createColumn(db: DB, input: ColumnCreateInput): Column[] {
 
 // Dropdown option ids that `input` would remove from the column (their values get cleared).
 export function removedChoiceIds(column: Column, input: ColumnUpdateInput): string[] {
+  if (isRetype(column, input)) return []
   if (column.type !== 'dropdown' || !input.options?.choices) return []
   const kept = new Set(input.options.choices.flatMap((c) => (c.id ? [c.id] : [])))
   return (column.options.choices ?? []).map((c) => c.id).filter((id) => !kept.has(id))
+}
+
+export const isRetype = (column: Column, input: ColumnUpdateInput): boolean =>
+  input.type !== undefined && input.type !== column.type
+
+// Whether an edit destroys data and so needs a backup first, and under which name:
+// changing the type converts every value; removing dropdown options clears cells.
+export function backupReason(column: Column, input: ColumnUpdateInput): string | null {
+  if (isRetype(column, input)) return 'retype-column'
+  if (removedChoiceIds(column, input).length > 0) return 'edit-column'
+  return null
+}
+
+// Changes a column's type and converts every row's value (spec §4.2). Destructive: the
+// caller takes a backup first. Runs inside updateColumn's transaction.
+function retype(db: DB, column: Column, input: ColumnUpdateInput & { type: ColumnType }): void {
+  const options = normaliseOptions(input.type, input.options ?? {})
+  const to = { type: input.type, options }
+  const rows = db.prepare('SELECT id, data FROM rows').all() as { id: number; data: string }[]
+  const write = db.prepare('UPDATE rows SET data = json_set(data, ?, json(?)) WHERE id = ?')
+  const path = cellPath(column.id)
+  for (const r of rows) {
+    const { value } = convertValue(column, to, JSON.parse(r.data)[String(column.id)])
+    write.run(path, JSON.stringify(value), r.id)
+  }
+  db.prepare('UPDATE columns SET type = ?, options = ? WHERE id = ?').run(
+    input.type,
+    JSON.stringify(options),
+    column.id
+  )
 }
 
 export function updateColumn(db: DB, input: ColumnUpdateInput): Column {
@@ -128,7 +160,9 @@ export function updateColumn(db: DB, input: ColumnUpdateInput): Column {
       assertLabelFree(db, label, column.id)
       db.prepare('UPDATE columns SET label = ? WHERE id = ?').run(label, column.id)
     }
-    if (input.options !== undefined) {
+    if (isRetype(column, input)) {
+      retype(db, column, { ...input, type: input.type as ColumnType })
+    } else if (input.options !== undefined) {
       const options = normaliseOptions(
         column.type,
         input.options,
@@ -151,7 +185,7 @@ export function updateColumn(db: DB, input: ColumnUpdateInput): Column {
     if (input.width !== undefined) {
       db.prepare('UPDATE columns SET width = ? WHERE id = ?').run(input.width, column.id)
     }
-    if (input.label !== undefined || input.options !== undefined) {
+    if (input.label !== undefined || input.options !== undefined || input.type !== undefined) {
       regenerateViews(db, listColumns(db))
     }
   })()

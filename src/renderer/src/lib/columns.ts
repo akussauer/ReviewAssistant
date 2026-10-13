@@ -15,3 +15,12 @@ export function moveColumn(
   rest.splice(side === 'before' ? at : at + 1, 0, dragged)
   return rest
 }
+
+// Returns a copy of `items` with the item at `from` moved to position `to`.
+export function moveItem<T>(items: T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || from >= items.length || to < 0 || to >= items.length) return items
+  const copy = [...items]
+  const [item] = copy.splice(from, 1)
+  copy.splice(to, 0, item)
+  return copy
+}

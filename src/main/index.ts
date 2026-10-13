@@ -5,8 +5,10 @@ import icon from '../../resources/icon.png?asset'
 import { registerIpc } from './ipc'
 import { initLog, log } from './log'
 import { buildMenu } from './menu'
+import { applySpellcheckLanguage, attachEditMenu } from './spellcheck'
 import {
   attachWindow,
+  config,
   closeReview,
   newReviewDialog,
   openRecent,
@@ -47,6 +49,7 @@ function createWindow(): void {
   })
 
   attachWindow(mainWindow, refreshMenu)
+  attachEditMenu(mainWindow)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -87,6 +90,7 @@ app.whenReady().then(() => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.mps.reviewassistant')
 
+  applySpellcheckLanguage(config.get().spellcheckLanguage)
   reopenLast()
   refreshMenu()
   // import.meta.env.DEV is true only under `npm run dev`; a built app, even unpackaged,
