@@ -11,7 +11,7 @@ import {
   getSortedRowModel,
   useReactTable
 } from '@tanstack/react-table'
-import type { Article, Column } from '../../../../shared/ipc'
+import type { CellValue, Column, Row } from '../../../../shared/ipc'
 import { EditableCell } from './EditableCell'
 
 // Default row height
@@ -19,11 +19,18 @@ const ROW_HEIGHT = 36
 
 type Props = {
   columns: Column[]
-  articles: Article[]
-  onUpdate: (id: number, key: string, value: string | number | null) => Promise<void>
+  rows: Row[]
+  onUpdate: (rowId: number, columnId: number, value: CellValue) => Promise<void>
 }
 
-export function ArticleTable({ columns, articles, onUpdate }: Props): React.JSX.Element {
+// Prototype display for dropdown and checkbox values until M4 adds real cell editors.
+function displayValue(c: Column, value: CellValue): string {
+  if (c.type === 'dropdown') return c.options.choices?.find((o) => o.id === value)?.label ?? ''
+  if (c.type === 'checkbox') return value ? '☑' : '☐'
+  return value == null ? '' : String(value)
+}
+
+export function ArticleTable({ columns, rows: articles, onUpdate }: Props): React.JSX.Element {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
@@ -31,7 +38,7 @@ export function ArticleTable({ columns, articles, onUpdate }: Props): React.JSX.
   // Column definitions are built from the DB's `columns` rows.
   // useMemo keeps the array stable between renders; a new array every
   // render makes the table recompute everything.
-  const defs = useMemo<ColumnDef<Article>[]>(
+  const defs = useMemo<ColumnDef<Row>[]>(
     () => [
       {
         id: 'select',
@@ -53,19 +60,22 @@ export function ArticleTable({ columns, articles, onUpdate }: Props): React.JSX.
           />
         )
       },
-      ...columns.map((c): ColumnDef<Article> => ({
-        id: c.key,
+      ...columns.map((c): ColumnDef<Row> => ({
+        id: String(c.id),
         header: c.label,
-        accessorFn: (a) => a.data[c.key],
+        accessorFn: (r) => r.data[String(c.id)],
         size: c.width,
         filterFn: 'includesString',
-        cell: ({ row, getValue }) => (
-          <EditableCell
-            value={getValue()}
-            widgetType={c.widgetType}
-            onCommit={(v) => onUpdate(row.original.id, c.key, v)}
-          />
-        )
+        cell: ({ row, getValue }) =>
+          c.type === 'dropdown' || c.type === 'checkbox' ? (
+            <div className="truncate">{displayValue(c, getValue() as CellValue)}</div>
+          ) : (
+            <EditableCell
+              value={getValue()}
+              widgetType={c.type}
+              onCommit={(v) => onUpdate(row.original.id, c.id, v)}
+            />
+          )
       }))
     ],
     [columns, onUpdate]

@@ -2,11 +2,31 @@ import { app, shell, BrowserWindow, Menu, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { initDb } from './db/connection'
-import { seedIfEmpty } from './db/seed'
 import { registerIpc } from './ipc'
 import { initLog, log } from './log'
 import { buildMenu } from './menu'
+import {
+  attachWindow,
+  closeReview,
+  newReviewDialog,
+  openRecent,
+  openReviewDialog,
+  recentFiles,
+  reopenLast,
+  safely
+} from './review'
+
+// Rebuilt whenever the Recent list changes, so File > Open Recent stays current.
+function refreshMenu(): void {
+  Menu.setApplicationMenu(
+    buildMenu({
+      newFile: () => safely('Could not create the review file', newReviewDialog),
+      openFile: () => safely('Could not open the review file', openReviewDialog),
+      openRecent: (path) => safely('Could not open the review file', () => openRecent(path)),
+      recent: recentFiles()
+    })
+  )
+}
 
 function createWindow(): void {
   // Create the browser window.
@@ -25,6 +45,8 @@ function createWindow(): void {
       nodeIntegration: false
     }
   })
+
+  attachWindow(mainWindow, refreshMenu)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -65,9 +87,8 @@ app.whenReady().then(() => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.mps.reviewassistant')
 
-  Menu.setApplicationMenu(buildMenu())
-  initDb()
-  seedIfEmpty()
+  reopenLast()
+  refreshMenu()
   registerIpc()
 
   // Default open or close DevTools by F12 in development
@@ -89,6 +110,9 @@ app.whenReady().then(() => {
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
+// Close the review cleanly so SQLite finishes any write and removes its journal file.
+app.on('will-quit', closeReview)
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
