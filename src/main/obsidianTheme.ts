@@ -173,7 +173,9 @@ const block = (selector: string, ...sets: Record<string, string>[]): string => {
 // Obsidian draws its own scrollbars (its app.css, not the theme): slim, rounded, no arrow
 // buttons, coloured by the --scrollbar-* variables a theme may set. These are the same
 // rules, so scrollbars look as they do in Obsidian with the same theme. Our fixed CSS,
-// not the theme's: only the colours come from the theme.
+// not the theme's: only the colours come from the theme. Unlike Obsidian, the cursor
+// changes over them (the owner's request): a hand on the track, which pages when
+// clicked, and a grab hand on the thumb. Native scrollbars (Default theme) ignore cursor.
 const SCROLLBARS = `:root.obsidian-theme ::-webkit-scrollbar {
   background-color: var(--scrollbar-bg);
   width: 12px;
@@ -182,6 +184,7 @@ const SCROLLBARS = `:root.obsidian-theme ::-webkit-scrollbar {
 }
 :root.obsidian-theme ::-webkit-scrollbar-track {
   background-color: transparent;
+  cursor: default;
 }
 :root.obsidian-theme ::-webkit-scrollbar-thumb {
   background-color: var(--scrollbar-thumb-bg);
@@ -189,9 +192,11 @@ const SCROLLBARS = `:root.obsidian-theme ::-webkit-scrollbar {
   background-clip: padding-box;
   border: 3px solid transparent;
   min-height: 45px;
+  cursor: default;
 }
 :root.obsidian-theme ::-webkit-scrollbar-thumb:active {
   background-color: var(--scrollbar-active-thumb-bg);
+  cursor: default;
 }
 :root.obsidian-theme ::-webkit-scrollbar-corner {
   background: transparent;

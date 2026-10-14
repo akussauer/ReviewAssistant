@@ -73,6 +73,9 @@ describe('buildThemeCss', () => {
     expect(css).toMatch(
       /:root\.obsidian-theme ::-webkit-scrollbar-thumb \{[^}]*background-color: var\(--scrollbar-thumb-bg\);/
     )
+    expect(css).toMatch(/::-webkit-scrollbar-thumb \{[^}]*cursor: default;/)
+    expect(css).toMatch(/::-webkit-scrollbar-thumb:active \{[^}]*cursor: default;/)
+    expect(css).toMatch(/::-webkit-scrollbar-track \{[^}]*cursor: default;/)
   })
 
   it("puts the theme's values after the defaults", () => {

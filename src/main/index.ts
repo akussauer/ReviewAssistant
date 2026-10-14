@@ -53,7 +53,9 @@ function createWindow(): void {
     height: 800,
     show: false,
     title: 'Review Assistant',
-    ...(process.platform === 'linux' ? { icon } : {}),
+    // The app logo in the title bar and taskbar (the installed .exe gets its own icon from
+    // electron-builder.yml).
+    icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       // Security defaults, stated explicitly: the page runs in Chromium's sandbox with no
