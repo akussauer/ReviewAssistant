@@ -40,9 +40,9 @@ How the Electron version should behave. The **PySide6 app** (`D:\Projects\Review
 │ ☑    │ …            │ [RCT ▾]     │ 2018 │ …              │ [+] [input] [Send]│
 └──────┴──────────────┴─────────────┴──────┴────────────────┴───────────────────┘
 ```
-- **Menu:** File (New, Open, Open Recent, Save As…, Import old JSON…, Export → CSV / JSON) and Settings (Preferences).
+- **Menu:** File (New, Open, Open Recent, Save As…, Import old JSON…, Export → CSV / JSON), **[New]** Edit (Undo, Redo, Cut, Copy, Paste, Select All; §6), **[New]** View (Search, Ctrl+F; §7), Settings (Preferences) and Help (About).
 - **Tab strip:** the main tab is first; it can't be closed and has no × **[Py]**. User tabs have a × that asks for confirmation.
-- **Search bar** above the table filters across all columns **[Py]**.
+- **Search bar** above the table filters across all columns **[Py]**. **[New]** Hidden by default; Ctrl+F shows or hides it (§7).
 - **Table:** a two-line header (column name, then that column's filter box) **[Py]**. A narrow row header holds each row's checkbox **[Py]**.
 - **Assistant panel:** a resizable right-hand splitter inside the tab, hidden unless the assistant is enabled for that tab **[Py]**. Its width is saved per tab in the file **[New]**.
 - **Status bar:** row counts, notices, and at the far right the assistant's bot button (§10) **[New]**.
@@ -121,8 +121,19 @@ Title (text), Study Type (dropdown: RCT, Cohort, Case Study, Systematic Review, 
 - **Always editable [Py]:** cells look and act like live form fields, not spreadsheet cells you have to double-click. A single click edits.
 - **Text cells [Py]:** plain text with markdown syntax highlighting (headings, bold, italic, strikethrough, lists, `- [ ]` checkboxes, inline code, quotes, links, `<br>`, horizontal rules) in one configurable colour. Misspellings get a red underline.
 - **Spellcheck language** is chosen in Settings (English variants, default `en_GB`) **[Py]**. **[New]** It uses Electron's built-in spellchecker, so there's no extra dependency.
-- **Keyboard (A):** Tab and Shift+Tab move between cells; Esc leaves a cell.
-- **Undo [New, optional]:** Ctrl+Z for the most recent cell edits. This is a polish item, not core.
+- **Keyboard [New]:**
+  - **Tab / Shift+Tab** move through the shown rows in order: the row's checkbox, then its cells left to right, then the next row. Rows off screen scroll into view. Tab on the last cell of the last row does nothing (Ctrl+N adds a row).
+  - **Inside a text cell,** Tab / Shift+Tab indent and outdent the line. **Esc** leaves the cell; the next Tab / Shift+Tab then moves on from that cell. A click elsewhere resets this.
+  - **Ctrl+↑ / Ctrl+↓** jump to the same column in the row above / below, from any cell type (including text cells).
+  - **Space** toggles a focused checkbox (row checks and checkbox cells).
+- **Undo [New]:**
+  - **Ctrl+Z** undoes recent cell edits; **Ctrl+Y** and **Ctrl+Shift+Z** both redo. A new edit clears the redo list. Each undo/redo is saved like any other edit.
+  - One list per open file, for all cell types, kept until another file is opened; the last 100 edits.
+  - Inside a text cell, Ctrl+Z undoes the typing step by step (the editor's own undo). Elsewhere it undoes the latest edit in the list; everything typed during one visit to a text cell counts as one edit.
+  - Not undoable: row checks, row heights, adding/deleting rows, column changes. Edits to a deleted row, or to a deleted or retyped column, are dropped from the list. Undoing to a dropdown option that has since been removed is skipped, with a notice.
+  - If the undone cell's row is in the current tab, the table scrolls to it and briefly highlights it. The status bar always says e.g. "Undid edit to Notes (row 12)". The app never switches tabs.
+  - In the search box, filters, dialogs and the assistant input, Ctrl+Z / Ctrl+Y are that box's own undo.
+  - **Edit menu:** Undo names what it will undo ("Undo edit to Notes") and is greyed out when there's nothing to undo; Redo shows Ctrl+Y.
 
 ---
 ## 7. Sorting, filtering, search
@@ -130,6 +141,7 @@ Title (text), Study Type (dropdown: RCT, Cohort, Case Study, Systematic Review, 
 - **Column filters [Py]:** each column has a filter box under its name. Filters are case-insensitive "contains" matches, and all column filters must match (AND).
   - **[New] type-aware filters:** dropdown and checkbox columns get a small picker instead of a text box. Number and date filters accept `>2015`, `<2020` or `2010..2020` as well as plain text.
 - **Global search [Py]:** a row matches if any cell contains the text. Typing is debounced by 150 ms. Search and column filters combine (AND).
+  - **[New] Hidden by default.** Ctrl+F (also View → Search, or the 🔍 button by the tabs) shows the bar and puts the cursor in it; Ctrl+F again, or Esc in an empty box, hides it. Shown/hidden is one app-wide setting, kept across restarts. Hiding the bar clears the search (column filters stay). Opening a tab that has a saved search shows the bar.
 - **Per tab (A):** each tab keeps its own sort, filters and search, saved in the file.
 
 ---
@@ -231,7 +243,7 @@ Based on the disabled `SynthesisWidget` in the PySide app **[Py]**:
 | Theme | Light / Dark / System |
 | Spellcheck language | en_AU … en_ZW (same list as the PySide app); default en_GB |
 | Markdown colour | colour picker; default `#0E80A3`. **[New]** *Colours per element* (Heading 1–6, bold, italic, strikethrough, list marker, task, inline code, quote, link, rule/`<br>`), each following the main colour until set. The task colour also colours the app's checkboxes. While an Obsidian theme is active, the theme's colours are used, unless *Override theme colour* is on. |
-| Hotkeys | New row (Ctrl+N) and New column (Ctrl+Shift+N), set by pressing the key combination; **[New]** Save As (Ctrl+Shift+S), Toggle assistant (Ctrl+Shift+A). A hotkey needs Ctrl/Cmd or Alt plus a letter, digit or F-key; combinations used by another hotkey or a fixed shortcut (Open, Preferences, cut/copy/paste, undo/redo, select all) are refused. |
+| Hotkeys | New row (Ctrl+N) and New column (Ctrl+Shift+N), set by pressing the key combination; **[New]** Save As (Ctrl+Shift+S), Toggle assistant (Ctrl+Shift+A). A hotkey needs Ctrl/Cmd or Alt plus a letter, digit or F-key; combinations used by another hotkey or a fixed shortcut (Open, Preferences, cut/copy/paste, undo (Ctrl+Z), redo (Ctrl+Y, Ctrl+Shift+Z), select all, **[New]** search (Ctrl+F)) are refused. A saved hotkey that clashes with a fixed shortcut goes back to its default, with a notice. |
 | Assistant **[New]** | provider, API key, test button; model list fetched from the provider (enable/disable, default model, *Use suggested*); fallback context length (32k); *Show token meter* and *Show costs* switches (both on) |
 | Reset to defaults | ✓ |
 
