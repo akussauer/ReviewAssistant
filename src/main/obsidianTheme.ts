@@ -69,7 +69,10 @@ const OBSIDIAN_BASE: Record<string, string> = {
   '--text-on-accent': 'white',
   '--text-error': 'var(--color-red)',
   '--text-accent': 'var(--color-accent)',
-  '--interactive-accent': 'var(--color-accent)'
+  '--interactive-accent': 'var(--color-accent)',
+  '--scrollbar-bg': 'rgba(var(--mono-rgb-100), 0.05)',
+  '--scrollbar-thumb-bg': 'rgba(var(--mono-rgb-100), 0.1)',
+  '--scrollbar-active-thumb-bg': 'rgba(var(--mono-rgb-100), 0.2)'
 }
 
 const OBSIDIAN_LIGHT: Record<string, string> = {
@@ -167,6 +170,33 @@ const block = (selector: string, ...sets: Record<string, string>[]): string => {
   return `${selector} {\n${lines.join('\n')}\n}`
 }
 
+// Obsidian draws its own scrollbars (its app.css, not the theme): slim, rounded, no arrow
+// buttons, coloured by the --scrollbar-* variables a theme may set. These are the same
+// rules, so scrollbars look as they do in Obsidian with the same theme. Our fixed CSS,
+// not the theme's: only the colours come from the theme.
+const SCROLLBARS = `:root.obsidian-theme ::-webkit-scrollbar {
+  background-color: var(--scrollbar-bg);
+  width: 12px;
+  height: 12px;
+  border-radius: 100px;
+}
+:root.obsidian-theme ::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+:root.obsidian-theme ::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-bg);
+  border-radius: 100px;
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  min-height: 45px;
+}
+:root.obsidian-theme ::-webkit-scrollbar-thumb:active {
+  background-color: var(--scrollbar-active-thumb-bg);
+}
+:root.obsidian-theme ::-webkit-scrollbar-corner {
+  background: transparent;
+}`
+
 // The stylesheet the renderer adds while a theme is active (it also puts the
 // `obsidian-theme` class on <html>). `:root.obsidian-theme` outranks main.css's `:root`
 // and `.dark`, and the theme's own values outrank Obsidian's defaults.
@@ -185,6 +215,7 @@ export function buildThemeCss(themeVars: ThemeVars): string {
   return [
     block(':root.obsidian-theme', OBSIDIAN_BASE, vars.base, TOKENS),
     block(':root.obsidian-theme:not(.dark)', notInBase(OBSIDIAN_LIGHT), vars.light),
-    block(':root.obsidian-theme.dark', notInBase(OBSIDIAN_DARK), vars.dark)
+    block(':root.obsidian-theme.dark', notInBase(OBSIDIAN_DARK), vars.dark),
+    SCROLLBARS
   ].join('\n\n')
 }

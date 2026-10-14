@@ -66,6 +66,15 @@ describe('buildThemeCss', () => {
     expect(css).toMatch(/:root\.obsidian-theme\.dark \{[^}]*--color-base-00: #1e1e1e;/)
   })
 
+  it('draws scrollbars as Obsidian does, from the theme’s --scrollbar-* colours', () => {
+    const css = buildThemeCss({ base: {}, light: {}, dark: { '--scrollbar-thumb-bg': '#445566' } })
+    expect(css).toContain('--scrollbar-thumb-bg: rgba(var(--mono-rgb-100), 0.1);') // default
+    expect(css).toMatch(/:root\.obsidian-theme\.dark \{[^}]*--scrollbar-thumb-bg: #445566;/)
+    expect(css).toMatch(
+      /:root\.obsidian-theme ::-webkit-scrollbar-thumb \{[^}]*background-color: var\(--scrollbar-thumb-bg\);/
+    )
+  })
+
   it("puts the theme's values after the defaults", () => {
     const css = buildThemeCss({ base: {}, light: { '--color-base-00': '#fafafa' }, dark: {} })
     const light = css.match(/:root\.obsidian-theme:not\(\.dark\) \{([^}]*)\}/)![1]
