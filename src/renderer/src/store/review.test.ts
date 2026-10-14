@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { Api, Column, ReviewSnapshot, Row, Settings } from '../../../shared/ipc'
+import {
+  DEFAULT_SETTINGS,
+  type Api,
+  type Column,
+  type ReviewSnapshot,
+  type Row,
+  type Settings
+} from '../../../shared/ipc'
 import { checkState, createReviewStore, tabRowIds } from './review'
 
 const col = (id: number, position: number): Column => ({
@@ -29,6 +36,8 @@ const snapshot = (): ReviewSnapshot => ({
       type: 'main',
       position: 0,
       assistantEnabled: false,
+      assistantWidth: null,
+      assistantModel: null,
       view: {},
       rowIds: []
     },
@@ -38,6 +47,8 @@ const snapshot = (): ReviewSnapshot => ({
       type: 'review',
       position: 1,
       assistantEnabled: false,
+      assistantWidth: null,
+      assistantModel: null,
       view: {},
       rowIds: [3, 1]
     }
@@ -45,14 +56,7 @@ const snapshot = (): ReviewSnapshot => ({
   activeTabId: 1
 })
 
-const SETTINGS: Settings = {
-  theme: 'system',
-  spellcheckLanguage: 'en_GB',
-  markdownColour: '#0E80A3',
-  markdownColourOverride: false,
-  markdownColours: {},
-  hotkeys: { newRow: 'CmdOrCtrl+N', newColumn: 'CmdOrCtrl+Shift+N', saveAs: 'CmdOrCtrl+Shift+S' }
-}
+const SETTINGS: Settings = DEFAULT_SETTINGS
 
 // A fake window.api: only the methods the store uses, as Vitest mock functions.
 type FakeApi = {
@@ -263,6 +267,8 @@ describe('rows and tabs', () => {
       type: 'review',
       position: 2,
       assistantEnabled: false,
+      assistantWidth: null,
+      assistantModel: null,
       view: {},
       rowIds: []
     }

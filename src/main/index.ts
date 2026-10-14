@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, Menu, dialog, nativeTheme } from 'electron'
 import { join } from 'path'
+import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { IPC } from '../shared/ipc'
@@ -20,6 +21,7 @@ import {
   safely,
   sendMenuCommand
 } from './review'
+import { recheck } from './assistant'
 import { applyTheme } from './settings'
 
 // Rebuilt whenever the Recent list, the open file or the settings change, so Open Recent,
@@ -33,10 +35,15 @@ function refreshMenu(): void {
       command: sendMenuCommand,
       recent: recentFiles(),
       hasFile: currentFile() !== null,
-      saveAsKey: config.get().hotkeys.saveAs
+      saveAsKey: config.get().hotkeys.saveAs,
+      dev: import.meta.env.DEV
     })
   )
 }
+
+// The page's own address: the dev server under `npm run dev`, else the built index.html.
+const devUrl = is.dev ? process.env['ELECTRON_RENDERER_URL'] : undefined
+const appUrl = pathToFileURL(join(__dirname, '../renderer/index.html')).href
 
 function createWindow(): void {
   // Create the browser window.
@@ -69,8 +76,16 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    // Only web links (e.g. in an assistant reply) open, in the browser.
+    if (/^https?:\/\//i.test(details.url)) shell.openExternal(details.url)
     return { action: 'deny' }
+  })
+  // The window never navigates away from the app (e.g. a link in a reply clicked without
+  // target=_blank): web links open in the browser instead.
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    if (url.split('#')[0] === appUrl || (devUrl && url.startsWith(devUrl))) return
+    e.preventDefault()
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
   })
 
   // HMR for renderer base on electron-vite cli.
@@ -119,6 +134,8 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+  // The assistant's key check (spec §10): a free call, and none at all without a key.
+  void recheck()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

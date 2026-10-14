@@ -84,7 +84,14 @@ export function sendMenuCommand(command: MenuCommand): void {
   liveWindow()?.webContents.send(IPC.menuCommand, command)
 }
 
+// Run just before the open file closes (e.g. to stop assistant replies writing to it).
+const closeListeners: (() => void)[] = []
+export function onReviewClose(fn: () => void): void {
+  closeListeners.push(fn)
+}
+
 export function closeReview(): void {
+  if (current) closeListeners.forEach((fn) => fn())
   current?.db.close()
   current = null
 }

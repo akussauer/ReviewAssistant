@@ -48,12 +48,27 @@ export const IPC = {
   pluginsSetEnabled: 'plugins:set-enabled',
   pluginsDelete: 'plugins:delete',
   pluginsOpenFolder: 'plugins:open-folder',
+  assistantStatus: 'assistant:status',
+  assistantRecheck: 'assistant:recheck',
+  assistantTest: 'assistant:test',
+  assistantHasKey: 'assistant:has-key',
+  assistantSetKey: 'assistant:set-key',
+  assistantFetchModels: 'assistant:fetch-models',
+  assistantModels: 'assistant:models',
+  assistantMessages: 'assistant:messages',
+  assistantClear: 'assistant:clear',
+  assistantAttach: 'assistant:attach',
+  assistantDetach: 'assistant:detach',
+  assistantSend: 'assistant:send',
+  assistantStop: 'assistant:stop',
   devSeed: 'dev:seed', // only registered in development builds
   // Events (main -> renderer, pushed without a request)
   fileChanged: 'file:changed',
   menuCommand: 'menu:command',
   themeChanged: 'theme:changed',
-  activeThemeChanged: 'themes:active-changed'
+  activeThemeChanged: 'themes:active-changed',
+  assistantStatusChanged: 'assistant:status-changed',
+  assistantChunk: 'assistant:chunk'
 } as const
 
 // ---- Columns ----------------------------------------------------------------
@@ -153,6 +168,8 @@ export type Tab = {
   type: TabType
   position: number
   assistantEnabled: boolean
+  assistantWidth: number | null // the panel's width in px; null = default
+  assistantModel: string | null // the model picked in this tab's panel; null = default
   view: TabView
   rowIds: number[] // in main-table order; always empty for the main tab
 }
@@ -164,6 +181,8 @@ export type TabUpdateInput = {
   label?: string
   type?: 'review' | 'synthesis'
   assistantEnabled?: boolean
+  assistantWidth?: number | null
+  assistantModel?: string | null
   view?: TabView
 }
 
@@ -189,8 +208,9 @@ export type ExportKind = 'csv' | 'json'
 export type ExportResult = { path: string; name: string; rows: number }
 
 // File-menu items that main hands to the renderer, which saves pending edits first.
+// devSeed only exists under `npm run dev` (the Developer menu).
 export type MenuCommand =
-  'saveAs' | 'importJson' | 'exportCsv' | 'exportJson' | 'preferences' | 'plugins'
+  'saveAs' | 'importJson' | 'exportCsv' | 'exportJson' | 'preferences' | 'plugins' | 'devSeed'
 
 // ---- Settings (spec §12) ----------------------------------------------------------
 
@@ -217,7 +237,81 @@ export const MARKDOWN_KINDS = [
   'rule'
 ] as const
 export type MarkdownKind = (typeof MARKDOWN_KINDS)[number]
-export type HotkeyName = 'newRow' | 'newColumn' | 'saveAs'
+export const HOTKEY_NAMES = ['newRow', 'newColumn', 'saveAs', 'toggleAssistant'] as const
+export type HotkeyName = (typeof HOTKEY_NAMES)[number]
+
+// ---- Assistant (spec §10) -----------------------------------------------------------
+
+// openai = any OpenAI-compatible endpoint. Those three are spoken to through the OpenAI
+// chat-completions format (Ollama serves it at /v1); anthropic = Claude through
+// Anthropic's own API (its SDK, in main).
+export const PROVIDERS = ['openrouter', 'anthropic', 'openai', 'ollama'] as const
+export type Provider = (typeof PROVIDERS)[number]
+
+export type AssistantSettings = {
+  provider: Provider
+  baseUrl: string // '' = the provider's usual address
+  enabledModels: string[] // model ids ticked in Preferences
+  defaultModel: string | null
+  fallbackContext: number // tokens, for models whose context length isn't known
+  showMeter: boolean
+  showCosts: boolean
+}
+
+// A model from the provider's list. Prices are USD per token; null = not given.
+export type ModelInfo = {
+  id: string
+  name: string
+  contextLength: number | null
+  priceIn: number | null
+  priceOut: number | null
+}
+
+// The last key check. 'none': no key saved (for providers that need one).
+export type AssistantStatus = {
+  state: 'none' | 'checking' | 'ok' | 'failed'
+  provider: Provider
+  reason?: string
+}
+
+// What Preferences sends to Test or to fetch models: the draft settings, plus the key
+// being typed (omitted = use the saved one).
+export type ConnectionInput = { provider: Provider; baseUrl: string; key?: string }
+export type TestResult = { ok: boolean; message: string }
+
+export type ChatMessage = {
+  id: number
+  role: 'user' | 'assistant'
+  content: string // what the user typed, or the reply
+  context: string[] // labels of the chips sent with it, e.g. "This tab (12 rows)", "a.pdf"
+  model: string | null
+  tokensIn: number | null // as reported by the provider (assistant messages)
+  tokensOut: number | null
+  cost: number | null // USD
+  costEstimated: boolean // worked out from token counts × list prices, not reported
+  createdAt: string
+}
+
+// A file attached in the chat panel. Main keeps its text; the page only sees its size.
+export type AttachedFile = { id: string; name: string; chars: number }
+
+export type SendInput = {
+  tabId: number
+  text: string
+  rowIds: number[] | null // the rows shown in the tab; null = the tab chip was removed
+  fileIds: string[]
+  model: string
+  generation: number // FileInfo.generation, so a send can't land in a newly opened file
+}
+
+export type SendResult = {
+  user: ChatMessage
+  reply: ChatMessage | null // null: it failed before any text arrived (see error)
+  error?: string
+  droppedMessages: number // old messages left out to fit
+}
+
+export type AssistantChunk = { tabId: number; generation: number; text: string }
 
 // App-wide settings, edited in the Preferences dialog. Hotkeys are Electron accelerators,
 // e.g. "CmdOrCtrl+Shift+N".
@@ -230,6 +324,7 @@ export type Settings = {
   // Per element (heading level, bold, list marker, …); a missing one uses markdownColour.
   markdownColours: Partial<Record<MarkdownKind, string>>
   hotkeys: Record<HotkeyName, string>
+  assistant: AssistantSettings
 }
 
 // Reset to defaults in the Preferences dialog returns to these (main's config uses them too).
@@ -239,7 +334,21 @@ export const DEFAULT_SETTINGS: Settings = {
   markdownColour: '#0E80A3',
   markdownColourOverride: false,
   markdownColours: {},
-  hotkeys: { newRow: 'CmdOrCtrl+N', newColumn: 'CmdOrCtrl+Shift+N', saveAs: 'CmdOrCtrl+Shift+S' }
+  hotkeys: {
+    newRow: 'CmdOrCtrl+N',
+    newColumn: 'CmdOrCtrl+Shift+N',
+    saveAs: 'CmdOrCtrl+Shift+S',
+    toggleAssistant: 'CmdOrCtrl+Shift+A'
+  },
+  assistant: {
+    provider: 'openrouter',
+    baseUrl: '',
+    enabledModels: [],
+    defaultModel: null,
+    fallbackContext: 32_000,
+    showMeter: true,
+    showCosts: true
+  }
 }
 
 // Shortcuts the app or every text field already uses, which a hotkey must not take.
@@ -396,6 +505,25 @@ export type Api = {
     addRows(tabId: number, rowIds: number[]): Promise<Tab>
     removeRows(tabId: number, rowIds: number[]): Promise<Tab>
     setActive(tabId: number): Promise<void>
+  }
+  // The API key never comes back to the page: only whether one is saved, and the status.
+  assistant: {
+    status(): Promise<AssistantStatus>
+    recheck(): Promise<AssistantStatus>
+    onStatusChange(cb: (status: AssistantStatus) => void): Unsubscribe
+    test(input: ConnectionInput): Promise<TestResult>
+    hasKey(provider: Provider): Promise<boolean>
+    setKey(provider: Provider, key: string | null): Promise<void> // null = remove
+    fetchModels(input: ConnectionInput): Promise<ModelInfo[]> // from the provider; cached
+    models(): Promise<ModelInfo[]> // the cached list for the saved provider
+    messages(tabId: number): Promise<ChatMessage[]>
+    clear(tabId: number): Promise<void>
+    attach(): Promise<AttachedFile[]> // shows main's open dialog; [] if cancelled
+    detach(id: string): Promise<void>
+    // Resolves when the reply has finished (or was stopped); text arrives via onChunk.
+    send(input: SendInput): Promise<SendResult>
+    stop(tabId: number): Promise<void>
+    onChunk(cb: (chunk: AssistantChunk) => void): Unsubscribe
   }
   // Only under `npm run dev`: undefined in a built app, and main doesn't register it.
   dev?: {

@@ -44,7 +44,8 @@ How the Electron version should behave. The **PySide6 app** (`D:\Projects\Review
 - **Tab strip:** the main tab is first; it can't be closed and has no × **[Py]**. User tabs have a × that asks for confirmation.
 - **Search bar** above the table filters across all columns **[Py]**.
 - **Table:** a two-line header (column name, then that column's filter box) **[Py]**. A narrow row header holds each row's checkbox **[Py]**.
-- **Assistant panel:** a resizable right-hand splitter inside the tab, hidden unless the assistant is enabled for that tab **[Py]**.
+- **Assistant panel:** a resizable right-hand splitter inside the tab, hidden unless the assistant is enabled for that tab **[Py]**. Its width is saved per tab in the file **[New]**.
+- **Status bar:** row counts, notices, and at the far right the assistant's bot button (§10) **[New]**.
 
 ---
 ## 3. Files and saving
@@ -134,7 +135,7 @@ Title (text), Study Type (dropdown: RCT, Cohort, Case Study, Systematic Review, 
 ---
 ## 8. Tabs
 - **Creating a tab:** *New Tab…* (from the row menu, or the **+** in the tab strip **[New]**) opens a dialog with **Name** (default "Tab N"; must be unique and non-empty) and **Type** (*Review Table* or *Synthesis*) **[Py]**.
-- **Tab right-click [Py]:** *Edit Tab* (rename or change type; not for the main tab) and *Assistant* (on/off toggle, available on every tab including the main one; only shown when an LLM is configured).
+- **Tab right-click [Py]:** *Edit Tab* (rename or change type; not for the main tab). **[Changed]** The assistant toggle has moved to the status-bar bot button (§10).
 - **Close (×):** asks "Delete *Name*?". It removes the tab, not its rows **[Py]**.
 - **Reorder** tabs by dragging **[New]**. The **active tab** is restored when the file is reopened **[Py]**.
 - **A Review Table tab** is the same table limited to its rows, which are shown in main-table order **[Py]**. Columns, widths and row heights are shared with the main table.
@@ -188,16 +189,22 @@ Each row is exported as one `.md` note that can go straight into an Obsidian vau
 
 ---
 ## 10. Assistant (per tab, read-only)
-- **Turning it on:** use the tab's right-click menu. Whether the assistant is on, and the conversation itself, are saved per tab in the file **[Py → New: conversations are now saved]**. The main tab has one too.
+- **Turning it on [Changed]:** a toggle button with the bot icon (`resources/ai_bot.png`) at the far right of the status bar, plus a configurable hotkey *Toggle assistant* (default Ctrl+Shift+A). It toggles the **active tab's** panel and looks pressed when that tab's assistant is on. It works on every tab, main and Synthesis included. The tab right-click item is gone. Whether the assistant is on, the panel width, and the conversation are saved per tab in the file **[Py → New: conversations are now saved]**.
+  - The icon is drawn as a mask in the theme's text colour (accent when on), so it shows in Light, Dark and Obsidian themes.
+  - **Enabled** only when the last key check (startup or Test) passed for the chosen provider: a valid key for OpenRouter / OpenAI-compatible, a reachable server for Ollama. Otherwise it is **disabled** with a tooltip giving the reason (no key set / check failed: *reason*) and pointing to Settings → Preferences.
+  - If a tab's assistant is saved as on but the check fails, the panel still opens and shows the conversation **read-only** (input disabled, with the reason). The button stays enabled while the panel is on, so it can be turned off; once off it is disabled until a check passes.
+  - **Clear conversation** in the panel header (asks first). Turning the assistant off keeps the conversation.
 - **Context chips (shown above the input):**
   - **"This tab (n rows)"** is attached automatically. It contains the rows currently shown (after filters) with all columns, and can be removed for one message **[New]**.
   - **"+"** attaches files: .txt and .md **[Py]**, and **[New]** PDFs (text is extracted locally). File chips are cleared after sending, and a "📎 n files referenced" note is added to the chat **[Py]**.
-  - A **token meter** shows the estimated size. If it's too large, sending is blocked and the message says why **[New]**.
+  - A **token meter** shows the estimated size of everything sent (≈ chars ÷ 4) against the model's context length minus room for the reply **[New]**. If the conversation is too long, the oldest turns are left out of what's sent and a *New chat* is recommended. Only if the rows, files and input don't fit on their own is sending blocked, and the message says why.
+  - **Costs [New]** (where the provider gives prices): the estimated cost of the next message, and a running total for the tab from the costs reported for each reply (or estimated from token counts, marked "~").
+- **Model picker [New]:** a dropdown in the panel header lists the models enabled in Settings. Each tab remembers its choice; new tabs and stale choices use the default model.
 - **Input:** Enter sends and Shift+Enter adds a new line **[Py]**. The input box grows up to about 250 px **[Py]**. Replies are rendered as markdown and can be selected **[Py]**.
 - **Prompting:** rows and files are wrapped in tags, and the system prompt says their contents are data, not instructions **[Py]**.
 - **Read-only:** the model gets no tools that can write. Any future tools will be read-only.
-- **Provider:** OpenRouter by default **[Py]**, plus any OpenAI-compatible endpoint and Ollama **[New]**. The model is chosen in Settings (the PySide app hardcoded `openai/gpt-4o-mini`). The key is stored with `safeStorage` instead of `.env` **[New]**.
-- **Key check** at startup uses a free endpoint (e.g. OpenRouter's key-info call) rather than a chat request **[New]**. Without a working key, the assistant options are hidden **[Py]**.
+- **Provider:** OpenRouter by default **[Py]**, plus Anthropic (Claude, through Anthropic's own API), any OpenAI-compatible endpoint and Ollama **[New]**. The model is chosen in Settings (the PySide app hardcoded `openai/gpt-4o-mini`). The key is stored with `safeStorage` instead of `.env` **[New]**.
+- **Key check** at startup uses a free endpoint (e.g. OpenRouter's key-info call) rather than a chat request **[New]**. Without a passing check the bot button is disabled (not hidden) **[Changed]**; nothing else in the app changes.
 
 ---
 ## 11. Synthesis tabs (late milestone)
@@ -215,8 +222,8 @@ Based on the disabled `SynthesisWidget` in the PySide app **[Py]**:
 | Theme | Light / Dark / System |
 | Spellcheck language | en_AU … en_ZW (same list as the PySide app); default en_GB |
 | Markdown colour | colour picker; default `#0E80A3`. **[New]** *Colours per element* (Heading 1–6, bold, italic, strikethrough, list marker, task, inline code, quote, link, rule/`<br>`), each following the main colour until set. The task colour also colours the app's checkboxes. While an Obsidian theme is active, the theme's colours are used, unless *Override theme colour* is on. |
-| Hotkeys | New row (Ctrl+N) and New column (Ctrl+Shift+N), set by pressing the key combination; **[New]** Save As (Ctrl+Shift+S). A hotkey needs Ctrl/Cmd or Alt plus a letter, digit or F-key; combinations used by another hotkey or a fixed shortcut (Open, Preferences, cut/copy/paste, undo/redo, select all) are refused. |
-| Assistant **[New]** | provider, API key, model, test button |
+| Hotkeys | New row (Ctrl+N) and New column (Ctrl+Shift+N), set by pressing the key combination; **[New]** Save As (Ctrl+Shift+S), Toggle assistant (Ctrl+Shift+A). A hotkey needs Ctrl/Cmd or Alt plus a letter, digit or F-key; combinations used by another hotkey or a fixed shortcut (Open, Preferences, cut/copy/paste, undo/redo, select all) are refused. |
+| Assistant **[New]** | provider, API key, test button; model list fetched from the provider (enable/disable, default model, *Use suggested*); fallback context length (32k); *Show token meter* and *Show costs* switches (both on) |
 | Reset to defaults | ✓ |
 
 - **Dialog [New]:** Settings → Preferences… (Ctrl+,). Theme and markdown colour preview immediately; **Save** keeps the changes, **Cancel** puts back the saved ones. *Reset to defaults* asks first, then fills in the defaults (still needs Save). Saved hotkeys apply at once.

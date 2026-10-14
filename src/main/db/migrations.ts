@@ -54,6 +54,17 @@ export const migrations: string[] = [
   CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);  -- active_tab, ...
 
   INSERT INTO tabs (id, label, type, position) VALUES (1, 'Main', 'main', 0);
+  `,
+  // 2: assistant panel width and model per tab; what each reply cost (M7)
+  `
+  ALTER TABLE tabs ADD COLUMN assistant_width INTEGER;     -- px; NULL = default
+  ALTER TABLE tabs ADD COLUMN assistant_model TEXT;        -- model id; NULL = default
+  ALTER TABLE messages ADD COLUMN model TEXT;
+  ALTER TABLE messages ADD COLUMN tokens_in INTEGER;       -- as reported by the provider
+  ALTER TABLE messages ADD COLUMN tokens_out INTEGER;
+  ALTER TABLE messages ADD COLUMN cost REAL;               -- USD
+  ALTER TABLE messages ADD COLUMN cost_estimated INTEGER NOT NULL DEFAULT 0;
+  CREATE INDEX messages_tab ON messages(tab_id, id);
   `
 ]
 

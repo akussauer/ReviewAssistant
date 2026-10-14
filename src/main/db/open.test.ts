@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { listColumns } from './columns'
-import { runMigrations, SCHEMA_VERSION, schemaVersion } from './migrations'
+import { migrations, runMigrations, SCHEMA_VERSION, schemaVersion } from './migrations'
 import { openReviewDb, ReviewFileError } from './open'
 import { createRow, listRows } from './rows'
 import { listTabs } from './tabs'
@@ -31,6 +31,27 @@ describe('migrations', () => {
     expect(tables).toEqual(['columns', 'messages', 'meta', 'rows', 'synthesis', 'tab_rows', 'tabs'])
     runMigrations(db) // running again is a no-op
     expect(schemaVersion(db)).toBe(SCHEMA_VERSION)
+  })
+
+  it('upgrade an M6 (version 1) file, keeping its tabs and messages', () => {
+    const db = new Database(':memory:')
+    db.exec(migrations[0])
+    db.pragma('user_version = 1')
+    db.exec(`INSERT INTO tabs (id, label, type, position, assistant_enabled)
+             VALUES (2, 'Pacing', 'review', 1, 1);
+             INSERT INTO messages (tab_id, role, content) VALUES (2, 'user', 'hi');`)
+    runMigrations(db)
+    expect(listTabs(db)[1]).toMatchObject({
+      label: 'Pacing',
+      assistantEnabled: true,
+      assistantWidth: null,
+      assistantModel: null
+    })
+    expect(db.prepare('SELECT content, cost, cost_estimated FROM messages').get()).toEqual({
+      content: 'hi',
+      cost: null,
+      cost_estimated: 0
+    })
   })
 })
 

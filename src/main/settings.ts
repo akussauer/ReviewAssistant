@@ -1,5 +1,6 @@
 import { nativeTheme } from 'electron'
 import type { Settings, Theme } from '../shared/ipc'
+import { recheck } from './assistant'
 import { config, settingsChanged } from './review'
 import { applySpellcheckLanguage } from './spellcheck'
 
@@ -13,7 +14,8 @@ export function currentSettings(): Settings {
     markdownColour: c.markdownColour,
     markdownColourOverride: c.markdownColourOverride,
     markdownColours: c.markdownColours,
-    hotkeys: c.hotkeys
+    hotkeys: c.hotkeys,
+    assistant: c.assistant
   }
 }
 
@@ -24,7 +26,14 @@ export function applyTheme(theme: Theme): void {
 }
 
 export function saveSettings(settings: Settings): Settings {
+  const before = config.get().assistant
   config.update(settings)
+  // A different provider or address needs a new check (and its own key).
+  if (
+    before.provider !== settings.assistant.provider ||
+    before.baseUrl !== settings.assistant.baseUrl
+  )
+    void recheck()
   applyTheme(settings.theme)
   applySpellcheckLanguage(settings.spellcheckLanguage)
   settingsChanged() // the Save As hotkey lives in the menu

@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import { IPC, type ActiveTheme, type Api, type FileInfo, type MenuCommand } from '../shared/ipc'
+import {
+  IPC,
+  type ActiveTheme,
+  type Api,
+  type AssistantChunk,
+  type AssistantStatus,
+  type FileInfo,
+  type MenuCommand
+} from '../shared/ipc'
 
 // The preload script is the only bridge between the web page (renderer) and Node/Electron.
 // contextBridge copies `api` into the page as `window.api`; the page gets these few
@@ -91,6 +99,31 @@ const api: Api = {
     addRows: (tabId, rowIds) => invoke(IPC.tabsAddRows, { tabId, rowIds }),
     removeRows: (tabId, rowIds) => invoke(IPC.tabsRemoveRows, { tabId, rowIds }),
     setActive: (tabId) => invoke(IPC.tabsSetActive, tabId)
+  },
+  assistant: {
+    status: () => invoke(IPC.assistantStatus),
+    recheck: () => invoke(IPC.assistantRecheck),
+    onStatusChange: (cb) => {
+      const listener = (_e: IpcRendererEvent, status: AssistantStatus): void => cb(status)
+      ipcRenderer.on(IPC.assistantStatusChanged, listener)
+      return () => ipcRenderer.removeListener(IPC.assistantStatusChanged, listener)
+    },
+    test: (input) => invoke(IPC.assistantTest, input),
+    hasKey: (provider) => invoke(IPC.assistantHasKey, provider),
+    setKey: (provider, key) => invoke(IPC.assistantSetKey, { provider, key }),
+    fetchModels: (input) => invoke(IPC.assistantFetchModels, input),
+    models: () => invoke(IPC.assistantModels),
+    messages: (tabId) => invoke(IPC.assistantMessages, tabId),
+    clear: (tabId) => invoke(IPC.assistantClear, tabId),
+    attach: () => invoke(IPC.assistantAttach),
+    detach: (id) => invoke(IPC.assistantDetach, id),
+    send: (input) => invoke(IPC.assistantSend, input),
+    stop: (tabId) => invoke(IPC.assistantStop, tabId),
+    onChunk: (cb) => {
+      const listener = (_e: IpcRendererEvent, chunk: AssistantChunk): void => cb(chunk)
+      ipcRenderer.on(IPC.assistantChunk, listener)
+      return () => ipcRenderer.removeListener(IPC.assistantChunk, listener)
+    }
   },
   // Only present under `npm run dev` (see Api.dev).
   ...(import.meta.env.DEV ? { dev: { seed: (count: number) => invoke(IPC.devSeed, count) } } : {})

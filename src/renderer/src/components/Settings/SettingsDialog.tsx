@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   DEFAULT_SETTINGS,
+  HOTKEY_NAMES,
   MARKDOWN_KINDS,
   SPELLCHECK_LANGUAGES,
   type HotkeyName,
@@ -11,7 +12,7 @@ import {
 } from '../../../../shared/ipc'
 import { captureHotkey, describeHotkey, HOTKEY_LABELS } from '../../lib/hotkeys'
 import { kindColour } from '../../lib/markdown'
-import { reviewStore, useReview } from '../../store'
+import { assistantStore, reviewStore, useReview } from '../../store'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +33,7 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { Label } from '../ui/label'
+import { AssistantSection, type KeyDraft } from './AssistantSettings'
 
 // Settings > Preferences (spec §12, like SettingsDialog in the reference app). Theme and
 // markdown colour preview straight away; Save keeps the changes, Cancel puts back the
@@ -42,7 +44,7 @@ const THEMES: { value: Theme; label: string }[] = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' }
 ]
-const HOTKEYS: HotkeyName[] = ['newRow', 'newColumn', 'saveAs']
+const HOTKEYS = HOTKEY_NAMES
 const isMac = navigator.platform.startsWith('Mac')
 // The reason from an IPC error, without Electron's "Error invoking remote method…" prefix.
 const reason = (err: unknown): string =>
@@ -61,6 +63,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
   const [keyErrors, setKeyErrors] = useState<Partial<Record<HotkeyName, string>>>({})
   const [confirmReset, setConfirmReset] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [keyDraft, setKeyDraft] = useState<KeyDraft>({ value: '', remove: false })
   const themeName = useReview((s) => s.themeName)
 
   useEffect(() => {
@@ -98,7 +101,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
   const save = async (): Promise<void> => {
     if (!draft) return
     try {
+      // The key first, so the check that saving a new provider starts can use it.
+      const key = keyDraft.value.trim()
+      if (key || keyDraft.remove)
+        await window.api.assistant.setKey(draft.assistant.provider, key || null)
       reviewStore.getState().setSettings(await window.api.settings.update(draft))
+      // Models may have been refreshed or the provider changed: the panels' list too.
+      void assistantStore.getState().refreshModels()
       onClose()
     } catch (err) {
       setError(reason(err))
@@ -125,7 +134,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
   return (
     <Dialog open onOpenChange={(open) => !open && cancel()}>
       <DialogContent
-        className="max-h-[90vh] overflow-y-auto sm:max-w-md"
+        className="max-h-[90vh] overflow-y-auto sm:max-w-xl"
         // While a hotkey is being set, Esc only stops that.
         onEscapeKeyDown={(e) => capturing && e.preventDefault()}
       >
@@ -190,6 +199,17 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
                 onKeyDown={(e) => onHotkeyKey(name, e)}
               />
             ))}
+
+            <AssistantSection
+              settings={draft.assistant}
+              savedProvider={saved?.assistant.provider ?? draft.assistant.provider}
+              savedBaseUrl={saved?.assistant.baseUrl ?? draft.assistant.baseUrl}
+              keyDraft={keyDraft}
+              onKeyDraft={setKeyDraft}
+              onChange={(patch) =>
+                preview({ ...draft, assistant: { ...draft.assistant, ...patch } })
+              }
+            />
           </div>
         )}
 
@@ -219,8 +239,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
           <AlertDialogHeader>
             <AlertDialogTitle>Reset to defaults?</AlertDialogTitle>
             <AlertDialogDescription>
-              Theme, markdown colours (and the override), spellcheck language and hotkeys go back to
-              their defaults. Nothing is saved until you click Save.
+              Theme, markdown colours (and the override), spellcheck language, hotkeys and the
+              assistant’s provider and models go back to their defaults (a saved API key is kept).
+              Nothing is saved until you click Save.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

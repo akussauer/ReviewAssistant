@@ -6,17 +6,20 @@ import {
   type FileInfo,
   type MenuCommand
 } from '../../shared/ipc'
+import { AssistantPanel } from './components/Assistant/AssistantPanel'
+import { BotButton } from './components/Assistant/BotButton'
 import { ReviewTable } from './components/ReviewTable/ReviewTable'
 import { PluginsDialog } from './components/Settings/PluginsDialog'
 import { SettingsDialog } from './components/Settings/SettingsDialog'
 import { useTabRows, type TabRows } from './components/ReviewTable/useTabRows'
 import { SearchBar } from './components/Tabs/SearchBar'
 import { TabStrip } from './components/Tabs/TabStrip'
+import { toggleAssistant } from './lib/assistant'
 import { matchesHotkey } from './lib/hotkeys'
 import { flushTextEdits } from './lib/pendingEdits'
-import { Button } from './components/ui/button'
 import { Welcome } from './components/Welcome/Welcome'
-import { reviewStore, useReview } from './store'
+import { assistantStore, reviewStore, useReview } from './store'
+import type { Tab } from '../../shared/ipc'
 
 // File-menu commands (main sends them; see MenuCommand). Text typed in the last moment
 // and pending search/filter changes are saved first, so a copy or export includes them;
@@ -30,6 +33,13 @@ function runMenuCommand(command: MenuCommand, openDialog: (d: SettingsPage) => v
   store.flushViews()
   const done = (what: string) => (err: unknown) => store.reportError(what, err)
   switch (command) {
+    case 'devSeed':
+      // Developer menu (`npm run dev` only): 2,000 random rows to test scrolling.
+      window.api.dev
+        ?.seed(2000)
+        .then(() => store.load())
+        .catch(done('Seeding'))
+      break
     case 'saveAs':
       window.api.file.saveAs().catch(done('Save As'))
       break
@@ -132,6 +142,12 @@ function App(): React.JSX.Element | null {
     () => window.api.menu.onCommand((command) => runMenuCommand(command, setSettingsPage)),
     []
   )
+  // The assistant's status and streamed replies (main pushes both).
+  useEffect(() => assistantStore.getState().init(), [])
+  // Chats belong to the open file: start afresh when another one opens.
+  useEffect(() => {
+    if (file !== undefined) assistantStore.getState().resetForFile(file?.generation)
+  }, [file])
 
   useEffect(() => {
     window.api.file
@@ -170,6 +186,7 @@ function ReviewView(): React.JSX.Element | null {
   const activeTabId = useReview((s) => s.activeTabId)
   const rows = useTabRows(activeTabId)
   const newRowKey = useReview((s) => s.settings?.hotkeys.newRow ?? 'CmdOrCtrl+N')
+  const assistantKey = useReview((s) => s.settings?.hotkeys.toggleAssistant ?? 'CmdOrCtrl+Shift+A')
 
   useEffect(() => {
     void reviewStore.getState().load()
@@ -192,6 +209,18 @@ function ReviewView(): React.JSX.Element | null {
     return () => window.removeEventListener('keydown', onKey)
   }, [newRowKey])
 
+  // Toggle assistant (Ctrl+Shift+A by default): the same as the status-bar button.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!matchesHotkey(e, assistantKey, navigator.platform.startsWith('Mac'))) return
+      if (document.querySelector('[role=dialog], [role=alertdialog]')) return
+      e.preventDefault()
+      toggleAssistant()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [assistantKey])
+
   if (status === 'error') {
     return <p className="p-4 text-sm text-destructive">Could not load the file: {error}</p>
   }
@@ -199,16 +228,25 @@ function ReviewView(): React.JSX.Element | null {
   return (
     <div className="flex h-screen flex-col">
       <TabStrip />
-      {activeTab.type === 'synthesis' ? (
-        <SynthesisPlaceholder rows={activeTab.rowIds.length} />
-      ) : (
-        // key: each tab gets its own search box and scroll position.
-        <div key={activeTab.id} className="flex min-h-0 flex-1 flex-col">
-          <SearchBar tabId={activeTab.id} />
-          <ReviewTable tabId={activeTab.id} rows={rows} />
-        </div>
-      )}
-      <StatusBar rows={rows} />
+      <div className="flex min-h-0 flex-1">
+        {activeTab.type === 'synthesis' ? (
+          <SynthesisPlaceholder rows={activeTab.rowIds.length} />
+        ) : (
+          // key: each tab gets its own search box and scroll position.
+          <div key={`table-${activeTab.id}`} className="flex min-w-0 flex-1 flex-col">
+            <SearchBar tabId={activeTab.id} />
+            <ReviewTable tabId={activeTab.id} rows={rows} />
+          </div>
+        )}
+        {activeTab.assistantEnabled && (
+          <AssistantPanel
+            key={`assistant-${activeTab.id}`}
+            tab={activeTab}
+            shownIds={rows.shownIds}
+          />
+        )}
+      </div>
+      <StatusBar rows={rows} tab={activeTab} />
     </div>
   )
 }
@@ -216,7 +254,7 @@ function ReviewView(): React.JSX.Element | null {
 // Synthesis tabs keep their rows; their own view (spec §11) arrives in M8.
 function SynthesisPlaceholder({ rows }: { rows: number }): React.JSX.Element {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+    <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
       <p className="text-base font-medium text-foreground">Synthesis tab</p>
       <p>
         This tab has {rows} {rows === 1 ? 'row' : 'rows'}. The synthesis view is coming in a later
@@ -227,25 +265,10 @@ function SynthesisPlaceholder({ rows }: { rows: number }): React.JSX.Element {
   )
 }
 
-function StatusBar({ rows }: { rows: TabRows }): React.JSX.Element {
+function StatusBar({ rows, tab }: { rows: TabRows; tab: Tab }): React.JSX.Element {
   const { allIds, shownIds } = rows
   const notice = useReview((s) => s.notice)
   const checkedCount = useReview((s) => s.rowOrder.filter((id) => s.rowsById[id]?.checked).length)
-  const [seeding, setSeeding] = useState(false)
-
-  // Development only (import.meta.env.DEV is false in a packaged build, and main doesn't
-  // register the channel there): adds 2,000 random rows to test scrolling performance.
-  const seed = async (): Promise<void> => {
-    setSeeding(true)
-    try {
-      await window.api.dev?.seed(2000)
-      await reviewStore.getState().load()
-    } catch (err) {
-      console.error('Seeding failed', err)
-    } finally {
-      setSeeding(false)
-    }
-  }
 
   return (
     <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-xs text-muted-foreground">
@@ -282,11 +305,7 @@ function StatusBar({ rows }: { rows: TabRows }): React.JSX.Element {
           </button>
         </span>
       )}
-      {window.api.dev && (
-        <Button size="xs" variant="outline" className="ml-auto" disabled={seeding} onClick={seed}>
-          {seeding ? 'Seeding…' : 'Dev: seed 2,000 rows'}
-        </Button>
-      )}
+      <BotButton tab={tab} />
     </div>
   )
 }

@@ -5,9 +5,14 @@ import { z } from 'zod'
 import {
   COLUMN_TYPES,
   FIXED_SHORTCUTS,
+  HOTKEY_NAMES,
   MARKDOWN_KINDS,
+  PROVIDERS,
   SPELLCHECK_LANGUAGES,
+  type AssistantSettings,
+  type ConnectionInput,
   type ExportKind,
+  type SendInput,
   type Settings,
   type CellValue,
   type ColumnCreateInput,
@@ -92,6 +97,8 @@ export const TabUpdateSchema = z.object({
   label: Label.optional(),
   type: TabType.optional(),
   assistantEnabled: z.boolean().optional(),
+  assistantWidth: z.number().int().min(200).max(5000).nullable().optional(),
+  assistantModel: z.string().min(1).max(300).nullable().optional(),
   view: View.optional()
 }) satisfies z.ZodType<TabUpdateInput>
 
@@ -115,6 +122,27 @@ export const ThemeSchema = z.enum(['light', 'dark', 'system'])
 
 export const HexColour = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Expected a colour like #0E80A3')
 
+export const ProviderSchema = z.enum(PROVIDERS)
+
+// '' = the provider's usual address. Only http(s), so a typo can't point at a file.
+const BaseUrl = z
+  .string()
+  .trim()
+  .max(500)
+  .refine((u) => u === '' || /^https?:\/\/[^\s]+$/i.test(u), 'Use an http:// or https:// address')
+
+const ModelId = z.string().min(1).max(300)
+
+export const AssistantSettingsSchema = z.object({
+  provider: ProviderSchema,
+  baseUrl: BaseUrl,
+  enabledModels: z.array(ModelId).max(500),
+  defaultModel: ModelId.nullable(),
+  fallbackContext: z.number().int().min(1_000).max(10_000_000),
+  showMeter: z.boolean(),
+  showCosts: z.boolean()
+}) satisfies z.ZodType<AssistantSettings>
+
 export const SettingsSchema = z.object({
   theme: ThemeSchema,
   spellcheckLanguage: z.enum(SPELLCHECK_LANGUAGES),
@@ -122,9 +150,41 @@ export const SettingsSchema = z.object({
   markdownColourOverride: z.boolean(),
   markdownColours: z.partialRecord(z.enum(MARKDOWN_KINDS), HexColour),
   hotkeys: z
-    .object({ newRow: AcceleratorSchema, newColumn: AcceleratorSchema, saveAs: AcceleratorSchema })
-    .refine((h) => new Set(Object.values(h)).size === 3, 'Each hotkey must be different')
+    .object({
+      newRow: AcceleratorSchema,
+      newColumn: AcceleratorSchema,
+      saveAs: AcceleratorSchema,
+      toggleAssistant: AcceleratorSchema
+    })
+    .refine(
+      (h) => new Set(Object.values(h)).size === HOTKEY_NAMES.length,
+      'Each hotkey must be different'
+    ),
+  assistant: AssistantSettingsSchema
 }) satisfies z.ZodType<Settings>
+
+// The key being typed in Preferences. Trimmed, since pasting often adds a space.
+const ApiKey = z.string().trim().min(1, 'Enter a key').max(1000)
+
+export const ConnectionInputSchema = z.object({
+  provider: ProviderSchema,
+  baseUrl: BaseUrl,
+  key: ApiKey.optional()
+}) satisfies z.ZodType<ConnectionInput>
+
+export const SetKeySchema = z.object({ provider: ProviderSchema, key: ApiKey.nullable() })
+
+// A chat message: generous, but it has to fit in a request.
+export const SendInputSchema = z.object({
+  tabId: Id,
+  text: z.string().trim().min(1, 'Type a message').max(200_000),
+  rowIds: IdList.nullable(),
+  fileIds: z.array(z.string().uuid()).max(50),
+  model: ModelId,
+  generation: z.number().int()
+}) satisfies z.ZodType<SendInput>
+
+export const FileIdSchema = z.string().uuid()
 
 // A folder name inside our Themes/Plugins folders (main also checks it's one it listed).
 export const FolderName = z

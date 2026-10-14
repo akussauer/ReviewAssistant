@@ -70,6 +70,35 @@ describe('mergeWithDefaults', () => {
     expect(merged.markdownColours).toEqual({ h1: '#112233' })
   })
 
+  it('loads an M6a config without assistant settings, and keeps each valid one', () => {
+    const old = mergeWithDefaults({ theme: 'dark', hotkeys: { newRow: 'CmdOrCtrl+R' } })
+    expect(old.assistant).toEqual(DEFAULT_CONFIG.assistant)
+    expect(old.hotkeys).toEqual({ ...DEFAULT_CONFIG.hotkeys, newRow: 'CmdOrCtrl+R' })
+    expect(old.modelCache).toBeNull()
+    const merged = mergeWithDefaults({
+      assistant: {
+        provider: 'ollama',
+        baseUrl: 'file:///etc', // not http(s) -> default
+        enabledModels: ['llama3'],
+        defaultModel: 'llama3',
+        fallbackContext: 5, // too small -> default
+        showCosts: false
+      }
+    })
+    expect(merged.assistant).toEqual({
+      ...DEFAULT_CONFIG.assistant,
+      provider: 'ollama',
+      enabledModels: ['llama3'],
+      defaultModel: 'llama3',
+      showCosts: false
+    })
+  })
+
+  it('falls back to the default hotkeys when an old one clashes with a new default', () => {
+    const merged = mergeWithDefaults({ hotkeys: { newRow: 'CmdOrCtrl+Shift+A' } })
+    expect(merged.hotkeys).toEqual(DEFAULT_CONFIG.hotkeys)
+  })
+
   it('returns defaults for garbage', () => {
     expect(mergeWithDefaults(null)).toEqual(DEFAULT_CONFIG)
     expect(mergeWithDefaults('nope')).toEqual(DEFAULT_CONFIG)

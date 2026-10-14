@@ -7,6 +7,8 @@ type TabRecord = {
   type: Tab['type']
   position: number
   assistant_enabled: number
+  assistant_width: number | null
+  assistant_model: string | null
   view: string
 }
 
@@ -27,6 +29,8 @@ const toTab = (db: DB, r: TabRecord): Tab => ({
   type: r.type,
   position: r.position,
   assistantEnabled: r.assistant_enabled === 1,
+  assistantWidth: r.assistant_width,
+  assistantModel: r.assistant_model,
   view: JSON.parse(r.view),
   rowIds: rowIdsOf(db, r.id)
 })
@@ -89,6 +93,18 @@ export function updateTab(db: DB, input: TabUpdateInput): Tab {
     if (input.assistantEnabled !== undefined) {
       db.prepare('UPDATE tabs SET assistant_enabled = ? WHERE id = ?').run(
         input.assistantEnabled ? 1 : 0,
+        tab.id
+      )
+    }
+    if (input.assistantWidth !== undefined) {
+      db.prepare('UPDATE tabs SET assistant_width = ? WHERE id = ?').run(
+        input.assistantWidth,
+        tab.id
+      )
+    }
+    if (input.assistantModel !== undefined) {
+      db.prepare('UPDATE tabs SET assistant_model = ? WHERE id = ?').run(
+        input.assistantModel,
         tab.id
       )
     }

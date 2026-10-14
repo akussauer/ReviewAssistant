@@ -265,18 +265,58 @@ The main tab shows all rows, so it has no `tab_rows` entries.
 - *Highlighter fixes vs md_highlighter.py* (now visible with separate colours): `*italic*` no longer matches inside `**bold**` (the reference drew bold as italic); `***both***` is bold + italic; a link's text can't contain `]`, so `- [ ] see [a](b)` keeps its task box; `---` is a rule only on a line of its own. The parity fixture marks the changed lines with a `note`.
 
 ### M7 – Assistant (per tab)
-- Settings: provider, `safeStorage` key, model, test button; key check at startup (free endpoint); assistant options hidden without a key
-- Tab context menu toggle (main tab included); right-hand splitter panel; conversation saved per tab
-- Chips: auto "This tab (n rows)" (filtered rows, all columns), file chips (txt/md/pdf), one-shot file chips with a "📎 referenced" note, token meter
+- Settings: provider, `safeStorage` key, model list (enable/disable, default, suggested), token-meter and cost switches, test button; key check at startup (free endpoint)
+- Status-bar bot toggle button (replaces the tab context-menu toggle); right-hand splitter panel; conversation and panel width saved per tab
+- Chips: auto "This tab (n rows)" (filtered rows, all columns), file chips (txt/md/pdf), one-shot file chips with a "📎 referenced" note, token meter with cost estimate and per-tab running total, per-tab model picker
 - Streaming replies with a stop button; markdown rendering; Enter/Shift+Enter; prompt wrapping as in `LLM_Assistant.py`
 
-**Accept:** the key never appears in the renderer or DevTools; the app is unchanged with no key; the reviewer confirms there is no write path.
+**Accept:** the key never appears in the renderer or DevTools; with no key the only difference is a disabled bot button with a tooltip, and nothing calls the network except the key check; the bot button toggles the active tab's panel on Review and Synthesis tabs, its pressed state follows tab switches, and Ctrl+Shift+A does the same; the icon is visible in Light, Dark and an Obsidian theme; the dev seed button is gone from the status bar and lives in a Developer menu under `npm run dev` only; models can be enabled, starred as default and restored with *Use suggested*; each tab remembers its model; the meter drops the oldest turns and recommends New chat on a long conversation; the tab's running cost survives reopening the file and both switches hide their parts; the reviewer confirms there is no write path.
+
+**Decisions (agreed 14 Oct 2026):**
+- *Toggle = status-bar button only.* A toggle button at the far right of the status bar (where the dev seed button was) with `resources/ai_bot.png` as its icon. The right-click *Assistant* item from the spec is dropped. Per tab: it toggles the active tab's `assistant_enabled`, and its pressed state follows tab switches. Shown on every tab, Synthesis included.
+- *Icon:* the PNG is solid black, so it is used as a CSS `mask-image` filled with `currentColor` (muted text when off, accent when on). That way it follows Light/Dark and Obsidian themes. `aria-pressed` and `aria-label="Assistant"` are set on it.
+- *Enabled when* the last check passed for the chosen provider: startup key-info call for OpenRouter/OpenAI-compatible, server reachable for Ollama, or the Test button in Preferences. Otherwise it is disabled with a tooltip giving the reason ("No API key — set one in Settings → Preferences" / "Key check failed: …"). Disabled buttons get no pointer events, so the tooltip sits on a wrapping span. Main exposes only the check *status* to the renderer, never the key.
+- *Saved-on tab but check failing:* the panel opens with the conversation read-only (input disabled, reason shown). The button stays enabled while that tab's panel is on, so it can be turned off. Once off, it is disabled until a check passes.
+- *Hotkey:* "Toggle assistant" joins the Preferences hotkeys (`HotkeyName` gets `toggleAssistant`, default `CmdOrCtrl+Shift+A`), with the same capture and conflict rules. It does nothing while the button is disabled.
+- *One M7 migration* adds `tabs.assistant_width` (nullable; null = default width, saved when the splitter drag ends), `tabs.assistant_model` (nullable model id), and to `messages`: `model`, `tokens_in`, `tokens_out`, `cost` (USD, nullable) and `cost_estimated` (0/1).
+- *New chat:* a button in the panel header asks first, then deletes that tab's messages (and resets its running total). Turning the assistant off keeps the history.
+- *Models in Preferences:* the Assistant section fetches the provider's model list (OpenRouter `/models` gives price and context length; OpenAI-compatible `/models` gives ids only; Ollama `/api/tags` gives local models, which cost $0). It's a searchable table with an Enabled tick, price in/out per 1M tokens and context length where known, and a star for the **default**. The list is cached in config.json with a Refresh button; fetching happens in main.
+- *Suggested:* a small built-in starter set (cheap models with large context windows), plus `openrouter/auto` for OpenRouter. It's applied automatically while no model is enabled, and a **Use suggested** button restores it. Ids the provider doesn't offer are skipped. The exact list is picked at implementation time from the live `/models` output and shown to the owner.
+- *Picker:* a dropdown in the panel header lists the enabled models. The tab's choice is saved in `tabs.assistant_model`, and new tabs use the default. If the saved model is no longer enabled or offered, the default is used and a small note says "X is no longer enabled"; the tab's choice is updated on the next send.
+- *Token meter:* `~12.4k / 124k tokens`. It counts everything sent (system prompt + history + tab rows + files + input), estimated as chars ÷ 4 (no new dependency, shown with "~"). The limit is the model's context length minus 4k for the reply. Where the length is unknown, an editable fallback in Preferences (default 32k) is used. The meter turns amber at 80%.
+- *Long chats:* when everything doesn't fit, the oldest turns are left out of what's sent (they stay visible). The meter notes "oldest n messages not sent" and a banner recommends **New chat**. Sending is blocked, with the reason, only if the tab rows + files + input don't fit on their own (remove the tab chip or files).
+- *Costs (only where prices are known):* next to the meter, "~$0.002 next message" (input price × estimated tokens) and "$0.041 this tab" (running total). Each reply's cost is the one OpenRouter reports (`usage` with cost); if none is given, it's worked out from the reported token counts × list prices and marked "~". Local/free models count as $0. Stored per message, so the total survives reopening. USD only.
+- *Switches in Preferences:* **Show token meter** and **Show costs**, both on by default. Hiding the meter doesn't turn off blocking; the reason appears when Send is pressed.
+- *Added during implementation (14 Oct 2026):* new dependencies `unpdf` (PDF text, main only), `react-markdown` + `remark-gfm` (replies; no raw HTML, images shown as text, links open in the browser). Saved history is text only: each send attaches the tab's current rows to the newest message, files go once, and a question whose reply failed is joined with the next one. The key is encrypted with `safeStorage` in `<userData>/assistant-keys.json` and is only sent to the saved provider and address. PDFs up to 20 MB; the same file can't be attached twice. New chat during a reply discards that reply. Suggested OpenRouter models: claude-haiku-5.5, gpt-6-luna, gemini-3.5-flash-lite, deepseek-v4.1-flash, openrouter/auto.
+- *Anthropic provider (added 14 Oct 2026):* Claude through Anthropic's own API via the official `@anthropic-ai/sdk` (new dependency, main only; owner approved). Key check = listing models (free). Anthropic's model list has no prices, so main keeps a price table (Oct 2026) and costs are worked out from the reported tokens (shown with "~"). Suggested: Claude Opus 5.5 (default), Sonnet 5.5, Haiku 5.5. Opus/Sonnet requests opt into Anthropic's server-side refusal fallback (`fallbacks: "default"`); Haiku 5.5 has none. A refusal shows as an error in the chat. Address field hidden (fixed endpoint, like OpenRouter).
+- *Dev seed button:* moved out of the status bar into a **Developer** menu (Seed 2,000 rows) that main builds only when `import.meta.env.DEV` is true. It is routed through the existing `menu:command` path, and the renderer reloads afterwards. Packaged builds have neither the menu nor the IPC channel.
 
 ### M8 – Synthesis tabs
 - Start by reviewing spec §11 with the owner (it may have changed)
 - Read-only table, per-column include and text panels, instructions line, Synthesise (one LLM call per included column), loading states, saved results
 
 **Accept:** results persist and stay editable; changing a tab's type between Review and Synthesis keeps its rows.
+
+### M8a – Claude Desktop connection (MCP, read-only)
+Lets people who pay for a Claude subscription (Pro/Max) use it with their review, with no API key and no API cost. Agreed 14 Oct 2026.
+
+*Why this route:* Anthropic's terms don't allow third-party apps to sign in with a Claude account or send requests through a subscription; outside apps must use API keys (check Anthropic's current terms at the start of the milestone). Claude Desktop, however, can use local **MCP servers** (Model Context Protocol: small local programs that offer Claude "tools" to call). Review Assistant ships one, so the chat happens in Claude Desktop on the user's own plan, and Claude reads their review through our tools. The built-in panel (M7) stays for API-key users.
+
+- **Read-only tools only** (CLAUDE.md: no path from model output into rows/columns). Starting list, to be confirmed: `list_tabs` (names, row counts), `get_columns`, `get_rows` (a tab's rows with all columns, readable values as in `formatRows`, paged), `search_rows` (same search syntax as the app, M5), `get_row` (one row by id). Results are data; tool descriptions say so.
+- **Off by default.** Preferences → Assistant gets a "Connect to Claude Desktop" section: an on/off switch, a status line, and "Add to Claude Desktop" (writes or explains the Claude Desktop config entry, or produces a Desktop Extension `.mcpb`; decide which in the milestone).
+- **Settings and docs:** new spec section (§10.1) describing the connection; `docs/mcp.md` with setup steps for users.
+
+**Open questions for the start of the milestone:**
+1. *How the MCP server reaches the data.*
+   - (a) A small script that Claude Desktop starts (stdio), which talks to the running app over a local named pipe / socket. Pro: one DB connection, always the open file; con: only works while the app is open.
+   - (b) The script opens the `.review` file read-only itself. Pro: works with the app closed; con: better-sqlite3 is built for Electron's Node (run the script with Electron + `ELECTRON_RUN_AS_NODE`), and which file to read must be chosen.
+   Recommendation to discuss: (a).
+2. *Which file is exposed:* only the file open in the app, or a chosen one; can Claude switch files? (Suggest: only the open file.)
+3. *Safety:* local only (no network port; a named pipe with a per-install secret), read-only DB connection, size limits on tool results (large tabs paged), an activity line in the status bar while Claude is reading.
+4. *Packaging:* how the script ships with the installer (M9) and where Claude Desktop is told to find it; Windows first.
+5. *New dependency:* `@modelcontextprotocol/sdk` (ask before adding, per CLAUDE.md).
+
+**Accept:** with the switch off, nothing listens and nothing changes; with it on and Claude Desktop set up, Claude can list tabs and read rows of the open review and answer questions about them; no tool can change data (the reviewer confirms); closing the app or turning the switch off cuts the connection cleanly; works with no API key.
 
 ### M9 – Packaging and polish
 - electron-builder NSIS installer (replaces `setup.iss`), app icon from `Resources/Logo.ico`, `.review` file association
@@ -304,7 +344,8 @@ The main tab shows all rows, so it has no `tab_rows` entries.
 - [X] M5a Rows, checked
 - [X] M6 File menu, import/export, settings
 - [X] M6a Themes, Plugin support
-- [ ] M7 Assistant
+- [X] M7 Assistant
 - [ ] M8 Synthesis
+- [ ] M8a Claude Desktop connection (MCP)
 - [ ] M9 Packaging
 - [ ] M10 Markdown / Obsidian export (long-term)

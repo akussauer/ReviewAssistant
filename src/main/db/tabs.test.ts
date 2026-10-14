@@ -24,6 +24,8 @@ describe('tabs', () => {
         type: 'main',
         position: 0,
         assistantEnabled: false,
+        assistantWidth: null,
+        assistantModel: null,
         view: {},
         rowIds: []
       }
@@ -32,6 +34,15 @@ describe('tabs', () => {
     expect(() => updateTab(db, { id: MAIN_TAB_ID, label: 'X' })).toThrow()
     // The assistant can be turned on for the main tab too (spec §8).
     expect(updateTab(db, { id: MAIN_TAB_ID, assistantEnabled: true }).assistantEnabled).toBe(true)
+  })
+
+  it('saves the assistant panel width and model per tab', () => {
+    const db = freshReview()
+    const tab = createTab(db, { label: 'Pacing', type: 'synthesis' })
+    const saved = updateTab(db, { id: tab.id, assistantWidth: 420, assistantModel: 'a/b' })
+    expect(saved).toMatchObject({ assistantWidth: 420, assistantModel: 'a/b' })
+    expect(updateTab(db, { id: tab.id, assistantModel: null }).assistantModel).toBeNull()
+    expect(getTab(db, MAIN_TAB_ID).assistantWidth).toBeNull()
   })
 
   it('needs unique names', () => {

@@ -1,8 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
 import { z } from 'zod'
-import { DEFAULT_SETTINGS, MARKDOWN_KINDS } from '../shared/ipc'
-import { AcceleratorSchema, HexColour, SettingsSchema } from '../shared/schemas'
+import { DEFAULT_SETTINGS, HOTKEY_NAMES, MARKDOWN_KINDS } from '../shared/ipc'
+import {
+  AcceleratorSchema,
+  AssistantSettingsSchema,
+  HexColour,
+  ProviderSchema,
+  SettingsSchema
+} from '../shared/schemas'
 import { log } from './log'
 
 // App-wide settings in <userData>/config.json, like FileFunctions.get_configs in the
@@ -17,7 +23,24 @@ const ConfigSchema = z.object({
   // Settings > Plugins (spec §12.1), changed straight from that dialog.
   activeTheme: z.string().nullable(), // a ThemeInfo id; null = Default
   obsidianVault: z.string().nullable(),
-  enabledPlugins: z.array(z.string()) // folder names in <userData>/Plugins
+  enabledPlugins: z.array(z.string()), // folder names in <userData>/Plugins
+  // The provider's model list (Preferences > Assistant), so it isn't fetched every time.
+  modelCache: z
+    .object({
+      provider: ProviderSchema,
+      baseUrl: z.string(),
+      fetchedAt: z.string(),
+      models: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          contextLength: z.number().nullable(),
+          priceIn: z.number().nullable(),
+          priceOut: z.number().nullable()
+        })
+      )
+    })
+    .nullable()
 })
 
 export type Config = z.infer<typeof ConfigSchema>
@@ -28,7 +51,8 @@ export const DEFAULT_CONFIG: Config = {
   lastFile: null,
   activeTheme: null,
   obsidianVault: null,
-  enabledPlugins: []
+  enabledPlugins: [],
+  modelCache: null
 }
 
 export const MAX_RECENT = 10
@@ -37,11 +61,26 @@ export const MAX_RECENT = 10
 function mergeHotkeys(raw: unknown): Config['hotkeys'] {
   const given = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const defaults = DEFAULT_CONFIG.hotkeys
-  const pick = (name: keyof typeof defaults): string => {
+  const merged = { ...defaults }
+  for (const name of HOTKEY_NAMES) {
     const parsed = AcceleratorSchema.safeParse(given[name])
-    return parsed.success ? parsed.data : defaults[name]
+    if (parsed.success) merged[name] = parsed.data
   }
-  return { newRow: pick('newRow'), newColumn: pick('newColumn'), saveAs: pick('saveAs') }
+  // Two hotkeys can clash, e.g. one set to Ctrl+Shift+A before Toggle assistant existed.
+  // Settings with a clash can't be saved, so (rarely) all hotkeys go back to the defaults.
+  return new Set(Object.values(merged)).size === HOTKEY_NAMES.length ? merged : { ...defaults }
+}
+
+// Each valid assistant field is kept; a bad one falls back to its default.
+function mergeAssistant(raw: unknown): Config['assistant'] {
+  const given = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const defaults = DEFAULT_CONFIG.assistant
+  const merged: Record<string, unknown> = {}
+  for (const [key, schema] of Object.entries(AssistantSettingsSchema.shape)) {
+    const parsed = (schema as z.ZodType).safeParse(given[key])
+    merged[key] = parsed.success ? parsed.data : defaults[key as keyof typeof defaults]
+  }
+  return AssistantSettingsSchema.parse(merged)
 }
 
 // Each valid per-element colour is kept; an unknown element (e.g. from a newer version) or
@@ -67,7 +106,9 @@ export function mergeWithDefaults(raw: unknown): Config {
         ? mergeHotkeys(obj.hotkeys)
         : key === 'markdownColours'
           ? mergeMarkdownColours(obj.markdownColours)
-          : obj[key]
+          : key === 'assistant'
+            ? mergeAssistant(obj.assistant)
+            : obj[key]
     const parsed = (fieldSchema as z.ZodType).safeParse(value)
     merged[key] = parsed.success ? parsed.data : DEFAULT_CONFIG[key as keyof Config]
   }

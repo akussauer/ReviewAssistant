@@ -38,7 +38,8 @@ export function matchesHotkey(e: KeyLike, accelerator: string, isMac = false): b
 export const HOTKEY_LABELS: Record<HotkeyName, string> = {
   newRow: 'New row',
   newColumn: 'New column',
-  saveAs: 'Save As'
+  saveAs: 'Save As',
+  toggleAssistant: 'Toggle assistant'
 }
 
 export type Capture =

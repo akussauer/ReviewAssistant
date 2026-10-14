@@ -141,3 +141,99 @@
     }
   }
 }
+
+/* Assistant replies (components/Assistant/Markdown.tsx). Tailwind resets headings and
+   lists, so give the rendered markdown some structure back, in the markdown colours. */
+.chat-markdown {
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.chat-markdown > * + * {
+  margin-top: 0.5em;
+}
+.chat-markdown :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: 600;
+  margin-top: 0.75em;
+}
+.chat-markdown h1 {
+  font-size: 1.15em;
+  color: var(--md-h1, inherit);
+}
+.chat-markdown h2 {
+  font-size: 1.1em;
+  color: var(--md-h2, inherit);
+}
+.chat-markdown h3 {
+  color: var(--md-h3, inherit);
+}
+.chat-markdown :is(h4, h5, h6) {
+  color: var(--md-h4, inherit);
+}
+.chat-markdown strong {
+  color: var(--md-bold, inherit);
+}
+.chat-markdown :is(ul, ol) {
+  padding-left: 1.25em;
+}
+.chat-markdown ul {
+  list-style: disc;
+}
+.chat-markdown ol {
+  list-style: decimal;
+}
+.chat-markdown li::marker {
+  color: var(--md-list, currentColor);
+}
+.chat-markdown li > :is(ul, ol) {
+  margin-top: 0.25em;
+}
+.chat-markdown .contains-task-list {
+  list-style: none;
+  padding-left: 0.25em;
+}
+.chat-markdown a {
+  color: var(--md-link, var(--primary));
+  text-decoration: underline;
+}
+.chat-markdown code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.9em;
+  border-radius: 4px;
+  background: var(--muted);
+  padding: 0 0.25em;
+  color: var(--md-code, inherit);
+}
+.chat-markdown pre {
+  overflow-x: auto;
+  border-radius: 6px;
+  background: var(--muted);
+  padding: 0.5em 0.75em;
+}
+.chat-markdown pre code {
+  padding: 0;
+  background: none;
+}
+.chat-markdown blockquote {
+  border-left: 3px solid var(--md-quote, var(--border));
+  padding-left: 0.75em;
+  color: var(--muted-foreground);
+}
+.chat-markdown hr {
+  border-color: var(--md-rule, var(--border));
+}
+.chat-markdown table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.chat-markdown :is(th, td) {
+  border: 1px solid var(--border);
+  padding: 0.2em 0.5em;
+  text-align: left;
+  vertical-align: top;
+}
+.chat-markdown th {
+  background: var(--muted);
+  font-weight: 600;
+}

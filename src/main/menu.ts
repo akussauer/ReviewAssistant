@@ -13,6 +13,7 @@ export type MenuActions = {
   recent: string[]
   hasFile: boolean // Save As and Export need an open review
   saveAsKey: string // the Save As hotkey from the settings
+  dev: boolean // `npm run dev`: adds the Developer menu
 }
 
 export function buildMenu(actions: MenuActions): Menu {
@@ -57,7 +58,16 @@ export function buildMenu(actions: MenuActions): Menu {
         run('Preferences…', 'preferences', { accelerator: 'CmdOrCtrl+,' }),
         run('Plugins…', 'plugins')
       ]
-    }
+    },
+    // Development only: never built into a packaged app (see index.ts).
+    ...(actions.dev
+      ? [
+          {
+            label: 'Developer',
+            submenu: [run('Seed 2,000 rows', 'devSeed', { enabled: actions.hasFile })]
+          }
+        ]
+      : [])
   ]
   return Menu.buildFromTemplate(template)
 }

@@ -5,15 +5,20 @@ import {
   CheckAllSchema,
   ColumnCreateSchema,
   ColumnUpdateSchema,
+  ConnectionInputSchema,
   ExportKindSchema,
+  FileIdSchema,
   FolderName,
   Id,
   IdList,
   NoInput,
   PathInput,
   PluginEnabledSchema,
+  ProviderSchema,
   RowCreateSchema,
   SeedCountSchema,
+  SendInputSchema,
+  SetKeySchema,
   SetCheckedSchema,
   SetHeightSchema,
   SettingsSchema,
@@ -83,6 +88,21 @@ import {
   setPluginEnabled,
   themesState
 } from '../addons'
+import {
+  assistantStatus,
+  attachDialog,
+  cachedModels,
+  clear,
+  detach,
+  hasKey,
+  recheck,
+  refreshModels,
+  send,
+  setKey,
+  stop,
+  testConnection
+} from '../assistant'
+import { listMessages } from '../db/messages'
 import { handle } from './handle'
 
 export function registerIpc({ dev }: { dev: boolean }): void {
@@ -163,7 +183,10 @@ export function registerIpc({ dev }: { dev: boolean }): void {
   // ---- Tabs
   handle(IPC.tabsCreate, TabCreateSchema, (input) => createTab(getDb(), input))
   handle(IPC.tabsUpdate, TabUpdateSchema, (input) => updateTab(getDb(), input))
-  handle(IPC.tabsDelete, Id, (id) => deleteTab(getDb(), id))
+  handle(IPC.tabsDelete, Id, (id) => {
+    stop(id) // a reply still coming for this tab has nowhere to go
+    deleteTab(getDb(), id)
+  })
   handle(IPC.tabsReorder, IdList, (ids) => reorderTabs(getDb(), ids))
   handle(IPC.tabsAddRows, TabRowsSchema, ({ tabId, rowIds }) =>
     addRowsToTab(getDb(), tabId, rowIds)
@@ -172,6 +195,21 @@ export function registerIpc({ dev }: { dev: boolean }): void {
     removeRowsFromTab(getDb(), tabId, rowIds)
   )
   handle(IPC.tabsSetActive, Id, (id) => setActiveTabId(getDb(), id))
+
+  // ---- Assistant (read-only: none of these change rows or columns)
+  handle(IPC.assistantStatus, NoInput, assistantStatus)
+  handle(IPC.assistantRecheck, NoInput, recheck)
+  handle(IPC.assistantTest, ConnectionInputSchema, testConnection)
+  handle(IPC.assistantHasKey, ProviderSchema, hasKey)
+  handle(IPC.assistantSetKey, SetKeySchema, ({ provider, key }) => setKey(provider, key))
+  handle(IPC.assistantFetchModels, ConnectionInputSchema, refreshModels)
+  handle(IPC.assistantModels, NoInput, cachedModels)
+  handle(IPC.assistantMessages, Id, (tabId) => listMessages(getDb(), tabId))
+  handle(IPC.assistantClear, Id, clear)
+  handle(IPC.assistantAttach, NoInput, attachDialog)
+  handle(IPC.assistantDetach, FileIdSchema, detach)
+  handle(IPC.assistantSend, SendInputSchema, send)
+  handle(IPC.assistantStop, Id, stop)
 
   // ---- Development only
   if (dev) handle(IPC.devSeed, SeedCountSchema, (count) => seedRows(getDb(), count))
