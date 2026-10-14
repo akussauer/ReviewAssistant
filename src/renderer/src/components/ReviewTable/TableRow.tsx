@@ -3,7 +3,7 @@ import type { Column, Row } from '../../../../shared/ipc'
 import { reviewStore } from '../../store'
 import { Cell } from './Cell'
 import { ContextMenu, ContextMenuTrigger } from '../ui/context-menu'
-import { ROW_HEADER_WIDTH } from './layout'
+import { HEADER_HEIGHT, ROW_HEADER_WIDTH } from './layout'
 import { RowMenu } from './RowMenu'
 
 type Props = {
@@ -15,9 +15,13 @@ type Props = {
 }
 
 // One table row, absolutely positioned by the virtualiser (only visible rows exist).
+// data-row-id / data-col let keyboard navigation find a cell (useCellNavigation); the
+// scroll margins keep a cell scrolled to by the keyboard clear of the sticky header and
+// row-header strip.
 export const TableRow = memo(function TableRow({ row, columns, widths, top, live }: Props) {
   return (
     <div
+      data-row-id={row.id}
       className="absolute top-0 left-0 flex border-b"
       style={{ transform: `translateY(${top}px)`, height: row.height }}
     >
@@ -25,8 +29,13 @@ export const TableRow = memo(function TableRow({ row, columns, widths, top, live
       {columns.map((column, i) => (
         <div
           key={column.id}
+          data-col={i}
           className="shrink-0 overflow-hidden border-r px-2 py-1 text-sm"
-          style={{ width: widths[i] }}
+          style={{
+            width: widths[i],
+            scrollMarginTop: HEADER_HEIGHT,
+            scrollMarginLeft: ROW_HEADER_WIDTH
+          }}
         >
           <Cell rowId={row.id} column={column} value={row.data[String(column.id)]} live={live} />
         </div>
@@ -70,14 +79,16 @@ function RowHeader({ row }: { row: Row }): React.JSX.Element {
     <ContextMenu onOpenChange={setMenuOpen}>
       <ContextMenuTrigger asChild>
         <div
+          data-col={-1}
           title="Right-click for row options"
           className="sticky left-0 z-10 flex shrink-0 items-start justify-center border-r bg-muted pt-2"
-          style={{ width: ROW_HEADER_WIDTH }}
+          style={{ width: ROW_HEADER_WIDTH, scrollMarginTop: HEADER_HEIGHT }}
         >
           <input
             type="checkbox"
             checked={row.checked}
             aria-label="Check row"
+            // Space toggles it natively once Tab has reached it.
             onChange={(e) => void reviewStore.getState().setChecked([row.id], e.target.checked)}
           />
           <div

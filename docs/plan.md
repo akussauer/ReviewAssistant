@@ -351,7 +351,7 @@ Lets people who pay for a Claude subscription (Pro/Max) use it with their review
 - *Text cells:* inside a focused text cell Ctrl+Z is CodeMirror's own step-by-step undo (as now); elsewhere Ctrl+Z undoes the latest list entry. One visit to a text cell (focus → leave) is one entry.
 - *Redo:* Ctrl+Y and Ctrl+Shift+Z both redo (CodeMirror already accepts both); a new edit clears the redo list. The Edit menu shows Ctrl+Y.
 - *Invalidation:* entries for a deleted row, or a deleted/retyped column, are dropped; undoing to a removed dropdown option is skipped with a status-bar notice.
-- *Off-screen cells:* if the row is in the current tab, scroll to the cell and briefly highlight it; the status bar always says e.g. "Undid edit to Notes (row 12)". Never switch tabs.
+- *Off-screen cells:* if the row is in the current tab, scroll to the cell and briefly highlight it; the status bar always says e.g. "Undid edit to Notes (“Pacing in elite swimmers”)". Never switch tabs.
 - *Other inputs:* search box, filters, dialogs and the assistant input keep their own native undo.
 - *Tab order:* row checkbox → cells left to right → next row, in the shown order (sort/filter/search); off-screen rows scroll into view; Tab on the very last cell does nothing.
 - *Tab in text cells:* indents / Shift+Tab outdents. Esc leaves the cell and remembers it, so the next Tab / Shift+Tab moves on from there; a click elsewhere resets this.
@@ -361,6 +361,7 @@ Lets people who pay for a Claude subscription (Pro/Max) use it with their review
 - *Menus:* new Edit menu (Undo "edit to <column>", greyed out when empty; Redo; Cut, Copy, Paste, Select All) and View menu (Search).
 - *Reserved shortcuts:* the hotkey picker also refuses Ctrl+F, Ctrl+Y, Ctrl+Shift+Z; a saved clashing hotkey falls back to its default with a notice.
 - *Not doing:* Menu key / Shift+F10 for context menus. Focus outlines already exist.
+- *Added during implementation (14 Oct 2026):* rows have no visible numbers, so the undo notice names the row by its first non-empty text column (fallback "row N", its main-table place). ↑/↓ steps during one visit to a number cell are one undo entry (like a text-cell visit), and Ctrl+Z while typing a number drops the draft. CodeMirror binds Ctrl+Shift+Z for redo only on Linux/macOS, so text cells add it. The menu shows Ctrl+Z/Y/F but doesn't register them (`registerAccelerator: false`); the page handles the keys so text boxes keep their own undo. Undo history lives in the renderer store (`store/undo.ts`); edits still save through the normal `updateCell` IPC. A text cell's own undo history is emptied when its text is replaced from outside (e.g. by an app-level undo), as its old steps no longer fit.
 
 **Accept:** edit a dropdown, date, number and text cell, scroll away, and Ctrl+Z ×4 restores all four (scrolling to each, with a status notice), Ctrl+Y redoes them, and every step is saved in the file; deleting a row with pending undo entries makes Ctrl+Z skip them without error; keyboard only: Tab crosses a row into the next (including rows that start off screen), Tab indents in a text cell and Esc → Tab moves on, Ctrl+↑/↓ move between rows, Space toggles row checks; the search bar is hidden on first launch, Ctrl+F toggles it, hiding clears the search, the state survives a restart, and a file with a saved search shows the bar; the Edit menu's Undo label follows the next undo; the hotkey picker refuses Ctrl+F, Ctrl+Y and Ctrl+Shift+Z; works with no API key.
 
@@ -394,6 +395,6 @@ Lets people who pay for a Claude subscription (Pro/Max) use it with their review
 - [X] M7 Assistant
 - [X] M8a Claude Desktop connection (MCP)
 - [X] M9 Packaging
-- [ ] M9a Polish (undo, keyboard navigation, search bar)
+- [X] M9a Polish (undo, keyboard navigation, search bar)
 - [ ] M10 Markdown / Obsidian export (long-term)
 - [ ] M11 Synthesis (was M8)

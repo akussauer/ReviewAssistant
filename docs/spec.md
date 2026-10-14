@@ -129,9 +129,9 @@ Title (text), Study Type (dropdown: RCT, Cohort, Case Study, Systematic Review, 
 - **Undo [New]:**
   - **Ctrl+Z** undoes recent cell edits; **Ctrl+Y** and **Ctrl+Shift+Z** both redo. A new edit clears the redo list. Each undo/redo is saved like any other edit.
   - One list per open file, for all cell types, kept until another file is opened; the last 100 edits.
-  - Inside a text cell, Ctrl+Z undoes the typing step by step (the editor's own undo). Elsewhere it undoes the latest edit in the list; everything typed during one visit to a text cell counts as one edit.
+  - Inside a text cell, Ctrl+Z undoes the typing step by step (the editor's own undo). Elsewhere it undoes the latest edit in the list; everything typed during one visit to a text cell counts as one edit (likewise ↑/↓ steps in a number cell). In a number cell, Ctrl+Z while typing drops the half-typed number.
   - Not undoable: row checks, row heights, adding/deleting rows, column changes. Edits to a deleted row, or to a deleted or retyped column, are dropped from the list. Undoing to a dropdown option that has since been removed is skipped, with a notice.
-  - If the undone cell's row is in the current tab, the table scrolls to it and briefly highlights it. The status bar always says e.g. "Undid edit to Notes (row 12)". The app never switches tabs.
+  - If the undone cell's row is in the current tab, the table scrolls to it and briefly highlights it. The status bar always says e.g. "Undid edit to Notes (“Pacing in elite swimmers”)", naming the row by its first non-empty text column (else "row 12", its place in the main table). The app never switches tabs.
   - In the search box, filters, dialogs and the assistant input, Ctrl+Z / Ctrl+Y are that box's own undo.
   - **Edit menu:** Undo names what it will undo ("Undo edit to Notes") and is greyed out when there's nothing to undo; Redo shows Ctrl+Y.
 

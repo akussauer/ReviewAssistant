@@ -24,6 +24,7 @@ import { HeaderCell } from './HeaderCell'
 import { FILTER_HEIGHT, HEADER_HEIGHT, LABEL_HEIGHT, ROW_HEADER_WIDTH } from './layout'
 import { TableContext, type TableContextValue } from './tableContext'
 import { TableRow } from './TableRow'
+import { useCellNavigation } from './useCellNavigation'
 import type { TabRows } from './useTabRows'
 
 const NO_ROWS: Row[] = []
@@ -149,6 +150,20 @@ export function ReviewTable({ tabId, rows }: { tabId: number; rows: TabRows }): 
   })
   // Row heights or order changed: drop the virtualiser's cached sizes.
   useEffect(() => virtualizer.measure(), [virtualizer, ids, rowsById])
+
+  // ---- Keyboard: Tab / Ctrl+↑↓ between cells (spec §6)
+  const reveal = useCellNavigation(scrollRef, ids, columns.length, virtualizer)
+
+  // After undo/redo: scroll to the cell and flash it, if its row is in this tab.
+  const undone = useReview((s) => s.reveal)
+  useEffect(() => {
+    if (!undone) return
+    const col = columns.findIndex((c) => c.id === undone.columnId)
+    if (col !== -1 && ids.includes(undone.rowId))
+      reveal({ rowId: undone.rowId, col }, { flash: true })
+    // Only when a new undo/redo happens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undone?.seq])
 
   // A row was just added (Ctrl+N, Insert above/below): bring it into view.
   const lastCreated = useReview((s) => s.lastCreatedRowId)

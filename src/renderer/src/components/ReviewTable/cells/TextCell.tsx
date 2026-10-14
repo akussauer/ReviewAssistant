@@ -1,5 +1,5 @@
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { Annotation, EditorState, Transaction } from '@codemirror/state'
+import { defaultKeymap, history, historyKeymap, indentWithTab, redo } from '@codemirror/commands'
+import { Annotation, Compartment, EditorState, Transaction } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { useEffect, useRef, useState } from 'react'
 import type { CellValue } from '../../../../../shared/ipc'
@@ -14,6 +14,12 @@ const SAVE_DELAY_MS = 300
 // Marks changes that came from outside (e.g. the same row edited in another tab), so
 // they aren't saved straight back.
 const FromStore = Annotation.define<boolean>()
+
+// Holds the editor's own undo history, so it can be emptied (see replaceFromStore).
+const historySlot = new Compartment()
+
+// Each visit to a text cell (focus until it's left) is one entry in the app's undo list.
+let visits = 0
 
 type Activation = { x: number; y: number } | 'focus' | null
 
@@ -79,6 +85,7 @@ function Editor({
     latest.current = text
   }, [text])
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const visit = useRef('')
 
   useEffect(() => {
     // Send the current text to the store if it changed since the last save.
@@ -87,7 +94,9 @@ function Editor({
       const doc = view.state.doc.toString()
       if (doc === lastSaved.current) return
       lastSaved.current = doc
-      void reviewStore.getState().updateCell(rowId, columnId, doc)
+      void reviewStore.getState().updateCell(rowId, columnId, doc, {
+        group: visit.current || undefined
+      })
     }
 
     const view = new EditorView({
@@ -95,10 +104,14 @@ function Editor({
       state: EditorState.create({
         doc: lastSaved.current,
         extensions: [
-          history(), // per-cell undo/redo (Ctrl+Z / Ctrl+Y)
+          historySlot.of(history()), // per-cell undo/redo (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z)
           keymap.of([
-            // Esc leaves the cell (spec §6). Tab isn't bound, so it moves to the next cell.
+            // Esc leaves the cell (spec §6); the next Tab then moves on from it.
             { key: 'Escape', run: (v) => (v.contentDOM.blur(), true) },
+            // Tab / Shift+Tab indent and outdent the line, for nested lists.
+            indentWithTab,
+            // CodeMirror binds Ctrl+Shift+Z for redo only on Linux and macOS.
+            { key: 'Mod-Shift-z', run: redo, preventDefault: true },
             ...defaultKeymap,
             ...historyKeymap
           ]),
@@ -115,6 +128,10 @@ function Editor({
             }
           }),
           EditorView.domEventHandlers({
+            focus: () => {
+              visit.current = `text-${++visits}`
+              return false
+            },
             blur: () => {
               flush()
               // A change made elsewhere while this cell had focus was skipped; show it now,
@@ -165,13 +182,16 @@ function Editor({
   return <div ref={host} className="h-full cursor-text" />
 }
 
-// Puts text that came from the store into the editor: not saved back, and not undoable
-// (Ctrl+Z only undoes the user's own typing in this cell).
+// Puts text that came from the store (an undo, or the same row edited in another tab) into
+// the editor: not saved back. The editor's own history is emptied, as its steps no longer
+// fit the new text (Ctrl+Z only undoes the user's own typing in this cell).
 function replaceFromStore(view: EditorView, text: string): void {
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: text },
-    annotations: [FromStore.of(true), Transaction.addToHistory.of(false)]
+    annotations: [FromStore.of(true), Transaction.addToHistory.of(false)],
+    effects: historySlot.reconfigure([])
   })
+  view.dispatch({ effects: historySlot.reconfigure(history()) })
 }
 
 // The cell's text with the same highlighting and layout as the editor, but plain DOM.

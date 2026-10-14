@@ -13,8 +13,11 @@ type Props = { rowId: number; column: Column; value: CellValue | undefined }
 const FIELD =
   'w-full rounded-sm border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-input focus:border-ring focus:outline-none'
 
-const save = (rowId: number, columnId: number, value: CellValue): void =>
-  void reviewStore.getState().updateCell(rowId, columnId, value)
+const save = (rowId: number, columnId: number, value: CellValue, group?: string): void =>
+  void reviewStore.getState().updateCell(rowId, columnId, value, { group })
+
+// Each visit to a number cell is one undo entry, so stepping with ↑/↓ undoes in one go.
+let visits = 0
 
 export function DropdownCell({ rowId, column, value }: Props): React.JSX.Element {
   const choices = column.options.choices ?? []
@@ -79,12 +82,20 @@ export function NumberCell({ rowId, column, value }: Props): React.JSX.Element {
   const [draft, setDraft] = useState<string | null>(null)
   const current = typeof value === 'number' ? value : null
   const shown = draft ?? (current === null ? '' : String(current))
+  const visit = useRef<string | undefined>(undefined)
+  // The value changed from elsewhere (e.g. undo/redo) while typing: show it, dropping the
+  // half-typed number, so leaving the cell doesn't save the draft over it.
+  const [prevValue, setPrevValue] = useState(value)
+  if (value !== prevValue) {
+    setPrevValue(value)
+    if (draft !== null) setDraft(null)
+  }
 
   const commit = (): void => {
     if (draft === null) return
     setDraft(null)
     const next = parseNumberDraft(draft, column)
-    if (next !== undefined && next !== current) save(rowId, column.id, next)
+    if (next !== undefined && next !== current) save(rowId, column.id, next, visit.current)
   }
 
   // Also save a half-typed number if the row scrolls out of view while focused (the
@@ -105,7 +116,7 @@ export function NumberCell({ rowId, column, value }: Props): React.JSX.Element {
     const base = draft !== null ? (parseInteger(draft) ?? current) : current
     const next = clampNumber((base ?? column.options.min ?? 0) + (base === null ? 0 : by), column)
     setDraft(null)
-    if (next !== current) save(rowId, column.id, next)
+    if (next !== current) save(rowId, column.id, next, visit.current)
   }
 
   return (
@@ -117,9 +128,20 @@ export function NumberCell({ rowId, column, value }: Props): React.JSX.Element {
       title={`Whole number from ${column.options.min} to ${column.options.max}; ↑/↓ to step`}
       value={shown}
       onChange={(e) => setDraft(e.target.value)}
+      onFocus={() => (visit.current = `number-${++visits}`)}
       onBlur={commit}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') commit()
+        // Ctrl+Z while typing drops the half-typed number; otherwise it undoes the last
+        // cell edit (handled for the whole window, see App).
+        if (
+          (e.ctrlKey || e.metaKey) &&
+          !e.shiftKey &&
+          e.key.toLowerCase() === 'z' &&
+          draft !== null
+        ) {
+          e.preventDefault()
+          setDraft(null)
+        } else if (e.key === 'Enter') commit()
         else if (e.key === 'Escape') {
           setDraft(null)
           e.currentTarget.blur()

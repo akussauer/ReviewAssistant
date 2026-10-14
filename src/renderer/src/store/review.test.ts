@@ -73,6 +73,7 @@ type FakeApi = {
     removeRows: Mock
     setActive: Mock
   }
+  ui: { searchBar: Mock<() => Promise<boolean>>; setSearchBar: Mock }
 }
 function fakeApi(): FakeApi {
   return {
@@ -94,8 +95,17 @@ function fakeApi(): FakeApi {
       addRows: vi.fn(),
       removeRows: vi.fn(),
       setActive: vi.fn(async () => {})
-    }
+    },
+    ui: { searchBar: vi.fn(async () => false), setSearchBar: vi.fn(async () => {}) }
   }
+}
+
+// Main saves a cell and sends the row back.
+const savesCells = (api: FakeApi): void => {
+  api.rows.updateCell.mockImplementation(async (rowId: number, columnId: number, value) => ({
+    ...row(rowId),
+    data: { [String(columnId)]: value }
+  }))
 }
 
 let api: FakeApi
@@ -336,5 +346,158 @@ describe('checkState', () => {
     expect(checkState(byId, [1, 2])).toBe('some')
     expect(checkState(byId, [2])).toBe('all')
     expect(checkState(byId, [])).toBe('none')
+  })
+})
+
+describe('undo and redo (spec §6)', () => {
+  beforeEach(() => savesCells(api))
+  const cell = (rowId: number, columnId = 1): unknown =>
+    store.getState().rowsById[rowId].data[String(columnId)]
+
+  it('undoes and redoes cell edits in order, saving each and saying what changed', async () => {
+    await store.getState().updateCell(1, 1, 'first')
+    await store.getState().updateCell(2, 1, 'second')
+    store.getState().undo()
+    expect(cell(2)).toBe('r2')
+    expect(api.rows.updateCell).toHaveBeenLastCalledWith(2, 1, 'r2', 1)
+    expect(store.getState().notice?.text).toBe('Undid edit to C1 (“r2”)')
+    expect(store.getState().reveal).toMatchObject({ rowId: 2, columnId: 1 })
+    store.getState().undo()
+    expect(cell(1)).toBe('r1')
+    store.getState().undo() // nothing left: no change
+    expect(store.getState().redoStack).toHaveLength(2)
+
+    store.getState().redo()
+    expect(cell(1)).toBe('first')
+    expect(store.getState().notice?.text).toBe('Redid edit to C1 (“first”)')
+    store.getState().redo()
+    expect(cell(2)).toBe('second')
+    expect(store.getState().undoStack).toHaveLength(2)
+  })
+
+  it('makes one entry of a visit to a text cell, and none if it ends unchanged', async () => {
+    await store.getState().updateCell(1, 1, 'r1 a', { group: 'v1' })
+    await store.getState().updateCell(1, 1, 'r1 ab', { group: 'v1' })
+    expect(store.getState().undoStack).toEqual([
+      { rowId: 1, columnId: 1, columnType: 'text', before: 'r1', after: 'r1 ab', group: 'v1' }
+    ])
+    await store.getState().updateCell(1, 1, 'r1', { group: 'v1' }) // typed back to the start
+    expect(store.getState().undoStack).toEqual([])
+  })
+
+  it('forgets what could be redone once something new is edited', async () => {
+    await store.getState().updateCell(1, 1, 'a')
+    store.getState().undo()
+    expect(store.getState().redoStack).toHaveLength(1)
+    await store.getState().updateCell(3, 1, 'b')
+    expect(store.getState().redoStack).toEqual([])
+  })
+
+  it('drops edits to deleted rows and to deleted or retyped columns', async () => {
+    await store.getState().updateCell(1, 1, 'a')
+    await store.getState().updateCell(3, 2, 'b')
+    await store.getState().updateCell(2, 1, 'c')
+    api.rows.delete.mockResolvedValueOnce({ deletedIds: [2], replacement: null })
+    await store.getState().deleteRows([2])
+    expect(store.getState().undoStack.map((e) => e.rowId)).toEqual([1, 3])
+
+    // Column 2 becomes a number column.
+    api.file.load.mockResolvedValueOnce({
+      ...snapshot(),
+      rows: [row(1), row(3)],
+      columns: [col(1, 0), { ...col(2, 1), type: 'number', options: { min: 0, max: 9 } }]
+    })
+    await store.getState().updateColumn({ id: 2, type: 'number' })
+    expect(store.getState().undoStack.map((e) => e.rowId)).toEqual([1])
+    store.getState().undo()
+    expect(cell(1)).toBe('r1')
+  })
+
+  it('skips undoing to a dropdown option that has been removed, and says so', async () => {
+    const study: Column = {
+      ...col(2, 1),
+      label: 'Study',
+      type: 'dropdown',
+      options: {
+        choices: [
+          { id: 'rct', label: 'RCT' },
+          { id: 'coh', label: 'Cohort' }
+        ]
+      }
+    }
+    store.setState((s) => ({
+      columns: [s.columns[0], study],
+      rowsById: { ...s.rowsById, 1: { ...s.rowsById[1], data: { '1': 'r1', '2': 'rct' } } }
+    }))
+    await store.getState().updateCell(1, 2, 'coh')
+    store.setState({
+      columns: [col(1, 0), { ...study, options: { choices: [study.options.choices![1]] } }]
+    })
+    store.getState().undo()
+    expect(cell(1, 2)).toBe('coh')
+    expect(store.getState().notice?.text).toBe(
+      "Couldn't undo the edit to Study: that option has been removed"
+    )
+    expect(store.getState().undoStack).toEqual([])
+    expect(store.getState().redoStack).toEqual([])
+  })
+
+  it('does not keep an edit that failed to save', async () => {
+    api.rows.updateCell.mockRejectedValueOnce(new Error('invalid'))
+    await store.getState().updateCell(1, 1, 'nope')
+    expect(store.getState().undoStack).toEqual([])
+  })
+
+  it('keeps an undo where it was if saving it fails, without touching other entries', async () => {
+    await store.getState().updateCell(1, 1, 'x') // e0
+    await store.getState().updateCell(1, 1, 'y') // e1
+    api.rows.updateCell.mockRejectedValueOnce(new Error('invalid'))
+    store.getState().undo() // tries to put back 'x'
+    await vi.waitFor(() => expect(store.getState().notice?.kind).toBe('error'))
+    expect(cell(1)).toBe('y')
+    expect(store.getState().undoStack.map((e) => e.after)).toEqual(['x', 'y'])
+    expect(store.getState().redoStack).toEqual([])
+  })
+
+  it('switching tabs does not replay the last undo', async () => {
+    await store.getState().updateCell(1, 1, 'x')
+    store.getState().undo()
+    expect(store.getState().reveal).not.toBeNull()
+    store.getState().setActiveTab(2)
+    expect(store.getState().reveal).toBeNull()
+  })
+
+  it('starts with an empty history when a file is loaded', async () => {
+    await store.getState().updateCell(1, 1, 'a')
+    await store.getState().load()
+    expect(store.getState().undoStack).toEqual([])
+  })
+})
+
+describe('search bar (spec §7)', () => {
+  it("is hidden by default; hiding it clears the active tab's search", async () => {
+    expect(store.getState().searchBar).toBe(false)
+    store.getState().setSearchBar(true)
+    expect(api.ui.setSearchBar).toHaveBeenLastCalledWith(true)
+    store.getState().setView(1, { search: 'pacing' })
+    store.getState().setSearchBar(false)
+    expect(store.getState().searchBar).toBe(false)
+    expect(store.getState().tabs[0].view.search).toBe('')
+    expect(api.ui.setSearchBar).toHaveBeenLastCalledWith(false)
+  })
+
+  it('shows itself for a tab with a saved search', async () => {
+    store.setState((s) => ({
+      tabs: s.tabs.map((t) => (t.id === 2 ? { ...t, view: { search: 'elite' } } : t))
+    }))
+    store.getState().setActiveTab(2)
+    expect(store.getState().searchBar).toBe(true)
+
+    const saved = snapshot()
+    saved.tabs[0].view = { search: 'old' }
+    api.file.load.mockResolvedValueOnce(saved)
+    api.ui.searchBar.mockResolvedValueOnce(false)
+    await store.getState().load()
+    expect(store.getState().searchBar).toBe(true)
   })
 })

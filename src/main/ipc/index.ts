@@ -6,6 +6,7 @@ import {
   ColumnCreateSchema,
   ColumnUpdateSchema,
   ConnectionInputSchema,
+  EditStateSchema,
   ExportKindSchema,
   FileIdSchema,
   FolderName,
@@ -16,6 +17,7 @@ import {
   PluginEnabledSchema,
   ProviderSchema,
   RowCreateSchema,
+  SearchBarSchema,
   SeedCountSchema,
   SendInputSchema,
   SetKeySchema,
@@ -105,6 +107,7 @@ import {
   testConnection
 } from '../assistant'
 import { listMessages } from '../db/messages'
+import { searchBarShown, setEditState, setSearchBarShown } from '../ui'
 import { handle } from './handle'
 
 export function registerIpc({ dev }: { dev: boolean }): void {
@@ -138,6 +141,11 @@ export function registerIpc({ dev }: { dev: boolean }): void {
   handle(IPC.settingsUpdate, SettingsSchema, saveSettings)
   handle(IPC.settingsPreviewTheme, ThemeSchema, applyTheme)
   handle(IPC.themeIsDark, NoInput, () => nativeTheme.shouldUseDarkColors)
+
+  // ---- Menu and window state (plan M9a)
+  handle(IPC.menuSetEditState, EditStateSchema, setEditState)
+  handle(IPC.uiSearchBar, NoInput, searchBarShown)
+  handle(IPC.uiSetSearchBar, SearchBarSchema, setSearchBarShown)
 
   // ---- Themes and plugins (Settings > Plugins)
   handle(IPC.themesList, NoInput, themesState)

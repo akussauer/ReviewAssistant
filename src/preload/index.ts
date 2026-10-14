@@ -46,7 +46,12 @@ const api: Api = {
       const listener = (_e: IpcRendererEvent, command: MenuCommand): void => cb(command)
       ipcRenderer.on(IPC.menuCommand, listener)
       return () => ipcRenderer.removeListener(IPC.menuCommand, listener)
-    }
+    },
+    setEditState: (state) => invoke(IPC.menuSetEditState, state)
+  },
+  ui: {
+    searchBar: () => invoke(IPC.uiSearchBar),
+    setSearchBar: (shown) => invoke(IPC.uiSetSearchBar, shown)
   },
   settings: {
     get: () => invoke(IPC.settingsGet),

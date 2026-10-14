@@ -1,8 +1,8 @@
 import { Menu, type MenuItemConstructorOptions } from 'electron'
 import { basename } from 'path'
-import type { MenuCommand } from '../shared/ipc'
+import type { EditState, MenuCommand } from '../shared/ipc'
 
-// The native application menu (File / Settings / Help, spec §2).
+// The native application menu (File / Edit / View / Settings / Help, spec §2).
 
 export type MenuActions = {
   newFile(): void
@@ -14,6 +14,8 @@ export type MenuActions = {
   recent: string[]
   hasFile: boolean // Save As and Export need an open review
   saveAsKey: string // the Save As hotkey from the settings
+  edit: EditState // what Undo / Redo will do (reported by the page)
+  searchBar: boolean // whether the search bar is shown
   dev: boolean // `npm run dev`: adds the Developer menu
 }
 
@@ -51,6 +53,42 @@ export function buildMenu(actions: MenuActions): Menu {
         },
         { type: 'separator' },
         { role: 'quit' }
+      ]
+    },
+    // Undo, Redo and Search go to the page, which decides what they act on (a cell, or the
+    // text box being typed in). Their shortcuts are shown but not registered here: the
+    // page handles the keys itself, so a text box keeps its own Ctrl+Z.
+    {
+      label: 'Edit',
+      submenu: [
+        run(actions.edit.undo ? `Undo ${actions.edit.undo}` : 'Undo', 'undo', {
+          accelerator: 'CmdOrCtrl+Z',
+          registerAccelerator: false,
+          enabled: actions.edit.undo !== null
+        }),
+        run(actions.edit.redo ? `Redo ${actions.edit.redo}` : 'Redo', 'redo', {
+          accelerator: 'CmdOrCtrl+Y',
+          registerAccelerator: false,
+          enabled: actions.edit.redo !== null
+        }),
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { type: 'separator' },
+        { role: 'selectAll' }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        run('Search', 'toggleSearch', {
+          type: 'checkbox',
+          checked: actions.searchBar,
+          accelerator: 'CmdOrCtrl+F',
+          registerAccelerator: false,
+          enabled: actions.hasFile
+        })
       ]
     },
     {

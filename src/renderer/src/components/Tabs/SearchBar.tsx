@@ -1,5 +1,6 @@
 import { Search, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { toggleSearchBar } from '../../lib/searchBar'
 import { reviewStore, useReview } from '../../store'
 
 const DEBOUNCE_MS = 150 // as the reference app's GlobalSearchBar
@@ -11,6 +12,7 @@ const HELP = [
 ].join('\n')
 
 // The global search box above a tab's table (spec §7). Filters 150 ms after typing stops.
+// Hidden unless switched on (Ctrl+F); Esc clears it, and Esc in an empty box hides it.
 export function SearchBar({ tabId }: { tabId: number }): React.JSX.Element {
   const saved = useReview((s) => s.tabs.find((t) => t.id === tabId)?.view.search ?? '')
   const [text, setText] = useState(saved)
@@ -23,14 +25,18 @@ export function SearchBar({ tabId }: { tabId: number }): React.JSX.Element {
     if (saved !== text) setText(saved)
   }
 
-  // Leaving the tab within the debounce: apply what was typed rather than lose it.
+  // Leaving the tab within the debounce: apply what was typed rather than lose it, unless
+  // the bar was hidden (which clears the search) or the search was changed meanwhile.
   const pending = useRef({ text, saved })
   useEffect(() => {
     pending.current = { text, saved }
   })
   useEffect(
     () => () => {
-      if (pending.current.text !== pending.current.saved)
+      const { tabs, searchBar } = reviewStore.getState()
+      if (!searchBar) return
+      const now = tabs.find((t) => t.id === tabId)?.view.search ?? ''
+      if (pending.current.text !== pending.current.saved && now === pending.current.saved)
         reviewStore.getState().setView(tabId, { search: pending.current.text })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -50,6 +56,7 @@ export function SearchBar({ tabId }: { tabId: number }): React.JSX.Element {
     <div className="flex items-center gap-2 border-b px-3 py-1.5">
       <Search className="size-4 shrink-0 text-muted-foreground" />
       <input
+        id="search-bar-input"
         aria-label="Search this tab"
         className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         placeholder='Search…  e.g. pacing "elite junior" NOT cycling'
@@ -57,7 +64,11 @@ export function SearchBar({ tabId }: { tabId: number }): React.JSX.Element {
         maxLength={2000}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => e.key === 'Escape' && setText('')}
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape') return
+          if (text) setText('')
+          else toggleSearchBar()
+        }}
       />
       {text && (
         <button

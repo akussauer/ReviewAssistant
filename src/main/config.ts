@@ -1,7 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
 import { z } from 'zod'
-import { DEFAULT_SETTINGS, HOTKEY_NAMES, MARKDOWN_KINDS } from '../shared/ipc'
+import {
+  DEFAULT_SETTINGS,
+  FIXED_SHORTCUTS,
+  HOTKEY_NAMES,
+  MARKDOWN_KINDS,
+  type HotkeyName
+} from '../shared/ipc'
 import {
   AcceleratorSchema,
   AssistantSettingsSchema,
@@ -42,7 +48,9 @@ const ConfigSchema = z.object({
     })
     .nullable(),
   // The Claude Desktop connection's secret (spec §10.1); made when first needed.
-  mcpToken: z.string().nullable()
+  mcpToken: z.string().nullable(),
+  // Whether the search bar above the table is shown (spec §7; Ctrl+F). Hidden by default.
+  showSearchBar: z.boolean()
 })
 
 export type Config = z.infer<typeof ConfigSchema>
@@ -55,7 +63,8 @@ export const DEFAULT_CONFIG: Config = {
   obsidianVault: null,
   enabledPlugins: [],
   modelCache: null,
-  mcpToken: null
+  mcpToken: null,
+  showSearchBar: false
 }
 
 export const MAX_RECENT = 10
@@ -72,6 +81,20 @@ function mergeHotkeys(raw: unknown): Config['hotkeys'] {
   // Two hotkeys can clash, e.g. one set to Ctrl+Shift+A before Toggle assistant existed.
   // Settings with a clash can't be saved, so (rarely) all hotkeys go back to the defaults.
   return new Set(Object.values(merged)).size === HOTKEY_NAMES.length ? merged : { ...defaults }
+}
+
+// A saved hotkey that a newer version made a fixed shortcut (e.g. Ctrl+F, now Search):
+// mergeHotkeys resets it, and the user is told once (see createConfigStore).
+export type HotkeyReset = { name: HotkeyName; accelerator: string; usedBy: string }
+
+export function fixedShortcutClashes(raw: unknown): HotkeyReset[] {
+  const hotkeys = raw && typeof raw === 'object' ? (raw as { hotkeys?: unknown }).hotkeys : null
+  if (!hotkeys || typeof hotkeys !== 'object') return []
+  return HOTKEY_NAMES.flatMap((name) => {
+    const accelerator = (hotkeys as Record<string, unknown>)[name]
+    const usedBy = typeof accelerator === 'string' ? FIXED_SHORTCUTS[accelerator] : undefined
+    return usedBy ? [{ name, accelerator: accelerator as string, usedBy }] : []
+  })
 }
 
 // Each valid assistant field is kept; a bad one falls back to its default.
@@ -135,16 +158,41 @@ export function withoutRecent(list: string[], path: string): string[] {
 export type ConfigStore = {
   get(): Config
   update(patch: Partial<Config>): Config
+  // Hotkeys reset on reading because they now clash with a fixed shortcut; empties the list.
+  takeHotkeyResets(): HotkeyReset[]
 }
 
 export function createConfigStore(dir: string): ConfigStore {
   const file = join(dir, 'config.json')
   let cache: Config | null = null
+  let hotkeyResets: HotkeyReset[] = []
+
+  const write = (config: Config): void => {
+    mkdirSync(dir, { recursive: true })
+    // Write to a temp file then rename, so a crash mid-write can't leave half a file.
+    writeFileSync(`${file}.tmp`, JSON.stringify(config, null, 2), 'utf8')
+    renameSync(`${file}.tmp`, file)
+  }
 
   const read = (): Config => {
     if (!existsSync(file)) return { ...DEFAULT_CONFIG }
     try {
-      return mergeWithDefaults(JSON.parse(readFileSync(file, 'utf8')))
+      const raw: unknown = JSON.parse(readFileSync(file, 'utf8'))
+      const config = mergeWithDefaults(raw)
+      const resets = fixedShortcutClashes(raw)
+      if (resets.length) {
+        hotkeyResets = resets
+        for (const r of resets)
+          log.warn(`Hotkey ${r.name} (${r.accelerator}) reset: used by ${r.usedBy}`)
+        // Saved straight away, so the user is told only once. If that fails, the reset still
+        // applies for this run (and they're told again next time).
+        try {
+          write(config)
+        } catch (err) {
+          log.error(`Could not save the reset hotkeys: ${String(err)}`)
+        }
+      }
+      return config
     } catch (err) {
       log.error(`Failed to read config file; using defaults. ${String(err)}`)
       return { ...DEFAULT_CONFIG }
@@ -155,12 +203,15 @@ export function createConfigStore(dir: string): ConfigStore {
     get: () => (cache ??= read()),
     update(patch) {
       const next = mergeWithDefaults({ ...(cache ??= read()), ...patch })
-      mkdirSync(dir, { recursive: true })
-      // Write to a temp file then rename, so a crash mid-write can't leave half a file.
-      writeFileSync(`${file}.tmp`, JSON.stringify(next, null, 2), 'utf8')
-      renameSync(`${file}.tmp`, file)
+      write(next)
       cache = next
       return next
+    },
+    takeHotkeyResets() {
+      cache ??= read()
+      const resets = hotkeyResets
+      hotkeyResets = []
+      return resets
     }
   }
 }

@@ -64,6 +64,9 @@ export const IPC = {
   assistantStop: 'assistant:stop',
   claudeDesktopStatus: 'claude-desktop:status',
   claudeDesktopSaveExtension: 'claude-desktop:save-extension',
+  menuSetEditState: 'menu:set-edit-state',
+  uiSearchBar: 'ui:search-bar',
+  uiSetSearchBar: 'ui:set-search-bar',
   devSeed: 'dev:seed', // only registered in development builds
   // Events (main -> renderer, pushed without a request)
   fileChanged: 'file:changed',
@@ -212,10 +215,24 @@ export type ReviewSnapshot = {
 export type ExportKind = 'csv' | 'json'
 export type ExportResult = { path: string; name: string; rows: number }
 
-// File-menu items that main hands to the renderer, which saves pending edits first.
+// Menu items that main hands to the renderer, which saves pending edits first.
 // devSeed only exists under `npm run dev` (the Developer menu).
 export type MenuCommand =
-  'saveAs' | 'importJson' | 'exportCsv' | 'exportJson' | 'preferences' | 'plugins' | 'devSeed'
+  | 'saveAs'
+  | 'importJson'
+  | 'exportCsv'
+  | 'exportJson'
+  | 'preferences'
+  | 'plugins'
+  | 'undo'
+  | 'redo'
+  | 'toggleSearch'
+  | 'devSeed'
+
+// What the Edit menu's Undo and Redo say (spec §6). null = greyed out; '' = plain "Undo"
+// (e.g. while typing in a text box, which has its own undo); otherwise what will be
+// undone, e.g. "edit to Notes" -> "Undo edit to Notes".
+export type EditState = { undo: string | null; redo: string | null }
 
 // ---- Settings (spec §12) ----------------------------------------------------------
 
@@ -244,6 +261,13 @@ export const MARKDOWN_KINDS = [
 export type MarkdownKind = (typeof MARKDOWN_KINDS)[number]
 export const HOTKEY_NAMES = ['newRow', 'newColumn', 'saveAs', 'toggleAssistant'] as const
 export type HotkeyName = (typeof HOTKEY_NAMES)[number]
+
+export const HOTKEY_LABELS: Record<HotkeyName, string> = {
+  newRow: 'New row',
+  newColumn: 'New column',
+  saveAs: 'Save As',
+  toggleAssistant: 'Toggle assistant'
+}
 
 // ---- Assistant (spec §10) -----------------------------------------------------------
 
@@ -380,6 +404,7 @@ export const FIXED_SHORTCUTS: Record<string, string> = {
   'CmdOrCtrl+Z': 'Undo',
   'CmdOrCtrl+Y': 'Redo',
   'CmdOrCtrl+Shift+Z': 'Redo',
+  'CmdOrCtrl+F': 'Search',
   'Alt+F4': 'Close window'
 }
 
@@ -472,6 +497,12 @@ export type Api = {
   }
   menu: {
     onCommand(cb: (command: MenuCommand) => void): Unsubscribe
+    setEditState(state: EditState): Promise<void>
+  }
+  // Window state that isn't part of Preferences, kept in config.json.
+  ui: {
+    searchBar(): Promise<boolean> // whether the search bar is shown (spec §7)
+    setSearchBar(shown: boolean): Promise<void>
   }
   settings: {
     get(): Promise<Settings>

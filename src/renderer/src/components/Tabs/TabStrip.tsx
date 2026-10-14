@@ -1,7 +1,8 @@
-import { Plus, X } from 'lucide-react'
+import { Plus, Search, X } from 'lucide-react'
 import { useState } from 'react'
 import { MAIN_TAB_ID, type Tab } from '../../../../shared/ipc'
 import { moveItem } from '../../lib/columns'
+import { toggleSearchBar } from '../../lib/searchBar'
 import { reviewStore, useReview } from '../../store'
 import {
   AlertDialog,
@@ -24,9 +25,12 @@ import { TabDialog, type TabDialogMode } from './TabDialog'
 
 // The tab strip (spec §8): Main first, without ×; user tabs with × (asks first; removes
 // the tab, not its rows); + for a new tab; right-click → Edit Tab; drag to reorder.
+// On the right, 🔍 shows or hides the search bar (spec §7).
 export function TabStrip(): React.JSX.Element {
   const tabs = useReview((s) => s.tabs)
   const activeTabId = useReview((s) => s.activeTabId)
+  const searchBar = useReview((s) => s.searchBar)
+  const isSynthesis = tabs.find((t) => t.id === activeTabId)?.type === 'synthesis'
   const [dialog, setDialog] = useState<TabDialogMode | null>(null)
   const [closing, setClosing] = useState<Tab | null>(null)
   const [dragFrom, setDragFrom] = useState<number | null>(null)
@@ -112,6 +116,18 @@ export function TabStrip(): React.JSX.Element {
         onClick={() => setDialog({ kind: 'create', rowIds: [] })}
       >
         <Plus />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className={`mb-0.5 ml-auto shrink-0 ${searchBar && !isSynthesis ? 'bg-accent' : ''}`}
+        aria-label="Search"
+        aria-pressed={searchBar && !isSynthesis}
+        title={searchBar ? 'Hide search (Ctrl+F)' : 'Search (Ctrl+F)'}
+        disabled={isSynthesis}
+        onClick={toggleSearchBar}
+      >
+        <Search />
       </Button>
 
       {dialog && (

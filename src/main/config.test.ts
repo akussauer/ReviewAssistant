@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createConfigStore,
   DEFAULT_CONFIG,
+  fixedShortcutClashes,
   MAX_RECENT,
   mergeWithDefaults,
   withoutRecent,
@@ -106,6 +107,20 @@ describe('mergeWithDefaults', () => {
     expect(merged.hotkeys).toEqual(DEFAULT_CONFIG.hotkeys)
   })
 
+  it('keeps the search bar hidden unless switched on (M9a)', () => {
+    expect(mergeWithDefaults({}).showSearchBar).toBe(false)
+    expect(mergeWithDefaults({ showSearchBar: true }).showSearchBar).toBe(true)
+  })
+
+  it('resets a hotkey that is now a fixed shortcut, and says which', () => {
+    const raw = { hotkeys: { newRow: 'CmdOrCtrl+F', saveAs: 'CmdOrCtrl+Shift+S' } }
+    expect(mergeWithDefaults(raw).hotkeys).toEqual(DEFAULT_CONFIG.hotkeys)
+    expect(fixedShortcutClashes(raw)).toEqual([
+      { name: 'newRow', accelerator: 'CmdOrCtrl+F', usedBy: 'Search' }
+    ])
+    expect(fixedShortcutClashes({ hotkeys: 'nope' })).toEqual([])
+  })
+
   it('returns defaults for garbage', () => {
     expect(mergeWithDefaults(null)).toEqual(DEFAULT_CONFIG)
     expect(mergeWithDefaults('nope')).toEqual(DEFAULT_CONFIG)
@@ -138,5 +153,22 @@ describe('createConfigStore', () => {
     const dir = tempDir()
     writeFileSync(join(dir, 'config.json'), '{ not json')
     expect(createConfigStore(dir).get()).toEqual(DEFAULT_CONFIG)
+  })
+
+  it('reports hotkeys reset on reading once, and saves the fix', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const dir = tempDir()
+    writeFileSync(
+      join(dir, 'config.json'),
+      JSON.stringify({ hotkeys: { toggleAssistant: 'CmdOrCtrl+F' } })
+    )
+    const store = createConfigStore(dir)
+    expect(store.takeHotkeyResets()).toEqual([
+      { name: 'toggleAssistant', accelerator: 'CmdOrCtrl+F', usedBy: 'Search' }
+    ])
+    expect(store.takeHotkeyResets()).toEqual([])
+    const saved = JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8'))
+    expect(saved.hotkeys.toggleAssistant).toBe('CmdOrCtrl+Shift+A')
+    expect(createConfigStore(dir).takeHotkeyResets()).toEqual([])
   })
 })

@@ -1,4 +1,6 @@
-import { FIXED_SHORTCUTS, type HotkeyName } from '../../../shared/ipc'
+import { FIXED_SHORTCUTS, HOTKEY_LABELS, type HotkeyName } from '../../../shared/ipc'
+
+export { HOTKEY_LABELS }
 
 // Matches a keyboard event against an Electron-style accelerator from the settings,
 // e.g. "CmdOrCtrl+Shift+N" (Ctrl on Windows/Linux, Cmd on macOS).
@@ -34,13 +36,6 @@ export function matchesHotkey(e: KeyLike, accelerator: string, isMac = false): b
 }
 
 // ---- Capturing a hotkey in the Preferences dialog ----------------------------------
-
-export const HOTKEY_LABELS: Record<HotkeyName, string> = {
-  newRow: 'New row',
-  newColumn: 'New column',
-  saveAs: 'Save As',
-  toggleAssistant: 'Toggle assistant'
-}
 
 export type Capture =
   | { kind: 'waiting' } // only modifiers pressed so far

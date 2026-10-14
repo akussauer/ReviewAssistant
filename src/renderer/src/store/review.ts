@@ -17,6 +17,7 @@ import {
   type TabUpdateInput,
   type TabView
 } from '../../../shared/ipc'
+import { missingOption, pruneEdits, pushEdit, rowName, type CellEdit } from './undo'
 
 // The renderer's copy of the open review, kept normalised (CLAUDE.md): each row is stored
 // once in rowsById, and the main table and each tab refer to rows by id.
@@ -44,6 +45,13 @@ export type ReviewState = {
   keptRowIds: number[]
   // The newest row, so the table can scroll to it.
   lastCreatedRowId: number | null
+  // Undo history for cell edits (spec §6), newest last. Cleared when a file loads.
+  undoStack: CellEdit[]
+  redoStack: CellEdit[]
+  // A cell to scroll to and flash briefly (after undo/redo); seq changes every time.
+  reveal: { rowId: number; columnId: number; seq: number } | null
+  // Whether the search bar is shown (spec §7). App-wide, saved in config.json.
+  searchBar: boolean
   // A short message in the status bar: something failed, or e.g. an export finished
   // (`path`: the exported file, for "Show in folder").
   notice: Notice | null
@@ -62,7 +70,17 @@ export type ReviewState = {
   previewRowHeight(rowId: number, height: number): void // while dragging; not saved
   setRowHeight(rowId: number, height: number): Promise<void>
   setChecked(rowIds: number[], checked: boolean): Promise<void>
-  updateCell(rowId: number, columnId: number, value: CellValue): Promise<void>
+  // `group`: edits with the same group become one undo entry (one visit to a text cell).
+  updateCell(
+    rowId: number,
+    columnId: number,
+    value: CellValue,
+    options?: { group?: string }
+  ): Promise<void>
+  undo(): void
+  redo(): void
+  // Hiding the bar clears the active tab's search.
+  setSearchBar(shown: boolean): void
   setSort(tabId: number, sort: SortSpec | null): Promise<void>
   // Search and filters change on every keystroke: shown at once, saved shortly after.
   setView(tabId: number, patch: Partial<TabView>): void
@@ -105,10 +123,10 @@ export function createReviewStore(api: Api): ReviewStore {
       notify({ kind: 'error', text: `${what} failed: ${reason}` })
     }
 
-    // Ids repeat between files, so an undo must not run if another file was opened while
+    // Ids repeat between files, so a rollback must not run if another file was opened while
     // the save was pending. Each action notes the file's generation when it starts.
     const generation = (): number | undefined => get().file?.generation
-    const undo = (startedIn: number | undefined, fn: () => void): void => {
+    const ifSameFile = (startedIn: number | undefined, fn: () => void): void => {
       if (generation() === startedIn) fn()
     }
 
@@ -181,6 +199,99 @@ export function createReviewStore(api: Api): ReviewStore {
     // Row heights from before a drag started, to put back if saving the new one fails.
     const heightBeforeDrag = new Map<number, number>()
 
+    // Shows the cell value at once and saves it; if main refuses, puts back what was there.
+    // Resolves to whether it was saved.
+    const saveCell = async (
+      rowId: number,
+      columnId: number,
+      value: CellValue
+    ): Promise<boolean> => {
+      const key = String(columnId)
+      const before = get().rowsById[rowId]
+      if (!before) return false
+      const setCell = (v: CellValue | undefined): void => {
+        const row = get().rowsById[rowId]
+        if (row) putRows([{ ...row, data: { ...row.data, [key]: v ?? null } }])
+      }
+      const gen = generation()
+      setCell(value)
+      // Keep the row on screen while it's being edited, even if it stops matching the
+      // tab's filters (it would otherwise vanish mid-typing).
+      if (!get().keptRowIds.includes(rowId)) set((s) => ({ keptRowIds: [...s.keptRowIds, rowId] }))
+      try {
+        // Main returns the saved row; take its value for this cell (it may be normalised).
+        const saved = (await api.rows.updateCell(rowId, columnId, value, gen)).data[key]
+        ifSameFile(gen, () => setCell(saved))
+        return true
+      } catch (err) {
+        ifSameFile(gen, () => setCell(before.data[key]))
+        fail('Saving the cell', err)
+        return false
+      }
+    }
+
+    // Edits whose row or column has gone (or changed type) can't be undone: drop them.
+    const pruneHistory = (): void => {
+      const { undoStack, redoStack, rowsById, columns } = get()
+      const u = pruneEdits(undoStack, rowsById, columns)
+      const r = pruneEdits(redoStack, rowsById, columns)
+      if (u !== undoStack || r !== redoStack) set({ undoStack: u, redoStack: r })
+    }
+
+    // Undo/redo: takes the newest entry off one list, puts the cell back to that entry's
+    // value, and moves the entry to the other list. If saving fails, the entry goes back
+    // where it was (the cell is put back too, and the error shown).
+    const moveEdit = (from: 'undoStack' | 'redoStack'): void => {
+      pruneHistory()
+      const edit = get()[from].at(-1)
+      if (!edit) return
+      const to = from === 'undoStack' ? 'redoStack' : 'undoStack'
+      set((s) => ({ [from]: s[from].slice(0, -1) }))
+      const verb = from === 'undoStack' ? 'Undid' : 'Redid'
+      const saving = applyEdit(edit, from === 'undoStack' ? edit.before : edit.after, verb)
+      if (!saving) return
+      set((s) => ({ [to]: [...s[to], edit] }))
+      const gen = generation()
+      void saving.then((ok) => {
+        if (ok || !sameFile(gen)) return
+        set((s) => ({ [to]: s[to].filter((e) => e !== edit), [from]: [...s[from], edit] }))
+      })
+    }
+
+    // Puts a cell back to `value` for undo/redo: the save, or null if it can't (the
+    // dropdown option has been removed since), after saying so.
+    const applyEdit = (
+      edit: CellEdit,
+      value: CellValue,
+      verb: 'Undid' | 'Redid'
+    ): Promise<boolean> | null => {
+      const { columns, rowOrder } = get()
+      const column = columns.find((c) => c.id === edit.columnId)!
+      if (missingOption(column, value)) {
+        const action = verb === 'Undid' ? 'undo' : 'redo'
+        notify({
+          kind: 'info',
+          text: `Couldn't ${action} the edit to ${column.label}: that option has been removed`
+        })
+        return null
+      }
+      const saving = saveCell(edit.rowId, edit.columnId, value) // shows the value straight away
+      // Named as it reads now (an undo to the title column names the row by the old title).
+      const name = rowName(get().rowsById[edit.rowId], columns, rowOrder)
+      const seq = (get().reveal?.seq ?? 0) + 1
+      set({ reveal: { rowId: edit.rowId, columnId: edit.columnId, seq } })
+      notify({ kind: 'info', text: `${verb} edit to ${column.label} (${name})` })
+      return saving
+    }
+
+    // When a tab with a saved search is shown, so is the search bar (spec §7): otherwise
+    // rows would be filtered by a search you can't see.
+    const showBarForSearch = (): void => {
+      const { tabs, activeTabId, searchBar } = get()
+      if (!searchBar && tabs.find((t) => t.id === activeTabId)?.view.search)
+        get().setSearchBar(true)
+    }
+
     return {
       status: 'loading',
       error: null,
@@ -194,6 +305,10 @@ export function createReviewStore(api: Api): ReviewStore {
       themeName: null,
       keptRowIds: [],
       lastCreatedRowId: null,
+      undoStack: [],
+      redoStack: [],
+      reveal: null,
+      searchBar: false,
       notice: null,
 
       dismissNotice() {
@@ -226,14 +341,23 @@ export function createReviewStore(api: Api): ReviewStore {
       async load() {
         set({ status: 'loading', error: null })
         try {
-          const [snap, settings] = await Promise.all([api.file.load(), api.settings.get()])
+          const [snap, settings, searchBar] = await Promise.all([
+            api.file.load(),
+            api.settings.get(),
+            api.ui.searchBar()
+          ])
           set({
             status: 'ready',
             settings,
+            searchBar,
             keptRowIds: [],
             lastCreatedRowId: null,
+            undoStack: [],
+            redoStack: [],
+            reveal: null,
             ...fromSnapshot(snap)
           })
+          showBarForSearch()
         } catch (err) {
           set({ status: 'error', error: err instanceof Error ? err.message : String(err) })
         }
@@ -248,12 +372,14 @@ export function createReviewStore(api: Api): ReviewStore {
         await api.columns.update(input)
         await refresh()
         if (input.type !== undefined) dropColumnFilter(input.id)
+        pruneHistory()
       },
 
       async deleteColumn(columnId) {
         await api.columns.delete(columnId)
         await refresh()
         dropColumnFilter(columnId)
+        pruneHistory()
       },
 
       async setColumnWidth(columnId, width) {
@@ -266,7 +392,7 @@ export function createReviewStore(api: Api): ReviewStore {
         try {
           await api.columns.update({ id: columnId, width: w })
         } catch (err) {
-          undo(gen, () => putColumn(before))
+          ifSameFile(gen, () => putColumn(before))
           fail('Saving the column width', err)
         }
       },
@@ -283,9 +409,9 @@ export function createReviewStore(api: Api): ReviewStore {
         set({ columns: moved })
         try {
           const saved = await api.columns.reorder(columnIds)
-          undo(gen, () => set({ columns: saved }))
+          ifSameFile(gen, () => set({ columns: saved }))
         } catch (err) {
-          undo(gen, () => set({ columns: before }))
+          ifSameFile(gen, () => set({ columns: before }))
           fail('Reordering columns', err)
         }
       },
@@ -309,7 +435,7 @@ export function createReviewStore(api: Api): ReviewStore {
         try {
           await api.rows.setHeight(rowId, h)
         } catch (err) {
-          undo(gen, () => {
+          ifSameFile(gen, () => {
             const now = get().rowsById[rowId]
             if (now) putRows([{ ...now, height: savedHeight }])
           })
@@ -329,35 +455,53 @@ export function createReviewStore(api: Api): ReviewStore {
             checked
           )
         } catch (err) {
-          undo(gen, () =>
+          ifSameFile(gen, () =>
             putRows(rowsOf(changing.map((r) => r.id)).map((r) => ({ ...r, checked: !checked })))
           )
           fail('Saving the checkboxes', err)
         }
       },
 
-      async updateCell(rowId, columnId, value) {
-        const key = String(columnId)
-        const before = get().rowsById[rowId]
-        if (!before) return
-        const setCell = (v: CellValue | undefined): void => {
-          const row = get().rowsById[rowId]
-          if (row) putRows([{ ...row, data: { ...row.data, [key]: v ?? null } }])
+      async updateCell(rowId, columnId, value, options = {}) {
+        const row = get().rowsById[rowId]
+        const column = get().columns.find((c) => c.id === columnId)
+        if (!row || !column) return
+        const edit: CellEdit = {
+          rowId,
+          columnId,
+          columnType: column.type,
+          before: row.data[String(columnId)] ?? null,
+          after: value,
+          group: options.group
         }
-        const gen = generation()
-        setCell(value)
-        // Keep the row on screen while it's being edited, even if it stops matching the
-        // tab's filters (it would otherwise vanish mid-typing).
-        if (!get().keptRowIds.includes(rowId))
-          set((s) => ({ keptRowIds: [...s.keptRowIds, rowId] }))
-        try {
-          // Main returns the saved row; take its value for this cell (it may be normalised).
-          const saved = (await api.rows.updateCell(rowId, columnId, value, gen)).data[key]
-          undo(gen, () => setCell(saved))
-        } catch (err) {
-          undo(gen, () => setCell(before.data[key]))
-          fail('Saving the cell', err)
+        // A new edit means the undone ones can't be redone any more.
+        set((s) => {
+          const undoStack = pushEdit(s.undoStack, edit)
+          return undoStack === s.undoStack ? {} : { undoStack, redoStack: [] }
+        })
+        if (await saveCell(rowId, columnId, value)) return
+        // Not saved, so nothing changed and there's nothing to undo either.
+        const top = get().undoStack.at(-1)
+        if (top?.rowId === rowId && top.columnId === columnId && top.after === value)
+          set((s) => ({ undoStack: s.undoStack.slice(0, -1) }))
+      },
+
+      undo() {
+        moveEdit('undoStack')
+      },
+
+      redo() {
+        moveEdit('redoStack')
+      },
+
+      setSearchBar(shown) {
+        if (shown === get().searchBar) return
+        if (!shown) {
+          const tab = get().tabs.find((t) => t.id === get().activeTabId)
+          if (tab?.view.search) get().setView(tab.id, { search: '' })
         }
+        set({ searchBar: shown })
+        api.ui.setSearchBar(shown).catch((err) => fail('Saving the search bar setting', err))
       },
 
       async setSort(tabId, sort) {
@@ -368,7 +512,7 @@ export function createReviewStore(api: Api): ReviewStore {
         try {
           await api.tabs.update({ id: tabId, view: { ...before.view, sort } })
         } catch (err) {
-          undo(gen, () => putTab(before))
+          ifSameFile(gen, () => putTab(before))
           fail('Saving the sort', err)
         }
       },
@@ -416,6 +560,7 @@ export function createReviewStore(api: Api): ReviewStore {
             tabs: s.tabs.map((t) => ({ ...t, rowIds: t.rowIds.filter((id) => !gone.has(id)) }))
           }
         })
+        pruneHistory()
       },
 
       async addRowsToTab(tabId, rowIds) {
@@ -473,8 +618,10 @@ export function createReviewStore(api: Api): ReviewStore {
       setActiveTab(tabId) {
         if (get().activeTabId === tabId) return
         get().flushViews()
-        set({ activeTabId: tabId, keptRowIds: [], lastCreatedRowId: null })
+        // reveal: the new tab's table mustn't replay the last undo's scroll and flash.
+        set({ activeTabId: tabId, keptRowIds: [], lastCreatedRowId: null, reveal: null })
         api.tabs.setActive(tabId).catch((err) => fail('Saving the active tab', err))
+        showBarForSearch()
       }
     }
   })

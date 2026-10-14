@@ -237,3 +237,16 @@
   background: var(--muted);
   font-weight: 600;
 }
+
+/* A cell changed by Undo / Redo flashes briefly (spec §6). */
+@keyframes cell-flash {
+  from {
+    background-color: color-mix(in oklab, var(--md-colour, var(--ring)) 30%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.cell-flash {
+  animation: cell-flash 1.2s ease-out;
+}

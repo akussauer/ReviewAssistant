@@ -6,7 +6,7 @@ import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { IPC } from '../shared/ipc'
+import { HOTKEY_LABELS, IPC } from '../shared/ipc'
 import { registerIpc } from './ipc'
 import { initLog, log } from './log'
 import { buildMenu } from './menu'
@@ -31,6 +31,7 @@ import { fileFromArgv } from './launchFile'
 import { recheck } from './assistant'
 import { applyClaudeDesktop, stopClaudeDesktop } from './claudeDesktop'
 import { applyTheme } from './settings'
+import { currentEditState, searchBarShown } from './ui'
 
 // Rebuilt whenever the Recent list, the open file or the settings change, so Open Recent,
 // the items that need a file, and the Save As hotkey stay current.
@@ -40,11 +41,17 @@ function refreshMenu(): void {
       newFile: () => safely('Could not create the review file', newReviewDialog),
       openFile: () => safely('Could not open the review file', openReviewDialog),
       openRecent: (path) => safely('Could not open the review file', () => openRecent(path)),
-      command: sendMenuCommand,
+      command: (command) => {
+        sendMenuCommand(command)
+        // A checkbox item ticks itself when clicked; put it back until the page has acted.
+        if (command === 'toggleSearch') refreshMenu()
+      },
       about: () => safely('Could not show About', showAbout),
       recent: recentFiles(),
       hasFile: currentFile() !== null,
       saveAsKey: config.get().hotkeys.saveAs,
+      edit: currentEditState(),
+      searchBar: searchBarShown(),
       dev: import.meta.env.DEV
     })
   )
@@ -67,6 +74,25 @@ async function showAbout(): Promise<void> {
   })
   if (response === 1) await shell.openPath(settings)
   if (response === 2) await shell.openPath(logsDir())
+}
+
+// A saved hotkey that is now a fixed shortcut (e.g. Ctrl+F became Search) went back to its
+// default when the settings were read: say so once.
+function showHotkeyResets(win: BrowserWindow): void {
+  const resets = config.takeHotkeyResets()
+  if (!resets.length) return
+  const lines = resets.map(
+    (r) =>
+      `${HOTKEY_LABELS[r.name]}: ${r.accelerator.replace('CmdOrCtrl', 'Ctrl')} is now used by ` +
+      `${r.usedBy}, so it is back to ${config.get().hotkeys[r.name].replace('CmdOrCtrl', 'Ctrl')}.`
+  )
+  void dialog.showMessageBox(win, {
+    type: 'info',
+    title: 'Hotkeys changed',
+    message: resets.length === 1 ? 'A hotkey was reset' : 'Some hotkeys were reset',
+    detail: `${lines.join('\n')}\n\nYou can choose another in Settings > Preferences.`,
+    noLink: true
+  })
 }
 
 // The page's own address: the dev server under `npm run dev`, else the built index.html.
@@ -105,6 +131,7 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
+    showHotkeyResets(mainWindow)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {

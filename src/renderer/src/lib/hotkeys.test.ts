@@ -74,6 +74,16 @@ describe('captureHotkey', () => {
     expect(captureHotkey(press('KeyC', { ctrlKey: true }), {})).toMatchObject({
       message: 'Already used by Copy'
     })
+    // M9a: Search, and both redo keys.
+    expect(captureHotkey(press('KeyF', { ctrlKey: true }), {})).toMatchObject({
+      message: 'Already used by Search'
+    })
+    expect(captureHotkey(press('KeyY', { ctrlKey: true }), {})).toMatchObject({
+      message: 'Already used by Redo'
+    })
+    expect(captureHotkey(press('KeyZ', { ctrlKey: true, shiftKey: true }), {})).toMatchObject({
+      message: 'Already used by Redo'
+    })
     expect(
       captureHotkey(press('KeyN', { ctrlKey: true }), { newRow: 'CmdOrCtrl+N' })
     ).toMatchObject({ message: 'Already used by New row' })

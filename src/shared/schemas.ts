@@ -11,6 +11,7 @@ import {
   SPELLCHECK_LANGUAGES,
   type AssistantSettings,
   type ConnectionInput,
+  type EditState,
   type ExportKind,
   type SendInput,
   type Settings,
@@ -78,6 +79,14 @@ export const UpdateCellSchema = z.object({
 export const SetHeightSchema = z.object({ rowId: Id, height: z.number().int().min(16).max(5000) })
 export const SetCheckedSchema = z.object({ rowIds: IdList, checked: z.boolean() })
 export const CheckAllSchema = z.boolean()
+
+export const SearchBarSchema = z.boolean()
+
+const MenuLabel = z.string().max(200).nullable()
+export const EditStateSchema = z.object({
+  undo: MenuLabel,
+  redo: MenuLabel
+}) satisfies z.ZodType<EditState>
 
 const TabType = z.enum(['review', 'synthesis'])
 const View = z.looseObject({
