@@ -221,6 +221,8 @@ The main tab shows all rows, so it has no `tab_rows` entries.
 - Check/uncheck all right-click menu options (when clicking row index) can be removed as there is a checkbox in the top left that allows the same functionality
 - column resizing triggers a dark grey highlight at the same time the cursor changes, the highlight should be removed so the function matches the row height change interaction
 
+**Accept:** status bar sits at the bottom; row menu starts with Insert row above/below (main tab, disabled while sorted) and has no Check all/Uncheck all; column divider shows no highlight on hover or while dragging (only the cursor changes).
+
 ### M6 – File menu, import/export, settings
 - Save As (with "only checked rows?"), Export CSV (checked-only prompt, TRUE/FALSE, Downloads default), Export JSON
 - **Importer for PySide JSON (v1 and v2), tested on your real file**
@@ -265,6 +267,7 @@ The main tab shows all rows, so it has no `tab_rows` entries.
 - [X] M3 Table
 - [X] M4 Cells and columns
 - [X] M5 Rows, tabs, filters
+- [X] M5a Rows, checked
 - [ ] M6 File menu, import/export, settings
 - [ ] M7 Assistant
 - [ ] M8 Synthesis

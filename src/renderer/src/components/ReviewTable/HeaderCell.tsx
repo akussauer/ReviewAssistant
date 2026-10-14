@@ -81,11 +81,10 @@ export function HeaderCell(props: Props): React.JSX.Element {
             {sortDir === 'desc' && <ArrowDown className="size-3.5 shrink-0" />}
           </div>
 
-          {/* Resize handle on the right edge; TanStack Table tracks the drag. */}
+          {/* Resize handle on the right edge; TanStack Table tracks the drag. Like the row
+              height handle, it has no highlight: only the cursor changes. */}
           <div
-            className={`absolute top-0 -right-1 z-10 h-full w-2 cursor-col-resize touch-none select-none ${
-              header.column.getIsResizing() ? 'bg-primary/40' : 'hover:bg-primary/20'
-            }`}
+            className="absolute top-0 -right-1 z-10 h-full w-2 cursor-col-resize touch-none select-none"
             onMouseDown={header.getResizeHandler()}
             onTouchStart={header.getResizeHandler()}
             onDoubleClick={(e) => e.stopPropagation()}

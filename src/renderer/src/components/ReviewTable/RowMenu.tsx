@@ -12,10 +12,11 @@ import { useTableContext } from './tableContext'
 
 const report = (what: string) => (err: unknown) => reviewStore.getState().reportError(what, err)
 
-// Right-click menu on a row's checkbox strip (spec §5, in the reference app's order).
+// Right-click menu on a row's checkbox strip (spec §5). Insert comes first as the most
+// common action; Check all / Uncheck all live on the corner checkbox instead.
 // Only rendered while open, so its store reads cost nothing otherwise.
 export function RowMenu({ rowId }: { rowId: number }): React.JSX.Element {
-  const { tabId, sorted, shownIds, allCount, newTabWith, deleteRows } = useTableContext()
+  const { tabId, sorted, newTabWith, deleteRows } = useTableContext()
   const tabs = useReview((s) => s.tabs)
   const rowsById = useReview((s) => s.rowsById)
   const rowOrder = useReview((s) => s.rowOrder)
@@ -28,7 +29,6 @@ export function RowMenu({ rowId }: { rowId: number }): React.JSX.Element {
   // …except for Remove, which can only remove rows this tab has.
   const tabRows = new Set(tabs.find((t) => t.id === tabId)?.rowIds ?? [])
   const checkedHere = isMain ? checked : checked.filter((id) => tabRows.has(id))
-  const shownChecked = shownIds.filter((id) => rowsById[id]?.checked).length
 
   const addTo = (rowIds: number[]): React.JSX.Element => (
     <>
@@ -51,6 +51,17 @@ export function RowMenu({ rowId }: { rowId: number }): React.JSX.Element {
 
   return (
     <ContextMenuContent>
+      {isMain && (
+        <>
+          <ContextMenuItem disabled={sorted} onSelect={() => insert('before')}>
+            Insert row above
+          </ContextMenuItem>
+          <ContextMenuItem disabled={sorted} onSelect={() => insert('after')}>
+            Insert row below
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+        </>
+      )}
       <ContextMenuSub>
         <ContextMenuSubTrigger>Add row to…</ContextMenuSubTrigger>
         <ContextMenuSubContent>{addTo([rowId])}</ContextMenuSubContent>
@@ -93,30 +104,6 @@ export function RowMenu({ rowId }: { rowId: number }): React.JSX.Element {
             </ContextMenuItem>
           )}
         </>
-      )}
-
-      {isMain && (
-        <>
-          <ContextMenuSeparator />
-          <ContextMenuItem disabled={sorted} onSelect={() => insert('before')}>
-            Insert row above
-          </ContextMenuItem>
-          <ContextMenuItem disabled={sorted} onSelect={() => insert('after')}>
-            Insert row below
-          </ContextMenuItem>
-        </>
-      )}
-
-      <ContextMenuSeparator />
-      {shownChecked < shownIds.length && (
-        <ContextMenuItem onSelect={() => void store.setChecked(shownIds, true)}>
-          Check all{shownIds.length < allCount && ' shown'}
-        </ContextMenuItem>
-      )}
-      {shownChecked > 0 && (
-        <ContextMenuItem onSelect={() => void store.setChecked(shownIds, false)}>
-          Uncheck all{shownIds.length < allCount && ' shown'}
-        </ContextMenuItem>
       )}
     </ContextMenuContent>
   )

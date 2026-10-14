@@ -100,16 +100,18 @@ Title (text), Study Type (dropdown: RCT, Cohort, Case Study, Systematic Review, 
 - **Checkbox:** in the row header. The check belongs to the row itself: it's shared across all tabs and saved in the file **[Py]**.
 - **Never empty:** if the main table loses its last row, a blank one is added **[Py]**.
 - **Ctrl+N** adds a row **[Py]**. In a user tab, the new row is also added to that tab.
+- **Status bar [New]:** at the bottom of the window: "N rows" (or "X of N rows shown" when searching/filtering) · "M checked", plus any error notice.
 
 ### Row-header context menu [Py]
 | Item | Main tab | User tab |
 |---|---|---|
+| Insert row above / below **[New: listed first]** | ✓ | – |
 | Add row to… → existing tabs / New Tab… | ✓ | ✓ |
 | Add checked rows (n) to… → tabs / New Tab… | ✓ (if any are checked) | ✓ |
 | Delete row / Delete checked rows (n) | ✓ (removes everywhere) | – |
 | Remove row / Remove checked rows (n) | – | ✓ (only from this tab) |
-| Insert row above / below | ✓ | – |
-| Check all / Uncheck all | ✓ | ✓ |
+
+**[New]** Check all / Uncheck all are not in this menu; the tri-state checkbox in the table's top-left corner does the same job.
 
 **[New]** Deleting rows that appear in tabs asks for confirmation, e.g. "3 rows are in 2 tabs".
 

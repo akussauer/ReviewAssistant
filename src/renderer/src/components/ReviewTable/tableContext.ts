@@ -6,8 +6,6 @@ import { createContext, useContext } from 'react'
 export type TableContextValue = {
   tabId: number
   sorted: boolean // insert above/below is off while sorted (spec §7)
-  shownIds: number[] // the rows on screen after filters, for Check all / Uncheck all
-  allCount: number // how many rows the tab has in total
   newTabWith(rowIds: number[]): void // opens the New Tab dialog
   deleteRows(rowIds: number[]): void // asks first if the rows are in tabs
 }

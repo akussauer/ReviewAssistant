@@ -45,7 +45,7 @@ export function ReviewTable({ tabId, rows }: { tabId: number; rows: TabRows }): 
   const sort = view?.sort ?? null
 
   // ---- Which rows, in which order: the tab's rows, filtered, then sorted
-  const { shownIds: ids, sorted, allIds } = rows
+  const { shownIds: ids, sorted } = rows
   const filtered = view ? isFiltered(view, columns) : false
 
   // ---- Columns and resizing (TanStack Table)
@@ -133,12 +133,10 @@ export function ReviewTable({ tabId, rows }: { tabId: number; rows: TabRows }): 
     () => ({
       tabId,
       sorted,
-      shownIds: ids,
-      allCount: allIds.length,
       newTabWith: (rowIds) => setTabDialog({ kind: 'create', rowIds }),
       deleteRows: (rowIds) => setDeletingRows(rowIds)
     }),
-    [tabId, sorted, ids, allIds.length]
+    [tabId, sorted]
   )
 
   // ---- Virtual rows (TanStack Virtual)

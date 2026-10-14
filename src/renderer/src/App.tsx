@@ -33,7 +33,7 @@ function App(): React.JSX.Element | null {
   return <ReviewView key={`${file.path}#${file.generation}`} />
 }
 
-// The open review: status bar, tab strip, and the active tab's content.
+// The open review: tab strip, the active tab's content, and the status bar at the bottom.
 function ReviewView(): React.JSX.Element | null {
   const status = useReview((s) => s.status)
   const error = useReview((s) => s.error)
@@ -69,7 +69,6 @@ function ReviewView(): React.JSX.Element | null {
   if (status === 'loading' || !activeTab) return null
   return (
     <div className="flex h-screen flex-col">
-      <StatusBar rows={rows} />
       <TabStrip />
       {activeTab.type === 'synthesis' ? (
         <SynthesisPlaceholder rows={activeTab.rowIds.length} />
@@ -80,6 +79,7 @@ function ReviewView(): React.JSX.Element | null {
           <ReviewTable tabId={activeTab.id} rows={rows} />
         </div>
       )}
+      <StatusBar rows={rows} />
     </div>
   )
 }
@@ -119,7 +119,7 @@ function StatusBar({ rows }: { rows: TabRows }): React.JSX.Element {
   }
 
   return (
-    <div className="flex items-center gap-3 border-b px-3 py-1.5 text-xs text-muted-foreground">
+    <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-xs text-muted-foreground">
       <span>
         {shownIds.length < allIds.length
           ? `${shownIds.length} of ${allIds.length} rows shown`
