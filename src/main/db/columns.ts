@@ -122,6 +122,11 @@ export function removedChoiceIds(column: Column, input: ColumnUpdateInput): stri
   return (column.options.choices ?? []).map((c) => c.id).filter((id) => !kept.has(id))
 }
 
+// The column dialog doesn't send the Markdown export setting (it's set in the export
+// dialog, spec §9.1), so an edit keeps it.
+const keepExport = (column: Column, options: ColumnOptions): ColumnOptions =>
+  column.options.export ? { ...options, export: column.options.export } : options
+
 export const isRetype = (column: Column, input: ColumnUpdateInput): boolean =>
   input.type !== undefined && input.type !== column.type
 
@@ -136,7 +141,7 @@ export function backupReason(column: Column, input: ColumnUpdateInput): string |
 // Changes a column's type and converts every row's value (spec §4.2). Destructive: the
 // caller takes a backup first. Runs inside updateColumn's transaction.
 function retype(db: DB, column: Column, input: ColumnUpdateInput & { type: ColumnType }): void {
-  const options = normaliseOptions(input.type, input.options ?? {})
+  const options = keepExport(column, normaliseOptions(input.type, input.options ?? {}))
   const to = { type: input.type, options }
   const rows = db.prepare('SELECT id, data FROM rows').all() as { id: number; data: string }[]
   const write = db.prepare('UPDATE rows SET data = json_set(data, ?, json(?)) WHERE id = ?')
@@ -163,10 +168,13 @@ export function updateColumn(db: DB, input: ColumnUpdateInput): Column {
     if (isRetype(column, input)) {
       retype(db, column, { ...input, type: input.type as ColumnType })
     } else if (input.options !== undefined) {
-      const options = normaliseOptions(
-        column.type,
-        input.options,
-        (column.options.choices ?? []).map((c) => c.id)
+      const options = keepExport(
+        column,
+        normaliseOptions(
+          column.type,
+          input.options,
+          (column.options.choices ?? []).map((c) => c.id)
+        )
       )
       const removed = removedChoiceIds(column, input)
       if (removed.length) {

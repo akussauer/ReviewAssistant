@@ -40,7 +40,7 @@ How the Electron version should behave. The **PySide6 app** (`D:\Projects\Review
 │ ☑    │ …            │ [RCT ▾]     │ 2018 │ …              │ [+] [input] [Send]│
 └──────┴──────────────┴─────────────┴──────┴────────────────┴───────────────────┘
 ```
-- **Menu:** File (New, Open, Open Recent, Save As…, Import old JSON…, Export → CSV / JSON), **[New]** Edit (Undo, Redo, Cut, Copy, Paste, Select All; §6), **[New]** View (Search, Ctrl+F; §7), Settings (Preferences) and Help (About).
+- **Menu:** File (New, Open, Open Recent, Save As…, Import old JSON…, Export → CSV / JSON / **[New]** Markdown), **[New]** Edit (Undo, Redo, Cut, Copy, Paste, Select All; §6), **[New]** View (Search, Ctrl+F; §7), Settings (Preferences) and Help (About).
 - **Tab strip:** the main tab is first; it can't be closed and has no × **[Py]**. User tabs have a × that asks for confirmation.
 - **Search bar** above the table filters across all columns **[Py]**. **[New]** Hidden by default; Ctrl+F shows or hides it (§7).
 - **Table:** a two-line header (column name, then that column's filter box) **[Py]**. A narrow row header holds each row's checkbox **[Py]**.
@@ -134,6 +134,7 @@ Title (text), Study Type (dropdown: RCT, Cohort, Case Study, Systematic Review, 
   - If the undone cell's row is in the current tab, the table scrolls to it and briefly highlights it. The status bar always says e.g. "Undid edit to Notes (“Pacing in elite swimmers”)", naming the row by its first non-empty text column (else "row 12", its place in the main table). The app never switches tabs.
   - In the search box, filters, dialogs and the assistant input, Ctrl+Z / Ctrl+Y are that box's own undo.
   - **Edit menu:** Undo names what it will undo ("Undo edit to Notes") and is greyed out when there's nothing to undo; Redo shows Ctrl+Y.
+  - **Undo / Redo buttons:** to the left of 🔍 by the tabs, the same as Ctrl+Z / Ctrl+Y outside a text box (an edit just made in a text cell counts as one step). Their tooltips name the edit; greyed out when there is nothing to undo or redo.
 
 ---
 ## 7. Sorting, filtering, search
@@ -169,35 +170,40 @@ Title (text), Study Type (dropdown: RCT, Cohort, Case Study, Systematic Review, 
 - **Export JSON [New]:** the PySide v2 format (documented in `docs/json-format.md`), so it round-trips through the importer and opens in the old app. Same checked-only prompt; tabs keep only the exported rows.
 - **[New]** After an export, the status bar shows "Exported N rows to <file>" with *Show in folder*.
 
-### 9.1 Markdown / Obsidian export (planned, long-term) [New]
-Each row is exported as one `.md` note that can go straight into an Obsidian vault.
-- **Per-column export setting** (in the column Edit dialog, "Markdown export" section):
+### 9.1 Markdown / Obsidian export [New]
+Each row is exported as one `.md` note that can go straight into an Obsidian vault. **File → Export → Markdown…** opens one dialog; every choice in it is remembered per `.review` file.
+- **Columns** (a list in the dialog, in display order; not in the column Edit dialog). Each column has a mode, stored with the column:
   | Mode | Output |
   |---|---|
-  | **Property** | YAML frontmatter key: text → string, number → number, date → date, checkbox → boolean, dropdown → its text |
-  | **Section** (default for text columns) | `## <Column name>` followed by the cell content as-is (cells are already markdown) |
+  | **Property** (default for dropdown, number, date, checkbox) | YAML frontmatter key: text → quoted one-line string (line breaks become spaces), number → number, date → `YYYY-MM-DD`, checkbox → `true`/`false`, dropdown → its text. Empty cells are written as `key:`. |
+  | **Section** (default for text columns) | `## <Column name>` followed by the cell content as-is (cells are already markdown). Empty cells are left out. |
   | **Skip** | not exported |
 
-  There's also an optional *property name* override, e.g. "Author(s)" → `authors`.
-- **Export dialog:**
-  - **Scope:** checked rows, the current tab, or everything.
-  - **Target folder:** e.g. a vault folder; remembered per file.
-  - **File name:** from a chosen column (default: first text column), made filename-safe and de-duplicated, e.g. `Title (2).md`.
-  - **If the file exists:** skip, overwrite, or overwrite only notes this app created.
-  - **Extra properties (optional):** `tags` from the tab names the row belongs to, and the source `.review` file name.
+  Each column also has a *property name*, by default a slug of its name ("Study Type" → `study-type`, "Author(s)" → `authors`); clashes get `-2`. One column is the **File name** column (default: the first text column); it is also written as `title` when it is a Section (a Property already has its own key; Skip means it only names the file).
+- **Scope:** checked rows, the current tab (the rows shown, after search and filters), or everything. The first time, checked rows if any are checked, otherwise the current tab.
+- **Target folder:** e.g. a folder in a vault, chosen with a folder picker.
+- **File names:** characters Windows or Obsidian links can't use (`< > : " / \ | ? * # ^ [ ]`) are removed, trailing dots and spaces trimmed, cut to 100 characters, "Untitled" when empty; repeats in one export get " (2)", " (3)", e.g. `Title (2).md`.
+- **If the file exists:** skip, overwrite, or overwrite only notes this app created (default). Notes the app writes carry a `review-assistant: "<file>.review#<row id>"` property; with the default, a note without it is skipped.
+- **Extra properties** (both on by default): `tags` from the names of the tabs the row is in (spaces become hyphens; never the main table) plus any *Extra tags* typed in the dialog (comma-separated), and `source`, the `.review` file name.
+- **Text at the top of every note** (optional): markdown typed in the dialog, written as-is under the frontmatter of every note, e.g. `#review/2026` or a link to a map-of-content note.
+- **Preview:** the dialog shows the first note in scope as it will be written, updating as settings change.
+- When it finishes, the status bar shows "Exported N notes (M skipped) to <folder>" with *Show in folder*. A note that can't be written (e.g. locked by another program) doesn't stop the others; the dialog stays open and says how many failed and why.
 - **Example output:**
   ```markdown
   ---
-  title: Pacing in age-group swimmers
+  title: "Pacing in age-group swimmers"
   year: 2016
-  study-type: Cohort
+  study-type: "Cohort"
   read: true
-  tags: [Pacing]
+  tags:
+    - "Pacing"
+  source: "Swimming.review"
+  review-assistant: "Swimming.review#12"
   ---
   ## Notes
   …cell content…
   ```
-- One-way only: exporting never reads back from the vault. Two-way sync is out of scope.
+- One-way only: exporting never reads back from the vault (apart from checking an existing note for the marker), and it never deletes or renames notes. If a row's file name changes, the next export writes a new note and the old one stays. Two-way sync is out of scope.
 
 ---
 ## 10. Assistant (per tab, read-only)

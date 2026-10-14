@@ -1,7 +1,8 @@
-import { Plus, Search, X } from 'lucide-react'
+import { Plus, Redo2, Search, Undo2, X } from 'lucide-react'
 import { useState } from 'react'
 import { MAIN_TAB_ID, type Tab } from '../../../../shared/ipc'
 import { moveItem } from '../../lib/columns'
+import { flushTextEdits } from '../../lib/pendingEdits'
 import { toggleSearchBar } from '../../lib/searchBar'
 import { reviewStore, useReview } from '../../store'
 import {
@@ -25,7 +26,7 @@ import { TabDialog, type TabDialogMode } from './TabDialog'
 
 // The tab strip (spec §8): Main first, without ×; user tabs with × (asks first; removes
 // the tab, not its rows); + for a new tab; right-click → Edit Tab; drag to reorder.
-// On the right, 🔍 shows or hides the search bar (spec §7).
+// On the right, undo / redo, and 🔍 shows or hides the search bar (spec §7).
 export function TabStrip(): React.JSX.Element {
   const tabs = useReview((s) => s.tabs)
   const activeTabId = useReview((s) => s.activeTabId)
@@ -117,10 +118,11 @@ export function TabStrip(): React.JSX.Element {
       >
         <Plus />
       </Button>
+      <UndoRedoButtons />
       <Button
         variant="ghost"
         size="icon-sm"
-        className={`mb-0.5 ml-auto shrink-0 ${searchBar && !isSynthesis ? 'bg-accent' : ''}`}
+        className={`mb-0.5 shrink-0 ${searchBar && !isSynthesis ? 'bg-accent' : ''}`}
         aria-label="Search"
         aria-pressed={searchBar && !isSynthesis}
         title={searchBar ? 'Hide search (Ctrl+F)' : 'Search (Ctrl+F)'}
@@ -160,6 +162,49 @@ export function TabStrip(): React.JSX.Element {
           </AlertDialogContent>
         </AlertDialog>
       )}
+    </div>
+  )
+}
+
+// Undo / redo of cell edits (spec §6): the same as Ctrl+Z / Ctrl+Y outside a text box.
+// Clicking moves the focus out of a text cell first, which ends its visit, so a visit
+// just made is undone as one step.
+function UndoRedoButtons(): React.JSX.Element {
+  const columns = useReview((s) => s.columns)
+  const nextUndo = useReview((s) => s.undoStack.at(-1))
+  const nextRedo = useReview((s) => s.redoStack.at(-1))
+  const what = (edit: { columnId: number } | undefined): string => {
+    const label = edit && columns.find((c) => c.id === edit.columnId)?.label
+    return label ? ` edit to ${label}` : ''
+  }
+  const run = (command: 'undo' | 'redo'): void => {
+    flushTextEdits()
+    const store = reviewStore.getState()
+    if (command === 'undo') store.undo()
+    else store.redo()
+  }
+  return (
+    <div className="mb-0.5 ml-auto flex shrink-0 gap-0.5">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Undo"
+        title={nextUndo ? `Undo${what(nextUndo)} (Ctrl+Z)` : 'Nothing to undo'}
+        disabled={!nextUndo}
+        onClick={() => run('undo')}
+      >
+        <Undo2 />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Redo"
+        title={nextRedo ? `Redo${what(nextRedo)} (Ctrl+Y)` : 'Nothing to redo'}
+        disabled={!nextRedo}
+        onClick={() => run('redo')}
+      >
+        <Redo2 />
+      </Button>
     </div>
   )
 }

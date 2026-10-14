@@ -82,6 +82,12 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* A <select>'s open list takes the select's own background, so a transparent select
+     (column/tab type, dropdown cells) showed light text on a white list in dark themes.
+     The options get the theme's popover colours instead. */
+  option {
+    @apply bg-popover text-popover-foreground;
+  }
   /* Checkboxes take the "- [ ]" markdown colour (Preferences, or the Obsidian theme's
      checkbox colour; see App.tsx useMarkdownColours). Drawn by us rather than the
      browser, since a native checkbox only takes a colour once it's ticked. */

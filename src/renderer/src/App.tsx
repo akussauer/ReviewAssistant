@@ -9,6 +9,7 @@ import {
 } from '../../shared/ipc'
 import { AssistantPanel } from './components/Assistant/AssistantPanel'
 import { BotButton } from './components/Assistant/BotButton'
+import { MarkdownExportDialog } from './components/Export/MarkdownExportDialog'
 import { ReviewTable } from './components/ReviewTable/ReviewTable'
 import { PluginsDialog } from './components/Settings/PluginsDialog'
 import { SettingsDialog } from './components/Settings/SettingsDialog'
@@ -37,7 +38,7 @@ function flushPending(): void {
 
 // File-menu commands (main sends them; see MenuCommand). Pending edits are saved first,
 // so a copy or export includes them.
-function runMenuCommand(command: MenuCommand, openDialog: (d: SettingsPage) => void): void {
+function runMenuCommand(command: MenuCommand, openDialog: (d: AppDialog) => void): void {
   // Undo / Redo act where the focus is, a dialog's text box included (never on a cell
   // behind an open dialog).
   if (command === 'undo' || command === 'redo') {
@@ -49,6 +50,8 @@ function runMenuCommand(command: MenuCommand, openDialog: (d: SettingsPage) => v
   if (command === 'toggleSearch') return toggleSearchBar()
   if (command === 'preferences' || command === 'plugins') return openDialog(command)
   flushPending()
+  // After the flush, so the preview and the export include the latest edits.
+  if (command === 'exportMarkdown') return openDialog('markdownExport')
   const store = reviewStore.getState()
   const done = (what: string) => (err: unknown) => store.reportError(what, err)
   switch (command) {
@@ -181,7 +184,8 @@ function useMarkdownColours(): void {
   }, [settings, byTheme])
 }
 
-type SettingsPage = 'preferences' | 'plugins'
+// Dialogs opened from the menu.
+type AppDialog = 'preferences' | 'plugins' | 'markdownExport'
 
 const isMac = navigator.platform.startsWith('Mac')
 
@@ -256,15 +260,12 @@ function useEditMenuState(): void {
 function App(): React.JSX.Element | null {
   // undefined = still asking main; null = no file open.
   const [file, setFile] = useState<FileInfo | null | undefined>(undefined)
-  const [settingsPage, setSettingsPage] = useState<SettingsPage | null>(null)
+  const [dialog, setDialog] = useState<AppDialog | null>(null)
   useDarkClass()
   useObsidianTheme()
   useMarkdownColours()
   useOpenRequests()
-  useEffect(
-    () => window.api.menu.onCommand((command) => runMenuCommand(command, setSettingsPage)),
-    []
-  )
+  useEffect(() => window.api.menu.onCommand((command) => runMenuCommand(command, setDialog)), [])
   // The assistant's status and streamed replies (main pushes both).
   useEffect(() => assistantStore.getState().init(), [])
   // Chats belong to the open file: start afresh when another one opens.
@@ -295,8 +296,15 @@ function App(): React.JSX.Element | null {
         // opened, including when the same path is recreated with New.
         <ReviewView key={`${file.path}#${file.generation}`} />
       )}
-      {settingsPage === 'preferences' && <SettingsDialog onClose={() => setSettingsPage(null)} />}
-      {settingsPage === 'plugins' && <PluginsDialog onClose={() => setSettingsPage(null)} />}
+      {dialog === 'preferences' && <SettingsDialog onClose={() => setDialog(null)} />}
+      {dialog === 'plugins' && <PluginsDialog onClose={() => setDialog(null)} />}
+      {dialog === 'markdownExport' && file && (
+        // key: a file opened while the dialog is up starts it afresh.
+        <MarkdownExportDialog
+          key={`${file.path}#${file.generation}`}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </>
   )
 }

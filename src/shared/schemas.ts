@@ -4,7 +4,10 @@
 import { z } from 'zod'
 import {
   COLUMN_TYPES,
+  EXPORT_MODES,
   FIXED_SHORTCUTS,
+  IF_EXISTS,
+  MARKDOWN_SCOPES,
   HOTKEY_NAMES,
   MARKDOWN_KINDS,
   PROVIDERS,
@@ -13,6 +16,9 @@ import {
   type ConnectionInput,
   type EditState,
   type ExportKind,
+  type ColumnExport,
+  type MarkdownExportInput,
+  type MarkdownSettings,
   type SendInput,
   type Settings,
   type CellValue,
@@ -116,6 +122,27 @@ export const SeedCountSchema = z.number().int().min(1).max(100_000)
 export const TabRowsSchema = z.object({ tabId: Id, rowIds: IdList })
 
 export const ExportKindSchema = z.enum(['csv', 'json']) satisfies z.ZodType<ExportKind>
+
+const ColumnExportSchema = z.object({
+  mode: z.enum(EXPORT_MODES),
+  property: z.string().max(100).optional()
+}) satisfies z.ZodType<ColumnExport>
+
+export const MarkdownSettingsSchema = z.object({
+  scope: z.enum(MARKDOWN_SCOPES),
+  fileNameColumnId: Id.nullable(),
+  ifExists: z.enum(IF_EXISTS),
+  tagsFromTabs: z.boolean(),
+  extraTags: z.string().max(2000),
+  source: z.boolean(),
+  header: z.string().max(20_000)
+}) satisfies z.ZodType<MarkdownSettings>
+
+export const MarkdownExportSchema = z.object({
+  rowIds: IdList.min(1, 'No rows to export').max(100_000),
+  settings: MarkdownSettingsSchema,
+  columns: z.array(z.object({ id: Id, export: ColumnExportSchema })).max(1000)
+}) satisfies z.ZodType<MarkdownExportInput>
 
 // A hotkey: Ctrl/Cmd or Alt (optionally Shift), then a letter, digit or F1–F12.
 export const AcceleratorSchema = z

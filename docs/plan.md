@@ -370,6 +370,20 @@ Lets people who pay for a Claude subscription (Pro/Max) use it with their review
 - Export dialog per spec §9.1; pure functions for frontmatter, file names and section building, with snapshot tests
 - Test on a scratch folder in the vault, never the real vault first
 
+**Decisions (agreed 14 Oct 2026):**
+- *Scope:* spec §9.1, one-way. No wikilinks or sync; exporting never deletes or renames notes in the vault.
+- *Where:* File → Export → **Markdown…** opens one dialog. Its column list (display order) sets each column's mode (Property / Section / Skip), property name and the **File name** radio (one column; default the first text column). Not in the column Edit dialog. Modes are stored in `columns.options.export`; every other choice is remembered per file in `meta`.
+- *Defaults:* text → Section; dropdown, number, date, checkbox → Property. Property names default to a slug of the label ("Study Type" → `study-type`); clashes get `-2`. The file-name column is also written as `title` when it is a Section (not when it is a Property, or Skip = file name only).
+- *Values:* text → quoted single-line string (line breaks → spaces, markdown kept); number; date `YYYY-MM-DD`; checkbox `true`/`false`; dropdown → its label. Empty properties stay as `key:`; empty sections are left out. Sections are `## <Column>` in display order, content as-is.
+- *Marker:* `review-assistant: "<file>.review#<row id>"` marks notes the app wrote; "overwrite only ours" replaces a note only if it has this key, otherwise skips it.
+- *File names:* `< > : " / \ | ? * # ^ [ ]` removed, trailing dots/spaces trimmed, max 100 characters, "Untitled" when empty, Windows device names guarded; repeats within one export get " (2)" (case-insensitive).
+- *Scope choice:* checked rows / current tab (the rows shown, after search and filters) / everything. First-time default: checked if any are checked, else the current tab. "If the file exists" defaults to overwrite only ours.
+- *Extras (both on by default):* `tags` from the user tabs the row is in (spaces → hyphens, invalid characters removed, never the main table) plus an "Extra tags" field (comma-separated); `source` = the `.review` file name.
+- *Header:* a free markdown box, written as typed under the frontmatter of every note (no placeholders).
+- *Preview:* live preview of the first note in scope, built by the same pure function as the export.
+- *Done:* status bar "Exported N notes (M skipped) to <folder>" with *Show in folder*.
+- *Added during implementation (14 Oct 2026, after review):* repeated file names are numbered over **all** rows in main-table order, not just the exported ones, so a row keeps its file name whichever scope is exported (otherwise exporting only the second "Pacing" row would overwrite the first row's note). Tags are written quoted, and tags that are only digits or punctuation are dropped. Typed property names lose a leading `-`/`.`. Dates are unquoted only if they're real calendar dates. Device names are also guarded before a dot (`Con. A study`). Notes are written asynchronously, one at a time; a note that can't be written is counted as failed and the rest carry on (the dialog stays open with the first error). New files use the `wx` flag, so a note created meanwhile is never overwritten.
+
 **Accept:** exported notes open in Obsidian with the properties shown correctly typed; re-exporting with "skip" or "overwrite" behaves as chosen.
 
 ### M11 – Synthesis tabs (was M8)
@@ -396,5 +410,5 @@ Lets people who pay for a Claude subscription (Pro/Max) use it with their review
 - [X] M8a Claude Desktop connection (MCP)
 - [X] M9 Packaging
 - [X] M9a Polish (undo, keyboard navigation, search bar)
-- [ ] M10 Markdown / Obsidian export (long-term)
+- [X] M10 Markdown / Obsidian export (long-term)
 - [ ] M11 Synthesis (was M8)

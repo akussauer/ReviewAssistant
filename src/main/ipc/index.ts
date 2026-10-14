@@ -8,6 +8,7 @@ import {
   ConnectionInputSchema,
   EditStateSchema,
   ExportKindSchema,
+  MarkdownExportSchema,
   FileIdSchema,
   FolderName,
   Id,
@@ -66,6 +67,8 @@ import {
   currentFile,
   destructive,
   exportDialog,
+  chooseMarkdownFolder,
+  markdownExportRun,
   getDb,
   importJsonDialog,
   newReviewDialog,
@@ -107,6 +110,7 @@ import {
   testConnection
 } from '../assistant'
 import { listMessages } from '../db/messages'
+import { getMarkdownState } from '../db/markdownExport'
 import { searchBarShown, setEditState, setSearchBarShown } from '../ui'
 import { handle } from './handle'
 
@@ -133,6 +137,11 @@ export function registerIpc({ dev }: { dev: boolean }): void {
   handle(IPC.fileImportJson, NoInput, () => importJsonDialog())
   handle(IPC.fileExport, ExportKindSchema, exportDialog)
   handle(IPC.fileShowInFolder, PathInput, showInFolder)
+
+  // ---- Markdown / Obsidian export (spec §9.1)
+  handle(IPC.markdownState, NoInput, () => getMarkdownState(getDb()))
+  handle(IPC.markdownChooseFolder, NoInput, chooseMarkdownFolder)
+  handle(IPC.markdownExport, MarkdownExportSchema, markdownExportRun)
   // No path from the page: main opens the file Windows gave it (review.ts, requestOpen).
   handle(IPC.fileOpenRequested, NoInput, openRequested)
 

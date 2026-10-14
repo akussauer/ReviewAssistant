@@ -41,6 +41,11 @@ const api: Api = {
     },
     openRequested: () => invoke(IPC.fileOpenRequested)
   },
+  markdown: {
+    state: () => invoke(IPC.markdownState),
+    chooseFolder: () => invoke(IPC.markdownChooseFolder),
+    export: (input) => invoke(IPC.markdownExport, input)
+  },
   menu: {
     onCommand: (cb) => {
       const listener = (_e: IpcRendererEvent, command: MenuCommand): void => cb(command)

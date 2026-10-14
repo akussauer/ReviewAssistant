@@ -7,6 +7,8 @@ import {
   type ExportKind,
   type ExportResult,
   type FileInfo,
+  type MarkdownExportInput,
+  type MarkdownExportResult,
   type MenuCommand
 } from '../shared/ipc'
 import { createConfigStore, samePath, withoutRecent, withRecent } from './config'
@@ -14,6 +16,8 @@ import { backupBeforeOp, backupOnOpen } from './db/backup'
 import { toCsv, toPysideJson } from './db/export'
 import { createReviewWith, removeReviewFile, saveCopy } from './db/files'
 import { importPyside, parsePysideJson } from './db/importer'
+import { getMarkdownFolder, setMarkdownFolder } from './db/markdownExport'
+import { exportMarkdown } from './markdownExport'
 import { openReviewDb, ReviewFileError } from './db/open'
 import type { DB } from './db/types'
 import { log } from './log'
@@ -328,6 +332,38 @@ export function exportDialog(kind: ExportKind): Promise<ExportResult | null> {
     lastExport = path
     log.info(`Exported ${out.rows} rows to ${path}`)
     return { path, name: basename(path), rows: out.rows }
+  })
+}
+
+// Markdown export (spec §9.1): the target folder is picked here and saved with the file,
+// so the page never hands main a path to write to.
+export async function chooseMarkdownFolder(): Promise<string | null> {
+  const win = liveWindow()
+  if (!win || !current) return null
+  const result = await dialog.showOpenDialog(win, {
+    title: 'Export notes to folder',
+    defaultPath: getMarkdownFolder(getDb()) ?? app.getPath('documents'),
+    properties: ['openDirectory', 'createDirectory']
+  })
+  if (result.canceled || !result.filePaths[0]) return null
+  const folder = resolve(result.filePaths[0])
+  setMarkdownFolder(getDb(), folder)
+  return folder
+}
+
+export function markdownExportRun(
+  input: MarkdownExportInput
+): Promise<MarkdownExportResult | null> {
+  return guarded('Could not export the notes', async () => {
+    if (!current) return null
+    const folder = getMarkdownFolder(getDb())
+    if (!folder) throw new ReviewFileError('Choose a target folder first.')
+    const result = await exportMarkdown(getDb(), input, folder, basename(current.path))
+    lastExport = result.path
+    log.info(
+      `Exported ${result.written} notes (${result.skipped} skipped, ${result.failed} failed) to ${folder}`
+    )
+    return result
   })
 }
 

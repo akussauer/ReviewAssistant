@@ -49,7 +49,11 @@ export function buildMenu(actions: MenuActions): Menu {
         {
           label: 'Export',
           enabled: actions.hasFile,
-          submenu: [run('CSV…', 'exportCsv'), run('JSON…', 'exportJson')]
+          submenu: [
+            run('CSV…', 'exportCsv'),
+            run('JSON…', 'exportJson'),
+            run('Markdown…', 'exportMarkdown')
+          ]
         },
         { type: 'separator' },
         { role: 'quit' }

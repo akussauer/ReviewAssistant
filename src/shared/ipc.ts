@@ -67,6 +67,9 @@ export const IPC = {
   menuSetEditState: 'menu:set-edit-state',
   uiSearchBar: 'ui:search-bar',
   uiSetSearchBar: 'ui:set-search-bar',
+  markdownState: 'markdown:state',
+  markdownChooseFolder: 'markdown:choose-folder',
+  markdownExport: 'markdown:export',
   devSeed: 'dev:seed', // only registered in development builds
   // Events (main -> renderer, pushed without a request)
   fileChanged: 'file:changed',
@@ -86,11 +89,13 @@ export type ColumnType = (typeof COLUMN_TYPES)[number]
 
 export type DropdownChoice = { id: string; label: string }
 
-// What `columns.options` holds, depending on the column type.
+// What `columns.options` holds, depending on the column type. `export` (any type) is the
+// column's Markdown export setting (spec §9.1); missing = the type's default.
 export type ColumnOptions = {
   choices?: DropdownChoice[] // dropdown
   min?: number // number
   max?: number // number
+  export?: ColumnExport
 }
 
 export type Column = {
@@ -215,6 +220,50 @@ export type ReviewSnapshot = {
 export type ExportKind = 'csv' | 'json'
 export type ExportResult = { path: string; name: string; rows: number }
 
+// ---- Markdown / Obsidian export (spec §9.1) -------------------------------------------
+
+export const EXPORT_MODES = ['property', 'section', 'skip'] as const
+export type ExportMode = (typeof EXPORT_MODES)[number]
+// property: the name typed over the default slug; '' or missing = the slug.
+export type ColumnExport = { mode: ExportMode; property?: string }
+
+export const MARKDOWN_SCOPES = ['checked', 'tab', 'all'] as const
+export type MarkdownScope = (typeof MARKDOWN_SCOPES)[number]
+export const IF_EXISTS = ['overwrite-ours', 'skip', 'overwrite'] as const
+export type IfExists = (typeof IF_EXISTS)[number]
+
+// The dialog's choices, remembered per file (the folder separately: only main sets it).
+export type MarkdownSettings = {
+  scope: MarkdownScope
+  fileNameColumnId: number | null // null = the first text column
+  ifExists: IfExists
+  tagsFromTabs: boolean
+  extraTags: string // comma-separated
+  source: boolean
+  header: string // markdown written under the frontmatter of every note
+}
+
+export type MarkdownState = {
+  settings: MarkdownSettings | null // null = never exported from this file
+  folder: string | null
+  columns: Record<number, ColumnExport> // only the columns that have a saved setting
+}
+
+export type MarkdownExportInput = {
+  rowIds: number[] // the rows in scope; main writes them in main-table order
+  settings: MarkdownSettings
+  columns: { id: number; export: ColumnExport }[]
+}
+
+export type MarkdownExportResult = {
+  folder: string
+  written: number
+  skipped: number // existed and could not be replaced (see IfExists)
+  failed: number // could not be written, e.g. locked by another program
+  error: string | null // the first failure, e.g. "Pacing.md: EBUSY: resource busy…"
+  path: string // for "Show in folder": the first note written (or the folder)
+}
+
 // Menu items that main hands to the renderer, which saves pending edits first.
 // devSeed only exists under `npm run dev` (the Developer menu).
 export type MenuCommand =
@@ -222,6 +271,7 @@ export type MenuCommand =
   | 'importJson'
   | 'exportCsv'
   | 'exportJson'
+  | 'exportMarkdown'
   | 'preferences'
   | 'plugins'
   | 'undo'
@@ -498,6 +548,14 @@ export type Api = {
   menu: {
     onCommand(cb: (command: MenuCommand) => void): Unsubscribe
     setEditState(state: EditState): Promise<void>
+  }
+  // Markdown / Obsidian export (spec §9.1). The folder is only ever picked with main's
+  // own dialog, so the page can't make main write somewhere else.
+  markdown: {
+    state(): Promise<MarkdownState>
+    chooseFolder(): Promise<string | null> // null = cancelled; the choice is saved
+    // null = cancelled or failed (main has shown why).
+    export(input: MarkdownExportInput): Promise<MarkdownExportResult | null>
   }
   // Window state that isn't part of Preferences, kept in config.json.
   ui: {
