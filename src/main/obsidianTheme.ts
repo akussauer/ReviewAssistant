@@ -119,6 +119,7 @@ const TEXT = 'var(--color-base-100)'
 const ACCENT = 'hsl(var(--accent-h), var(--accent-s), var(--accent-l))'
 const LINE = 'var(--color-base-30)'
 const role = (name: string, fallback: string): string => `var(${name}, ${fallback})`
+const MD = 'var(--md-colour)'
 const TOKENS: Record<string, string> = {
   '--background': role('--background-primary', BG),
   '--foreground': role('--text-normal', TEXT),
@@ -139,7 +140,21 @@ const TOKENS: Record<string, string> = {
   '--input': role('--background-modifier-border', LINE),
   '--ring': role('--interactive-accent', ACCENT),
   '--radius': role('--radius-m', '8px'),
-  '--md-colour': role('--text-accent', ACCENT)
+  '--md-colour': role('--text-accent', ACCENT),
+  // Per markdown element (MARKDOWN_KINDS): Obsidian's variable for it, or the one some
+  // themes use instead (e.g. Things' --strong-color), else the markdown colour.
+  ...Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [`--md-h${n}`, role(`--h${n}-color`, MD)])),
+  '--md-bold': role('--bold-color', role('--strong-color', MD)),
+  '--md-italic': role('--italic-color', role('--em-color', MD)),
+  '--md-strike': MD,
+  '--md-list': role('--list-marker-color', MD),
+  // Also the app's checkboxes (main.css), like Obsidian's own.
+  '--md-task': role('--checkbox-color', role('--interactive-accent', ACCENT)),
+  '--md-task-mark': role('--checkbox-marker-color', role('--background-primary', 'white')), // the tick
+  '--md-code': role('--code-normal', MD),
+  '--md-quote': role('--blockquote-color', role('--quote-color', MD)),
+  '--md-link': role('--link-color', MD),
+  '--md-rule': role('--hr-color', MD)
 }
 
 // A theme can't set our tokens directly, in any scope: only through Obsidian's roles.

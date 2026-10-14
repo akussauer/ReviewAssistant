@@ -5,6 +5,7 @@ import { z } from 'zod'
 import {
   COLUMN_TYPES,
   FIXED_SHORTCUTS,
+  MARKDOWN_KINDS,
   SPELLCHECK_LANGUAGES,
   type ExportKind,
   type Settings,
@@ -112,11 +113,14 @@ export const AcceleratorSchema = z
 
 export const ThemeSchema = z.enum(['light', 'dark', 'system'])
 
+export const HexColour = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Expected a colour like #0E80A3')
+
 export const SettingsSchema = z.object({
   theme: ThemeSchema,
   spellcheckLanguage: z.enum(SPELLCHECK_LANGUAGES),
-  markdownColour: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Expected a colour like #0E80A3'),
+  markdownColour: HexColour,
   markdownColourOverride: z.boolean(),
+  markdownColours: z.partialRecord(z.enum(MARKDOWN_KINDS), HexColour),
   hotkeys: z
     .object({ newRow: AcceleratorSchema, newColumn: AcceleratorSchema, saveAs: AcceleratorSchema })
     .refine((h) => new Set(Object.values(h)).size === 3, 'Each hotkey must be different')

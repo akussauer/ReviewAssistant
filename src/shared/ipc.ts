@@ -195,6 +195,28 @@ export type MenuCommand =
 // ---- Settings (spec §12) ----------------------------------------------------------
 
 export type Theme = 'light' | 'dark' | 'system'
+
+// The markdown elements text cells colour separately (renderer/lib/markdown.ts). Each is
+// drawn with the CSS variable --md-<kind>, falling back to --md-colour. "rule" also covers
+// <br>; "task" is "- [ ]", and also colours the app's checkboxes.
+export const MARKDOWN_KINDS = [
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'bold',
+  'italic',
+  'strike',
+  'list',
+  'task',
+  'code',
+  'quote',
+  'link',
+  'rule'
+] as const
+export type MarkdownKind = (typeof MARKDOWN_KINDS)[number]
 export type HotkeyName = 'newRow' | 'newColumn' | 'saveAs'
 
 // App-wide settings, edited in the Preferences dialog. Hotkeys are Electron accelerators,
@@ -205,6 +227,8 @@ export type Settings = {
   markdownColour: string // e.g. #0E80A3
   // While an Obsidian theme is active, markdown uses the theme's accent unless this is on.
   markdownColourOverride: boolean
+  // Per element (heading level, bold, list marker, …); a missing one uses markdownColour.
+  markdownColours: Partial<Record<MarkdownKind, string>>
   hotkeys: Record<HotkeyName, string>
 }
 
@@ -214,6 +238,7 @@ export const DEFAULT_SETTINGS: Settings = {
   spellcheckLanguage: 'en_GB',
   markdownColour: '#0E80A3',
   markdownColourOverride: false,
+  markdownColours: {},
   hotkeys: { newRow: 'CmdOrCtrl+N', newColumn: 'CmdOrCtrl+Shift+N', saveAs: 'CmdOrCtrl+Shift+S' }
 }
 

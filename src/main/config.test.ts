@@ -62,6 +62,14 @@ describe('mergeWithDefaults', () => {
     expect(mergeWithDefaults({ enabledPlugins: ['a', 3] }).enabledPlugins).toEqual([])
   })
 
+  it('keeps each valid per-element markdown colour on its own', () => {
+    expect(mergeWithDefaults({}).markdownColours).toEqual({})
+    const merged = mergeWithDefaults({
+      markdownColours: { h1: '#112233', bold: 'red', future: '#445566' }
+    })
+    expect(merged.markdownColours).toEqual({ h1: '#112233' })
+  })
+
   it('returns defaults for garbage', () => {
     expect(mergeWithDefaults(null)).toEqual(DEFAULT_CONFIG)
     expect(mergeWithDefaults('nope')).toEqual(DEFAULT_CONFIG)

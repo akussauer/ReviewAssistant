@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
 import { z } from 'zod'
-import { DEFAULT_SETTINGS } from '../shared/ipc'
-import { AcceleratorSchema, SettingsSchema } from '../shared/schemas'
+import { DEFAULT_SETTINGS, MARKDOWN_KINDS } from '../shared/ipc'
+import { AcceleratorSchema, HexColour, SettingsSchema } from '../shared/schemas'
 import { log } from './log'
 
 // App-wide settings in <userData>/config.json, like FileFunctions.get_configs in the
@@ -44,13 +44,30 @@ function mergeHotkeys(raw: unknown): Config['hotkeys'] {
   return { newRow: pick('newRow'), newColumn: pick('newColumn'), saveAs: pick('saveAs') }
 }
 
-// Keeps each valid field of `raw` and uses the default for the rest. Hotkeys are merged
-// one by one, so a single missing hotkey doesn't reset the others.
+// Each valid per-element colour is kept; an unknown element (e.g. from a newer version) or
+// a bad colour is dropped, so that element follows the main colour again.
+function mergeMarkdownColours(raw: unknown): Config['markdownColours'] {
+  const given = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const kept: Config['markdownColours'] = {}
+  for (const kind of MARKDOWN_KINDS) {
+    const parsed = HexColour.safeParse(given[kind])
+    if (parsed.success) kept[kind] = parsed.data
+  }
+  return kept
+}
+
+// Keeps each valid field of `raw` and uses the default for the rest. Hotkeys and
+// per-element colours are merged one by one, so a single bad one doesn't reset the others.
 export function mergeWithDefaults(raw: unknown): Config {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const merged: Record<string, unknown> = {}
   for (const [key, fieldSchema] of Object.entries(ConfigSchema.shape)) {
-    const value = key === 'hotkeys' ? mergeHotkeys(obj.hotkeys) : obj[key]
+    const value =
+      key === 'hotkeys'
+        ? mergeHotkeys(obj.hotkeys)
+        : key === 'markdownColours'
+          ? mergeMarkdownColours(obj.markdownColours)
+          : obj[key]
     const parsed = (fieldSchema as z.ZodType).safeParse(value)
     merged[key] = parsed.success ? parsed.data : DEFAULT_CONFIG[key as keyof Config]
   }

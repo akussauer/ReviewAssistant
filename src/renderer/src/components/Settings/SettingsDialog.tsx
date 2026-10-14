@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import {
   DEFAULT_SETTINGS,
+  MARKDOWN_KINDS,
   SPELLCHECK_LANGUAGES,
   type HotkeyName,
+  type MarkdownKind,
   type Settings,
   type SpellcheckLanguage,
   type Theme
 } from '../../../../shared/ipc'
 import { captureHotkey, describeHotkey, HOTKEY_LABELS } from '../../lib/hotkeys'
+import { kindColour } from '../../lib/markdown'
 import { reviewStore, useReview } from '../../store'
 import {
   AlertDialog,
@@ -78,7 +81,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
       reviewStore.getState().setSettings({
         ...saved,
         markdownColour: next.markdownColour,
-        markdownColourOverride: next.markdownColourOverride
+        markdownColourOverride: next.markdownColourOverride,
+        markdownColours: next.markdownColours
       })
     setDraft(next)
   }
@@ -121,7 +125,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
   return (
     <Dialog open onOpenChange={(open) => !open && cancel()}>
       <DialogContent
-        className="sm:max-w-md"
+        className="max-h-[90vh] overflow-y-auto sm:max-w-md"
         // While a hotkey is being set, Esc only stops that.
         onEscapeKeyDown={(e) => capturing && e.preventDefault()}
       >
@@ -146,7 +150,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
               ))}
             </select>
 
-            <Label htmlFor="pref-colour">Markdown colour</Label>
+            <Label htmlFor="pref-colour" className="self-start pt-2.5">
+              Markdown colour
+            </Label>
             <MarkdownColour
               settings={draft}
               themeName={themeName}
@@ -213,7 +219,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
           <AlertDialogHeader>
             <AlertDialogTitle>Reset to defaults?</AlertDialogTitle>
             <AlertDialogDescription>
-              Theme, markdown colour (and its override), spellcheck language and hotkeys go back to
+              Theme, markdown colours (and the override), spellcheck language and hotkeys go back to
               their defaults. Nothing is saved until you click Save.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -234,8 +240,30 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
   )
 }
 
-// While an Obsidian theme is active it sets the colour, unless "Override theme colour" is
-// on; the picker keeps its value either way.
+const KIND_LABELS: Record<MarkdownKind, string> = {
+  h1: '# Heading 1',
+  h2: '## Heading 2',
+  h3: '### Heading 3',
+  h4: '#### Heading 4',
+  h5: '##### Heading 5',
+  h6: '###### Heading 6',
+  bold: '**Bold**',
+  italic: '*Italic*',
+  strike: '~~Strikethrough~~',
+  list: '- / 1. List marker',
+  task: '- [ ] Task (and checkboxes)',
+  code: '`Inline code`',
+  quote: '> Quote',
+  link: '[Link](url)',
+  rule: '--- Rule, <br>'
+}
+const BOLD_KINDS = new Set<MarkdownKind>(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'bold'])
+const pickerBase =
+  'shrink-0 cursor-pointer rounded-md border border-input bg-background p-1 disabled:cursor-not-allowed disabled:opacity-50'
+
+// The main colour, plus an optional colour per element (each follows the main one until
+// set). While an Obsidian theme is active it sets them all, unless "Override theme
+// colour" is on; the saved colours are kept either way.
 function MarkdownColour(props: {
   settings: Settings
   themeName: string | null
@@ -243,22 +271,31 @@ function MarkdownColour(props: {
 }): React.JSX.Element {
   const { settings, themeName, onChange } = props
   const byTheme = themeName !== null && !settings.markdownColourOverride
+  // While previewing, <html> carries the live colours (App.tsx), so the samples can read
+  // them; the theme's when it sets them.
+  const colourOf = (k: MarkdownKind): string =>
+    byTheme ? kindColour(k) : (settings.markdownColours[k] ?? settings.markdownColour)
+  const setKind = (k: MarkdownKind, colour: string | null): void => {
+    const next = { ...settings.markdownColours }
+    if (colour === null) delete next[k]
+    else next[k] = colour
+    onChange({ markdownColours: next })
+  }
   return (
     <div className="grid gap-1.5">
       <div className="flex items-center gap-2">
         <input
           id="pref-colour"
           type="color"
-          className="h-9 w-12 cursor-pointer rounded-md border border-input bg-background p-1 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`${pickerBase} h-9 w-12`}
           value={settings.markdownColour}
           disabled={byTheme}
           onChange={(e) => onChange({ markdownColour: e.target.value })}
         />
-        <span
-          className="text-sm"
-          style={{ color: byTheme ? 'var(--text-accent)' : settings.markdownColour }}
-        >
-          <b>**bold**</b> <i>_italic_</i> # heading
+        <span className="text-sm">
+          <b style={{ color: colourOf('bold') }}>**bold**</b>{' '}
+          <i style={{ color: colourOf('italic') }}>*italic*</i>{' '}
+          <b style={{ color: colourOf('h1') }}># heading</b>
         </span>
       </div>
       {themeName !== null && (
@@ -274,6 +311,44 @@ function MarkdownColour(props: {
           </label>
         </div>
       )}
+      <details className="text-sm">
+        <summary className="cursor-pointer text-muted-foreground select-none">
+          Colours per element
+        </summary>
+        <div className="mt-2 grid gap-1">
+          {MARKDOWN_KINDS.map((k) => {
+            const own = settings.markdownColours[k]
+            return (
+              <div key={k} className="flex items-center gap-2">
+                <input
+                  type="color"
+                  aria-label={`${KIND_LABELS[k]} colour`}
+                  className={`${pickerBase} h-8 w-10`}
+                  value={own ?? settings.markdownColour}
+                  disabled={byTheme}
+                  onChange={(e) => setKind(k, e.target.value)}
+                />
+                <span
+                  className="min-w-0 flex-1 truncate font-mono text-xs"
+                  style={{ color: colourOf(k), fontWeight: BOLD_KINDS.has(k) ? 700 : undefined }}
+                >
+                  {KIND_LABELS[k]}
+                </span>
+                {own !== undefined && !byTheme && (
+                  <button
+                    type="button"
+                    className="rounded-sm px-1 text-xs text-muted-foreground hover:bg-accent"
+                    title="Use the main markdown colour"
+                    onClick={() => setKind(k, null)}
+                  >
+                    ↺
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </details>
     </div>
   )
 }

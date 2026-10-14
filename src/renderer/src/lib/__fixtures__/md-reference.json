@@ -44,20 +44,21 @@
       null,
       null,
       null,
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
       [true, false],
       null,
       null,
       null,
       null,
       null
-    ]
+    ],
+    "note": "Differs from md_highlighter.py on purpose: **bold** stays bold"
   },
   {
     "line": "Some *italic* text",
@@ -85,24 +86,25 @@
   {
     "line": "**bold** and *it*",
     "format": [
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
       null,
       null,
-      null
-    ]
+      null,
+      null,
+      null,
+      [false, true],
+      [false, true],
+      [false, true],
+      [false, true]
+    ],
+    "note": "Differs from md_highlighter.py on purpose: **bold** stays bold"
   },
   {
     "line": "~~gone~~ here",
@@ -341,18 +343,18 @@
       [false, false],
       [false, false],
       [false, false],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
-      [false, true],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
       [true, false],
       null,
       null,
@@ -366,7 +368,8 @@
       [false, false],
       [false, false],
       [false, false]
-    ]
+    ],
+    "note": "Differs from md_highlighter.py on purpose: **bold** stays bold"
   },
   {
     "line": "> *quote italic*",
@@ -392,5 +395,48 @@
   {
     "line": "",
     "format": []
+  },
+  {
+    "line": "***both***",
+    "format": [
+      [true, true],
+      [true, true],
+      [true, true],
+      [true, true],
+      [true, true],
+      [true, true],
+      [true, true],
+      [true, true],
+      [true, true],
+      [true, true]
+    ],
+    "note": "Differs from md_highlighter.py on purpose: bold + italic, not a rule"
+  },
+  {
+    "line": "--- text",
+    "format": [null, null, null, null, null, null, null, null],
+    "note": "Differs from md_highlighter.py on purpose: a rule only on a line of its own"
+  },
+  {
+    "line": "- [ ] see [a](b)",
+    "format": [
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      null,
+      null,
+      null,
+      null,
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false]
+    ],
+    "note": "Differs from md_highlighter.py on purpose: the link no longer starts at the task box"
   }
 ]

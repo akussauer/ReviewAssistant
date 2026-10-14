@@ -259,7 +259,10 @@ The main tab shows all rows, so it has no `tab_rows` entries.
 - *Sources:* our folder `<userData>/Themes/<name>/theme.css` ("Add theme…" copies a chosen `.css`, plus a `manifest.json` next to it if there is one; asks before replacing) and, optionally, one Obsidian vault set in the Theme section (the vault or its `.obsidian` folder; its `.obsidian/themes/*` are listed as "(vault)", read-only, never changed). "Open themes folder" button. If the active theme is missing, Default is shown and the setting is kept.
 - *Plugins (placeholder):* `<userData>/Plugins/<folder>/manifest.json` (Obsidian-style: id, name, version, author, description, checked with Zod). Table: Name, Version, Author, Description, Enabled, Delete. A broken manifest shows as "Invalid manifest" (can be deleted, not enabled). Enabled folders are stored in config.json. **No plugin code is loaded or run.** "Open plugins folder" and Refresh buttons.
 - *Delete* (our folders only): confirm, then move to the Recycle Bin (`shell.trashItem`). Deleting the active theme switches to Default.
-- *Markdown colour:* while a theme is active, markdown uses the theme's `--text-accent`. Preferences shows "Set by theme <name>" with an **Override theme colour** switch; with the switch on, the picker works and its colour wins. The saved colour is kept either way.
+- *Markdown colour:* while a theme is active, markdown uses the theme's colours. Preferences shows "Set by theme <name>" with an **Override theme colour** switch; with the switch on, the pickers work and their colours win. The saved colours are kept either way.
+- *Colours per element* (added after first review): Heading 1–6, bold, italic, strikethrough, list marker, task `- [ ]`, inline code, quote, link, rule/`<br>`. Each is drawn with `--md-<kind>`, falling back to `--md-colour`. Preferences has a collapsed "Colours per element" list (each follows the main colour until set, ↺ resets). A theme supplies them from Obsidian's variables (`--h3-color`, `--bold-color`/`--strong-color`, `--checkbox-color`, `--blockquote-color`/`--quote-color`, `--link-color`, …), else its accent.
+- *Checkboxes* are drawn by the app (outline + fill in the task colour, a dash when half-checked), because a native checkbox only takes a colour once ticked.
+- *Highlighter fixes vs md_highlighter.py* (now visible with separate colours): `*italic*` no longer matches inside `**bold**` (the reference drew bold as italic); `***both***` is bold + italic; a link's text can't contain `]`, so `- [ ] see [a](b)` keeps its task box; `---` is a rule only on a line of its own. The parity fixture marks the changed lines with a `note`.
 
 ### M7 – Assistant (per tab)
 - Settings: provider, `safeStorage` key, model, test button; key check at startup (free endpoint); assistant options hidden without a key
@@ -300,7 +303,7 @@ The main tab shows all rows, so it has no `tab_rows` entries.
 - [X] M5 Rows, tabs, filters
 - [X] M5a Rows, checked
 - [X] M6 File menu, import/export, settings
-- [ ] M6a Themes, Plugin support
+- [X] M6a Themes, Plugin support
 - [ ] M7 Assistant
 - [ ] M8 Synthesis
 - [ ] M9 Packaging

@@ -214,7 +214,7 @@ Based on the disabled `SynthesisWidget` in the PySide app **[Py]**:
 |---|---|
 | Theme | Light / Dark / System |
 | Spellcheck language | en_AU … en_ZW (same list as the PySide app); default en_GB |
-| Markdown colour | colour picker; default `#0E80A3`. **[New]** While an Obsidian theme is active the theme's accent is used, unless *Override theme colour* is on. |
+| Markdown colour | colour picker; default `#0E80A3`. **[New]** *Colours per element* (Heading 1–6, bold, italic, strikethrough, list marker, task, inline code, quote, link, rule/`<br>`), each following the main colour until set. The task colour also colours the app's checkboxes. While an Obsidian theme is active, the theme's colours are used, unless *Override theme colour* is on. |
 | Hotkeys | New row (Ctrl+N) and New column (Ctrl+Shift+N), set by pressing the key combination; **[New]** Save As (Ctrl+Shift+S). A hotkey needs Ctrl/Cmd or Alt plus a letter, digit or F-key; combinations used by another hotkey or a fixed shortcut (Open, Preferences, cut/copy/paste, undo/redo, select all) are refused. |
 | Assistant **[New]** | provider, API key, model, test button |
 | Reset to defaults | ✓ |

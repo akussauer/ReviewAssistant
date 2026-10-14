@@ -82,6 +82,13 @@ describe('buildThemeCss', () => {
     expect(css).not.toContain('hotpink')
   })
 
+  it('colours each markdown element from its Obsidian or theme variable', () => {
+    const css = buildThemeCss({ base: {}, light: {}, dark: {} })
+    expect(css).toContain('--md-h3: var(--h3-color, var(--md-colour));')
+    expect(css).toContain('--md-bold: var(--bold-color, var(--strong-color, var(--md-colour)));')
+    expect(css).toContain('--md-task: var(--checkbox-color, var(--interactive-accent, hsl(')
+  })
+
   it('gives every token a fallback for an undefined role', () => {
     const css = buildThemeCss({ base: {}, light: {}, dark: {} })
     expect(css).toContain('--background: var(--background-primary, var(--color-base-00));')

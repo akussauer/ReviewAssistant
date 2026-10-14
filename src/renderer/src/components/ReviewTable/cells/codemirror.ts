@@ -6,7 +6,8 @@ import {
   type DecorationSet,
   type ViewUpdate
 } from '@codemirror/view'
-import { highlightLine, type Span } from '../../../lib/markdown'
+import { MARKDOWN_KINDS } from '../../../../../shared/ipc'
+import { highlightLine, kindColour, type Span } from '../../../lib/markdown'
 
 // CodeMirror extensions for text cells.
 //
@@ -15,14 +16,20 @@ import { highlightLine, type Span } from '../../../lib/markdown'
 // A ViewPlugin recomputes them for the visible lines whenever the text or viewport changes.
 // (Later, the same mechanism can hide markup and render it, Obsidian-style.)
 
-const marks = {
-  plain: Decoration.mark({ class: 'cm-md' }),
-  bold: Decoration.mark({ class: 'cm-md cm-md-bold' }),
-  italic: Decoration.mark({ class: 'cm-md cm-md-italic' }),
-  both: Decoration.mark({ class: 'cm-md cm-md-bold cm-md-italic' })
+// One mark per element kind and style, made once and reused.
+const marks = new Map<string, Decoration>()
+function markFor(s: Span): Decoration {
+  const key = `${s.kind}|${s.bold}|${s.italic}`
+  let mark = marks.get(key)
+  if (!mark) {
+    const classes = ['cm-md', `cm-md-kind-${s.kind}`]
+    if (s.bold) classes.push('cm-md-bold')
+    if (s.italic) classes.push('cm-md-italic')
+    mark = Decoration.mark({ class: classes.join(' ') })
+    marks.set(key, mark)
+  }
+  return mark
 }
-const markFor = (s: Span): Decoration =>
-  s.bold && s.italic ? marks.both : s.bold ? marks.bold : s.italic ? marks.italic : marks.plain
 
 function buildDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
@@ -53,15 +60,15 @@ export const markdownHighlight = ViewPlugin.fromClass(
   { decorations: (plugin) => plugin.decorations }
 )
 
-// Makes the editor look like the rest of the cell. The markdown colour comes from the
-// --md-colour CSS variable, set from the settings on the table.
+// Makes the editor look like the rest of the cell. Markdown colours come from the
+// --md-<kind> / --md-colour CSS variables (set from the settings or the Obsidian theme).
 export const cellTheme = EditorView.theme({
+  ...Object.fromEntries(MARKDOWN_KINDS.map((k) => [`.cm-md-kind-${k}`, { color: kindColour(k) }])),
   '&': { height: '100%', fontSize: '0.875rem', backgroundColor: 'transparent' },
   '&.cm-focused': { outline: '1px solid var(--ring)', borderRadius: '2px' },
   '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.25rem', overflowX: 'hidden' },
   '.cm-content': { padding: '0', caretColor: 'var(--foreground)' },
   '.cm-line': { padding: '0 2px' },
-  '.cm-md': { color: 'var(--md-colour, #0E80A3)' },
   '.cm-md-bold': { fontWeight: '700' },
   '.cm-md-italic': { fontStyle: 'italic' }
 })

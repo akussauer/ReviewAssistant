@@ -37,7 +37,7 @@ export type ReviewState = {
   activeTabId: number
   settings: Settings | null
   // The active Obsidian theme's name (Settings > Plugins); null = Default. While a theme
-  // is active, markdown uses its accent unless settings.markdownColourOverride is on.
+  // is active, markdown uses its colours unless settings.markdownColourOverride is on.
   themeName: string | null
   // Rows just added, kept visible even if they don't match the tab's filters (a new row
   // is blank). Cleared when filters or search change.

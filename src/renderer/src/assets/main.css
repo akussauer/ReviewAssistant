@@ -82,4 +82,62 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Checkboxes take the "- [ ]" markdown colour (Preferences, or the Obsidian theme's
+     checkbox colour; see App.tsx useMarkdownColours). Drawn by us rather than the
+     browser, since a native checkbox only takes a colour once it's ticked. */
+  input[type='checkbox'] {
+    --check: var(--md-task, var(--md-colour, #0e80a3));
+    /* The tick: an Obsidian theme's --checkbox-marker-color (obsidianTheme.ts), else white. */
+    --check-mark: var(--md-task-mark, white);
+    appearance: none;
+    display: inline-grid;
+    place-content: center;
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    border: 1.5px solid var(--check);
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer;
+    vertical-align: middle;
+  }
+  /* Drawn as a mask so its colour can come from a CSS variable. */
+  input[type='checkbox']::before {
+    content: '';
+    width: 10px;
+    height: 10px;
+    background-color: var(--check-mark);
+    mask: center / contain no-repeat;
+    visibility: hidden;
+  }
+  input[type='checkbox']:checked,
+  input[type='checkbox']:indeterminate {
+    background-color: var(--check);
+  }
+  input[type='checkbox']:checked::before {
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3 3 7-7' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    visibility: visible;
+  }
+  input[type='checkbox']:indeterminate::before {
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8h9' stroke='black' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    visibility: visible;
+  }
+  input[type='checkbox']:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+  }
+  input[type='checkbox']:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+  /* Windows high contrast replaces our colours: let the system draw checkboxes. */
+  @media (forced-colors: active) {
+    input[type='checkbox'] {
+      appearance: auto;
+    }
+    input[type='checkbox']::before {
+      display: none;
+    }
+  }
 }

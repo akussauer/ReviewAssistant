@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import { MAIN_TAB_ID, type ActiveTheme, type FileInfo, type MenuCommand } from '../../shared/ipc'
+import {
+  MAIN_TAB_ID,
+  MARKDOWN_KINDS,
+  type ActiveTheme,
+  type FileInfo,
+  type MenuCommand
+} from '../../shared/ipc'
 import { ReviewTable } from './components/ReviewTable/ReviewTable'
 import { PluginsDialog } from './components/Settings/PluginsDialog'
 import { SettingsDialog } from './components/Settings/SettingsDialog'
@@ -84,6 +90,35 @@ function useObsidianTheme(): void {
   }, [])
 }
 
+// Markdown colours (Preferences) as CSS variables on <html>: --md-colour and one
+// --md-<kind> per element. Text cells and checkboxes read them. While an Obsidian theme
+// sets the colours (no override), they're removed so the theme's stylesheet applies.
+function useMarkdownColours(): void {
+  const settings = useReview((s) => s.settings)
+  const byTheme = useReview((s) => s.themeName !== null && !s.settings?.markdownColourOverride)
+  // Opening a file loads them too; this covers the Welcome screen before that.
+  useEffect(() => {
+    window.api.settings
+      .get()
+      .then((s) => {
+        if (!reviewStore.getState().settings) reviewStore.getState().setSettings(s)
+      })
+      .catch((err) => console.error('Could not read the settings', err))
+  }, [])
+  useEffect(() => {
+    const style = document.documentElement.style
+    if (!settings || byTheme) {
+      style.removeProperty('--md-colour')
+      for (const k of MARKDOWN_KINDS) style.removeProperty(`--md-${k}`)
+      return
+    }
+    style.setProperty('--md-colour', settings.markdownColour)
+    // Every kind is set, so none falls through to a theme's value while overriding.
+    for (const k of MARKDOWN_KINDS)
+      style.setProperty(`--md-${k}`, settings.markdownColours[k] ?? settings.markdownColour)
+  }, [settings, byTheme])
+}
+
 type SettingsPage = 'preferences' | 'plugins'
 
 function App(): React.JSX.Element | null {
@@ -92,6 +127,7 @@ function App(): React.JSX.Element | null {
   const [settingsPage, setSettingsPage] = useState<SettingsPage | null>(null)
   useDarkClass()
   useObsidianTheme()
+  useMarkdownColours()
   useEffect(
     () => window.api.menu.onCommand((command) => runMenuCommand(command, setSettingsPage)),
     []

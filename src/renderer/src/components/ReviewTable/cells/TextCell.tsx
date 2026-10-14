@@ -3,7 +3,7 @@ import { Annotation, EditorState, Transaction } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { useEffect, useRef, useState } from 'react'
 import type { CellValue } from '../../../../../shared/ipc'
-import { highlightLine } from '../../../lib/markdown'
+import { highlightLine, kindColour } from '../../../lib/markdown'
 import { registerFlush } from '../../../lib/pendingEdits'
 import { reviewStore } from '../../../store'
 import { cellTheme, markdownHighlight } from './codemirror'
@@ -215,7 +215,7 @@ function HighlightedLine({ line }: { line: string }): React.JSX.Element {
       <span
         key={s.from}
         style={{
-          color: 'var(--md-colour, #0E80A3)',
+          color: kindColour(s.kind),
           fontWeight: s.bold ? 700 : undefined,
           fontStyle: s.italic ? 'italic' : undefined
         }}
