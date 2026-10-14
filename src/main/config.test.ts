@@ -38,6 +38,30 @@ describe('mergeWithDefaults', () => {
     })
   })
 
+  it('loads an M6 config without the theme/plugin fields, and checks them', () => {
+    const old = mergeWithDefaults({ theme: 'dark', recentFiles: [], lastFile: null })
+    expect(old).toMatchObject({
+      activeTheme: null,
+      obsidianVault: null,
+      enabledPlugins: [],
+      markdownColourOverride: false
+    })
+    const set = mergeWithDefaults({
+      activeTheme: 'local:Things',
+      obsidianVault: 'D:/Vault',
+      enabledPlugins: ['a', 'b'],
+      markdownColourOverride: true
+    })
+    expect(set).toMatchObject({
+      activeTheme: 'local:Things',
+      obsidianVault: 'D:/Vault',
+      enabledPlugins: ['a', 'b'],
+      markdownColourOverride: true
+    })
+    // One bad entry resets the list (as for every field: invalid -> default).
+    expect(mergeWithDefaults({ enabledPlugins: ['a', 3] }).enabledPlugins).toEqual([])
+  })
+
   it('returns defaults for garbage', () => {
     expect(mergeWithDefaults(null)).toEqual(DEFAULT_CONFIG)
     expect(mergeWithDefaults('nope')).toEqual(DEFAULT_CONFIG)

@@ -8,7 +8,7 @@ import {
   type Theme
 } from '../../../../shared/ipc'
 import { captureHotkey, describeHotkey, HOTKEY_LABELS } from '../../lib/hotkeys'
-import { reviewStore } from '../../store'
+import { reviewStore, useReview } from '../../store'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,6 +58,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
   const [keyErrors, setKeyErrors] = useState<Partial<Record<HotkeyName, string>>>({})
   const [confirmReset, setConfirmReset] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const themeName = useReview((s) => s.themeName)
 
   useEffect(() => {
     window.api.settings
@@ -74,7 +75,11 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
     if (next.theme !== draft?.theme) previewTheme(next.theme)
     const live = reviewStore.getState().settings
     if (live && saved)
-      reviewStore.getState().setSettings({ ...saved, markdownColour: next.markdownColour })
+      reviewStore.getState().setSettings({
+        ...saved,
+        markdownColour: next.markdownColour,
+        markdownColourOverride: next.markdownColourOverride
+      })
     setDraft(next)
   }
 
@@ -142,18 +147,11 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
             </select>
 
             <Label htmlFor="pref-colour">Markdown colour</Label>
-            <div className="flex items-center gap-2">
-              <input
-                id="pref-colour"
-                type="color"
-                className="h-9 w-12 cursor-pointer rounded-md border border-input bg-background p-1"
-                value={draft.markdownColour}
-                onChange={(e) => preview({ ...draft, markdownColour: e.target.value })}
-              />
-              <span className="text-sm" style={{ color: draft.markdownColour }}>
-                <b>**bold**</b> <i>_italic_</i> # heading
-              </span>
-            </div>
+            <MarkdownColour
+              settings={draft}
+              themeName={themeName}
+              onChange={(patch) => preview({ ...draft, ...patch })}
+            />
 
             <Label htmlFor="pref-language">Spellcheck language</Label>
             <select
@@ -215,8 +213,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
           <AlertDialogHeader>
             <AlertDialogTitle>Reset to defaults?</AlertDialogTitle>
             <AlertDialogDescription>
-              Theme, markdown colour, spellcheck language and hotkeys go back to their defaults.
-              Nothing is saved until you click Save.
+              Theme, markdown colour (and its override), spellcheck language and hotkeys go back to
+              their defaults. Nothing is saved until you click Save.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -233,6 +231,50 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
         </AlertDialogContent>
       </AlertDialog>
     </Dialog>
+  )
+}
+
+// While an Obsidian theme is active it sets the colour, unless "Override theme colour" is
+// on; the picker keeps its value either way.
+function MarkdownColour(props: {
+  settings: Settings
+  themeName: string | null
+  onChange(patch: Partial<Settings>): void
+}): React.JSX.Element {
+  const { settings, themeName, onChange } = props
+  const byTheme = themeName !== null && !settings.markdownColourOverride
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex items-center gap-2">
+        <input
+          id="pref-colour"
+          type="color"
+          className="h-9 w-12 cursor-pointer rounded-md border border-input bg-background p-1 disabled:cursor-not-allowed disabled:opacity-50"
+          value={settings.markdownColour}
+          disabled={byTheme}
+          onChange={(e) => onChange({ markdownColour: e.target.value })}
+        />
+        <span
+          className="text-sm"
+          style={{ color: byTheme ? 'var(--text-accent)' : settings.markdownColour }}
+        >
+          <b>**bold**</b> <i>_italic_</i> # heading
+        </span>
+      </div>
+      {themeName !== null && (
+        <div className="grid gap-1">
+          {byTheme && <p className="text-xs text-muted-foreground">Set by theme {themeName}</p>}
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={settings.markdownColourOverride}
+              onChange={(e) => onChange({ markdownColourOverride: e.target.checked })}
+            />
+            Override theme colour
+          </label>
+        </div>
+      )}
+    </div>
   )
 }
 

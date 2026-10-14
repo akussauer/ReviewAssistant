@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { MAIN_TAB_ID, type FileInfo, type MenuCommand } from '../../shared/ipc'
+import { MAIN_TAB_ID, type ActiveTheme, type FileInfo, type MenuCommand } from '../../shared/ipc'
 import { ReviewTable } from './components/ReviewTable/ReviewTable'
+import { PluginsDialog } from './components/Settings/PluginsDialog'
 import { SettingsDialog } from './components/Settings/SettingsDialog'
 import { useTabRows, type TabRows } from './components/ReviewTable/useTabRows'
 import { SearchBar } from './components/Tabs/SearchBar'
@@ -14,10 +15,10 @@ import { reviewStore, useReview } from './store'
 // File-menu commands (main sends them; see MenuCommand). Text typed in the last moment
 // and pending search/filter changes are saved first, so a copy or export includes them;
 // IPC keeps the order, so those saves reach main before the command does.
-function runMenuCommand(command: MenuCommand, openPreferences: () => void): void {
+function runMenuCommand(command: MenuCommand, openDialog: (d: SettingsPage) => void): void {
   // A dialog is open (e.g. Preferences, where the Save As hotkey is being set): ignore.
   if (document.querySelector('[role=dialog], [role=alertdialog]')) return
-  if (command === 'preferences') return openPreferences()
+  if (command === 'preferences' || command === 'plugins') return openDialog(command)
   flushTextEdits()
   const store = reviewStore.getState()
   store.flushViews()
@@ -59,14 +60,40 @@ function useDarkClass(): void {
   }, [])
 }
 
+// An Obsidian theme (Settings > Plugins): main builds a stylesheet from the theme's CSS
+// variables; it applies while <html> has the `obsidian-theme` class (see obsidianTheme.ts).
+function useObsidianTheme(): void {
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.id = 'obsidian-theme'
+    document.head.appendChild(style)
+    const apply = (theme: ActiveTheme): void => {
+      style.textContent = theme?.css ?? ''
+      document.documentElement.classList.toggle('obsidian-theme', theme !== null)
+      reviewStore.getState().setThemeName(theme?.name ?? null)
+    }
+    window.api.themes
+      .active()
+      .then(apply)
+      .catch((err) => console.error('Could not read the theme', err))
+    const unsubscribe = window.api.themes.onActiveChange(apply)
+    return () => {
+      unsubscribe()
+      style.remove()
+    }
+  }, [])
+}
+
+type SettingsPage = 'preferences' | 'plugins'
+
 function App(): React.JSX.Element | null {
   // undefined = still asking main; null = no file open.
   const [file, setFile] = useState<FileInfo | null | undefined>(undefined)
-  const [preferences, setPreferences] = useState(false)
+  const [settingsPage, setSettingsPage] = useState<SettingsPage | null>(null)
   useDarkClass()
+  useObsidianTheme()
   useEffect(
-    () =>
-      window.api.menu.onCommand((command) => runMenuCommand(command, () => setPreferences(true))),
+    () => window.api.menu.onCommand((command) => runMenuCommand(command, setSettingsPage)),
     []
   )
 
@@ -93,7 +120,8 @@ function App(): React.JSX.Element | null {
         // opened, including when the same path is recreated with New.
         <ReviewView key={`${file.path}#${file.generation}`} />
       )}
-      {preferences && <SettingsDialog onClose={() => setPreferences(false)} />}
+      {settingsPage === 'preferences' && <SettingsDialog onClose={() => setSettingsPage(null)} />}
+      {settingsPage === 'plugins' && <PluginsDialog onClose={() => setSettingsPage(null)} />}
     </>
   )
 }

@@ -123,7 +123,11 @@ export function ReviewTable({ tabId, rows }: { tabId: number; rows: TabRows }): 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [newColumnKey, columnCount])
-  const markdownColour = useReview((s) => s.settings?.markdownColour)
+  // With an Obsidian theme active, its accent is used (the theme's stylesheet sets
+  // --md-colour on <html>) unless the Preferences colour overrides it.
+  const markdownColour = useReview((s) =>
+    s.themeName && !s.settings?.markdownColourOverride ? undefined : s.settings?.markdownColour
+  )
 
   // ---- Row menu: New Tab... and the delete confirmation live here; the menu reads the
   // rest from this context.

@@ -13,7 +13,11 @@ import { log } from './log'
 const ConfigSchema = z.object({
   ...SettingsSchema.shape,
   recentFiles: z.array(z.string()),
-  lastFile: z.string().nullable()
+  lastFile: z.string().nullable(),
+  // Settings > Plugins (spec §12.1), changed straight from that dialog.
+  activeTheme: z.string().nullable(), // a ThemeInfo id; null = Default
+  obsidianVault: z.string().nullable(),
+  enabledPlugins: z.array(z.string()) // folder names in <userData>/Plugins
 })
 
 export type Config = z.infer<typeof ConfigSchema>
@@ -21,7 +25,10 @@ export type Config = z.infer<typeof ConfigSchema>
 export const DEFAULT_CONFIG: Config = {
   ...DEFAULT_SETTINGS,
   recentFiles: [],
-  lastFile: null
+  lastFile: null,
+  activeTheme: null,
+  obsidianVault: null,
+  enabledPlugins: []
 }
 
 export const MAX_RECENT = 10

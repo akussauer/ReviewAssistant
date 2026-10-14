@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import { IPC, type Api, type FileInfo, type MenuCommand } from '../shared/ipc'
+import { IPC, type ActiveTheme, type Api, type FileInfo, type MenuCommand } from '../shared/ipc'
 
 // The preload script is the only bridge between the web page (renderer) and Node/Electron.
 // contextBridge copies `api` into the page as `window.api`; the page gets these few
@@ -45,6 +45,27 @@ const api: Api = {
       ipcRenderer.on(IPC.themeChanged, listener)
       return () => ipcRenderer.removeListener(IPC.themeChanged, listener)
     }
+  },
+  themes: {
+    list: () => invoke(IPC.themesList),
+    active: () => invoke(IPC.themesActive),
+    setActive: (id) => invoke(IPC.themesSetActive, id),
+    add: () => invoke(IPC.themesAdd),
+    delete: (id) => invoke(IPC.themesDelete, id),
+    chooseVault: () => invoke(IPC.themesChooseVault),
+    clearVault: () => invoke(IPC.themesClearVault),
+    openFolder: () => invoke(IPC.themesOpenFolder),
+    onActiveChange: (cb) => {
+      const listener = (_e: IpcRendererEvent, theme: ActiveTheme): void => cb(theme)
+      ipcRenderer.on(IPC.activeThemeChanged, listener)
+      return () => ipcRenderer.removeListener(IPC.activeThemeChanged, listener)
+    }
+  },
+  plugins: {
+    list: () => invoke(IPC.pluginsList),
+    setEnabled: (folder, enabled) => invoke(IPC.pluginsSetEnabled, { folder, enabled }),
+    delete: (folder) => invoke(IPC.pluginsDelete, folder),
+    openFolder: () => invoke(IPC.pluginsOpenFolder)
   },
   columns: {
     create: (input) => invoke(IPC.columnsCreate, input),

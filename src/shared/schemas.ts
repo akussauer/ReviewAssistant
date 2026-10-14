@@ -116,7 +116,23 @@ export const SettingsSchema = z.object({
   theme: ThemeSchema,
   spellcheckLanguage: z.enum(SPELLCHECK_LANGUAGES),
   markdownColour: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Expected a colour like #0E80A3'),
+  markdownColourOverride: z.boolean(),
   hotkeys: z
     .object({ newRow: AcceleratorSchema, newColumn: AcceleratorSchema, saveAs: AcceleratorSchema })
     .refine((h) => new Set(Object.values(h)).size === 3, 'Each hotkey must be different')
 }) satisfies z.ZodType<Settings>
+
+// A folder name inside our Themes/Plugins folders (main also checks it's one it listed).
+export const FolderName = z
+  .string()
+  .min(1)
+  .max(255)
+  .refine((f) => !/[\\/]/.test(f) && f !== '.' && f !== '..', 'Not a folder name')
+
+export const ThemeIdSchema = z
+  .string()
+  .regex(/^(local|vault):/, 'Not a theme id')
+  .refine((id) => FolderName.safeParse(id.slice(id.indexOf(':') + 1)).success, 'Not a theme id')
+export const ActiveThemeIdSchema = ThemeIdSchema.nullable()
+
+export const PluginEnabledSchema = z.object({ folder: FolderName, enabled: z.boolean() })

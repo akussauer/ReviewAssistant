@@ -6,8 +6,9 @@ import { applySpellcheckLanguage } from './spellcheck'
 // The Preferences dialog's settings (spec §12), stored in config.json.
 
 export function currentSettings(): Settings {
-  const { theme, spellcheckLanguage, markdownColour, hotkeys } = config.get()
-  return { theme, spellcheckLanguage, markdownColour, hotkeys }
+  const { theme, spellcheckLanguage, markdownColour, markdownColourOverride, hotkeys } =
+    config.get()
+  return { theme, spellcheckLanguage, markdownColour, markdownColourOverride, hotkeys }
 }
 
 // Electron's themeSource sets the native title bar, menus and dialogs; its 'updated' event

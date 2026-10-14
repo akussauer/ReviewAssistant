@@ -49,6 +49,7 @@ const SETTINGS: Settings = {
   theme: 'system',
   spellcheckLanguage: 'en_GB',
   markdownColour: '#0E80A3',
+  markdownColourOverride: false,
   hotkeys: { newRow: 'CmdOrCtrl+N', newColumn: 'CmdOrCtrl+Shift+N', saveAs: 'CmdOrCtrl+Shift+S' }
 }
 

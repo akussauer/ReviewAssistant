@@ -33,6 +33,7 @@
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "lucide-react": "^1.56.0",
+    "postcss": "^8.5.30",
     "radix-ui": "^1.8.1",
     "tailwindcss": "^4.3.3",
     "zod": "^4.6.7",

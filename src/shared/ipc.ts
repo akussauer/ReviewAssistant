@@ -36,11 +36,24 @@ export const IPC = {
   settingsUpdate: 'settings:update',
   settingsPreviewTheme: 'settings:preview-theme',
   themeIsDark: 'theme:is-dark',
+  themesList: 'themes:list',
+  themesActive: 'themes:active',
+  themesSetActive: 'themes:set-active',
+  themesAdd: 'themes:add',
+  themesDelete: 'themes:delete',
+  themesChooseVault: 'themes:choose-vault',
+  themesClearVault: 'themes:clear-vault',
+  themesOpenFolder: 'themes:open-folder',
+  pluginsList: 'plugins:list',
+  pluginsSetEnabled: 'plugins:set-enabled',
+  pluginsDelete: 'plugins:delete',
+  pluginsOpenFolder: 'plugins:open-folder',
   devSeed: 'dev:seed', // only registered in development builds
   // Events (main -> renderer, pushed without a request)
   fileChanged: 'file:changed',
   menuCommand: 'menu:command',
-  themeChanged: 'theme:changed'
+  themeChanged: 'theme:changed',
+  activeThemeChanged: 'themes:active-changed'
 } as const
 
 // ---- Columns ----------------------------------------------------------------
@@ -176,7 +189,8 @@ export type ExportKind = 'csv' | 'json'
 export type ExportResult = { path: string; name: string; rows: number }
 
 // File-menu items that main hands to the renderer, which saves pending edits first.
-export type MenuCommand = 'saveAs' | 'importJson' | 'exportCsv' | 'exportJson' | 'preferences'
+export type MenuCommand =
+  'saveAs' | 'importJson' | 'exportCsv' | 'exportJson' | 'preferences' | 'plugins'
 
 // ---- Settings (spec §12) ----------------------------------------------------------
 
@@ -189,6 +203,8 @@ export type Settings = {
   theme: Theme
   spellcheckLanguage: SpellcheckLanguage // e.g. en_GB
   markdownColour: string // e.g. #0E80A3
+  // While an Obsidian theme is active, markdown uses the theme's accent unless this is on.
+  markdownColourOverride: boolean
   hotkeys: Record<HotkeyName, string>
 }
 
@@ -197,6 +213,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   spellcheckLanguage: 'en_GB',
   markdownColour: '#0E80A3',
+  markdownColourOverride: false,
   hotkeys: { newRow: 'CmdOrCtrl+N', newColumn: 'CmdOrCtrl+Shift+N', saveAs: 'CmdOrCtrl+Shift+S' }
 }
 
@@ -241,6 +258,42 @@ export const SPELLCHECK_LANGUAGES = [
 ] as const
 export type SpellcheckLanguage = (typeof SPELLCHECK_LANGUAGES)[number]
 
+// ---- Themes and plugins (spec §12.1) ------------------------------------------------
+
+// local: in <userData>/Themes (can be deleted) · vault: in the chosen Obsidian vault's
+// .obsidian/themes (read-only).
+export type ThemeSource = 'local' | 'vault'
+
+export type ThemeInfo = {
+  id: string // "local:<folder>" or "vault:<folder>"
+  name: string
+  source: ThemeSource
+  version?: string
+  author?: string
+}
+
+export type ThemesState = {
+  themes: ThemeInfo[]
+  activeId: string | null // null = Default (also when the chosen theme has gone missing)
+  vault: string | null // the chosen Obsidian vault folder
+  vaultMissing: boolean // a vault is set but its .obsidian folder isn't there
+}
+
+// What the page needs to show a theme: a stylesheet built by main from the theme's CSS
+// variables only (see main/obsidianTheme.ts). null = Default.
+export type ActiveTheme = { id: string; name: string; css: string } | null
+
+// A folder in <userData>/Plugins. A placeholder for future plugins: no plugin code runs.
+export type PluginInfo = {
+  folder: string
+  name: string
+  version?: string
+  author?: string
+  description?: string
+  enabled: boolean
+  error?: string // e.g. "No manifest.json": listed, can be deleted, can't be enabled
+}
+
 export type Unsubscribe = () => void
 
 export type Api = {
@@ -273,6 +326,25 @@ export type Api = {
   theme: {
     isDark(): Promise<boolean>
     onChange(cb: (dark: boolean) => void): Unsubscribe
+  }
+  // Settings > Plugins: Obsidian themes. The dialogs (add, choose vault) are main's own;
+  // they resolve to null when cancelled or failed (main shows why).
+  themes: {
+    list(): Promise<ThemesState>
+    active(): Promise<ActiveTheme>
+    setActive(id: string | null): Promise<ThemesState>
+    add(): Promise<ThemesState | null>
+    delete(id: string): Promise<ThemesState> // local themes only, to the Recycle Bin
+    chooseVault(): Promise<ThemesState | null>
+    clearVault(): Promise<ThemesState>
+    openFolder(): Promise<void>
+    onActiveChange(cb: (theme: ActiveTheme) => void): Unsubscribe
+  }
+  plugins: {
+    list(): Promise<PluginInfo[]>
+    setEnabled(folder: string, enabled: boolean): Promise<PluginInfo[]>
+    delete(folder: string): Promise<PluginInfo[]> // to the Recycle Bin
+    openFolder(): Promise<void>
   }
   columns: {
     create(input: ColumnCreateInput): Promise<Column[]>

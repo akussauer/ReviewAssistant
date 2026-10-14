@@ -214,7 +214,7 @@ Based on the disabled `SynthesisWidget` in the PySide app **[Py]**:
 |---|---|
 | Theme | Light / Dark / System |
 | Spellcheck language | en_AU … en_ZW (same list as the PySide app); default en_GB |
-| Markdown colour | colour picker; default `#0E80A3` |
+| Markdown colour | colour picker; default `#0E80A3`. **[New]** While an Obsidian theme is active the theme's accent is used, unless *Override theme colour* is on. |
 | Hotkeys | New row (Ctrl+N) and New column (Ctrl+Shift+N), set by pressing the key combination; **[New]** Save As (Ctrl+Shift+S). A hotkey needs Ctrl/Cmd or Alt plus a letter, digit or F-key; combinations used by another hotkey or a fixed shortcut (Open, Preferences, cut/copy/paste, undo/redo, select all) are refused. |
 | Assistant **[New]** | provider, API key, model, test button |
 | Reset to defaults | ✓ |
@@ -222,3 +222,9 @@ Based on the disabled `SynthesisWidget` in the PySide app **[Py]**:
 - **Dialog [New]:** Settings → Preferences… (Ctrl+,). Theme and markdown colour preview immediately; **Save** keeps the changes, **Cancel** puts back the saved ones. *Reset to defaults* asks first, then fills in the defaults (still needs Save). Saved hotkeys apply at once.
 - **Logs:** a rotating log in the user-data `Logs/` folder (5 MB × 3) **[Py]**.
 - **Dropped:** the PySide "Style" setting (Default/Fusion) and the loading overlay; with autosave there's no long save to wait for.
+
+### 12.1 Themes and plugins [New]
+- **Dialog:** Settings → Plugins… (below Preferences). Changes apply and save at once; only a Close button.
+- **Theme:** *Default* or an installed Obsidian theme. Only the theme's CSS variables are used (colours, accent, radius); its other rules are ignored. Light/Dark/System in Preferences picks which half of the theme applies. Themes come from `<userData>/Themes` (*Add theme…* copies a `.css` file in) or, read-only, from one chosen Obsidian vault's `.obsidian/themes`.
+- **Plugins:** a placeholder for future community plugins. A table of the folders in `<userData>/Plugins` (name, version, author, description from `manifest.json`) with Enable/Disable and Delete. No plugin code runs yet.
+- **Delete** (themes and plugins in our folders) asks first and moves the folder to the Recycle Bin.

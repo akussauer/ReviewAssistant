@@ -36,6 +36,9 @@ export type ReviewState = {
   tabs: Tab[]
   activeTabId: number
   settings: Settings | null
+  // The active Obsidian theme's name (Settings > Plugins); null = Default. While a theme
+  // is active, markdown uses its accent unless settings.markdownColourOverride is on.
+  themeName: string | null
   // Rows just added, kept visible even if they don't match the tab's filters (a new row
   // is blank). Cleared when filters or search change.
   keptRowIds: number[]
@@ -49,6 +52,7 @@ export type ReviewState = {
   showInfo(text: string, path?: string): void
   // After saving Preferences, or while previewing them (not saved).
   setSettings(settings: Settings): void
+  setThemeName(name: string | null): void
   // Saves any view changes still waiting (e.g. before switching tabs or closing).
   flushViews(): void
 
@@ -187,6 +191,7 @@ export function createReviewStore(api: Api): ReviewStore {
       tabs: [],
       activeTabId: 1,
       settings: null,
+      themeName: null,
       keptRowIds: [],
       lastCreatedRowId: null,
       notice: null,
@@ -205,6 +210,10 @@ export function createReviewStore(api: Api): ReviewStore {
 
       setSettings(settings) {
         set({ settings })
+      },
+
+      setThemeName(themeName) {
+        set({ themeName })
       },
 
       flushViews() {

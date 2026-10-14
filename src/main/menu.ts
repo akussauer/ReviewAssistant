@@ -53,7 +53,10 @@ export function buildMenu(actions: MenuActions): Menu {
     },
     {
       label: 'Settings',
-      submenu: [run('Preferences…', 'preferences', { accelerator: 'CmdOrCtrl+,' })]
+      submenu: [
+        run('Preferences…', 'preferences', { accelerator: 'CmdOrCtrl+,' }),
+        run('Plugins…', 'plugins')
+      ]
     }
   ]
   return Menu.buildFromTemplate(template)

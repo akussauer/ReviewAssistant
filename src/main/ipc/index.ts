@@ -1,14 +1,17 @@
 import { nativeTheme } from 'electron'
 import { IPC, type ReviewSnapshot } from '../../shared/ipc'
 import {
+  ActiveThemeIdSchema,
   CheckAllSchema,
   ColumnCreateSchema,
   ColumnUpdateSchema,
   ExportKindSchema,
+  FolderName,
   Id,
   IdList,
   NoInput,
   PathInput,
+  PluginEnabledSchema,
   RowCreateSchema,
   SeedCountSchema,
   SetCheckedSchema,
@@ -17,6 +20,7 @@ import {
   TabCreateSchema,
   TabRowsSchema,
   TabUpdateSchema,
+  ThemeIdSchema,
   ThemeSchema,
   UpdateCellSchema
 } from '../../shared/schemas'
@@ -65,6 +69,20 @@ import {
   showInFolder
 } from '../review'
 import { applyTheme, currentSettings, saveSettings } from '../settings'
+import {
+  activeTheme,
+  addThemeDialog,
+  chooseVaultDialog,
+  clearVault,
+  deletePlugin,
+  deleteTheme,
+  openPluginsFolder,
+  openThemesFolder,
+  pluginsList,
+  setActiveTheme,
+  setPluginEnabled,
+  themesState
+} from '../addons'
 import { handle } from './handle'
 
 export function registerIpc({ dev }: { dev: boolean }): void {
@@ -96,6 +114,22 @@ export function registerIpc({ dev }: { dev: boolean }): void {
   handle(IPC.settingsUpdate, SettingsSchema, saveSettings)
   handle(IPC.settingsPreviewTheme, ThemeSchema, applyTheme)
   handle(IPC.themeIsDark, NoInput, () => nativeTheme.shouldUseDarkColors)
+
+  // ---- Themes and plugins (Settings > Plugins)
+  handle(IPC.themesList, NoInput, themesState)
+  handle(IPC.themesActive, NoInput, activeTheme)
+  handle(IPC.themesSetActive, ActiveThemeIdSchema, setActiveTheme)
+  handle(IPC.themesAdd, NoInput, addThemeDialog)
+  handle(IPC.themesDelete, ThemeIdSchema, deleteTheme)
+  handle(IPC.themesChooseVault, NoInput, chooseVaultDialog)
+  handle(IPC.themesClearVault, NoInput, clearVault)
+  handle(IPC.themesOpenFolder, NoInput, openThemesFolder)
+  handle(IPC.pluginsList, NoInput, pluginsList)
+  handle(IPC.pluginsSetEnabled, PluginEnabledSchema, ({ folder, enabled }) =>
+    setPluginEnabled(folder, enabled)
+  )
+  handle(IPC.pluginsDelete, FolderName, deletePlugin)
+  handle(IPC.pluginsOpenFolder, NoInput, openPluginsFolder)
 
   // ---- Columns
   handle(IPC.columnsCreate, ColumnCreateSchema, (input) => createColumn(getDb(), input))

@@ -47,7 +47,8 @@ export function attachWindow(win: BrowserWindow, menuChanged: () => void): void 
   updateTitle()
 }
 
-const liveWindow = (): BrowserWindow | null => (window && !window.isDestroyed() ? window : null)
+export const liveWindow = (): BrowserWindow | null =>
+  window && !window.isDestroyed() ? window : null
 
 export function getDb(): DB {
   if (!current) throw new Error('No review file is open')
