@@ -386,7 +386,40 @@ Lets people who pay for a Claude subscription (Pro/Max) use it with their review
 
 **Accept:** exported notes open in Obsidian with the properties shown correctly typed; re-exporting with "skip" or "overwrite" behaves as chosen.
 
-### M11 – Synthesis tabs (was M8)
+### M10a – Search highlighting
+- Highlight search and column-filter matches in the shown rows (spec §7), coloured from the theme or a new Preferences picker (spec §12)
+
+**Decisions (agreed 14 Oct 2026):**
+- *Terms:* every positive term in the query (word, phrase, wildcard) is highlighted wherever it appears; NOT terms never are. AND/OR logic isn't traced per occurrence (with OR, both terms show in every shown row).
+- *Extent:* a plain word marks only the matching characters (`swim` → **swim**ming); a wildcard marks the whole span it matched (`swim*` → **swimming**); a phrase marks the whole phrase including its spaces (never across a line break, as in matching).
+- *Scope:* the global search highlights in every column it searches; a column filter only in its own column. Both at once, one colour.
+- *Text cells:* a CodeMirror decoration marks the characters, over the markdown colouring (background only, text colour unchanged). Stays live while editing; the static copy shown while scrolling shows the same marks, so nothing flickers.
+- *Dropdown, number, date cells:* native inputs can't colour part of their text, so the whole cell is tinted when its shown value (dropdown label, number, date) matches. Comparison/range filters (`>2015`, `2010..2020`) tint nothing, as every shown row passes them.
+- *Checkboxes:* never highlighted.
+- *Colour:* a CSS variable `--search-hl`, set on `<html>` like `--md-colour` (App.tsx). Obsidian theme active → its `--text-highlight-bg` as-is (mapped in obsidianTheme.ts). Otherwise, or if the theme doesn't define it, or *Override theme colour* is on → the Preferences colour (default `#ffd400`) drawn at ~40% (`color-mix`), since the colour picker has no alpha.
+- *Preferences:* a **Search highlight** picker under the markdown colours, with its own *Override theme colour* switch (shown only while a theme is active) and a highlighted sample word. App-wide settings (`searchHighlightColour`, `searchHighlightOverride`), previewed live and covered by Save/Cancel/Reset like the others. No DB change.
+- *Matching code:* a pure `compileHighlighter(query)` in `shared/search.ts`, returning `(text) => [from, to][]`, reusing the tokenizer and the wildcard/phrase rules, case-insensitive, overlapping ranges merged. Unit-tested alongside `search.test.ts`. Only visible cells compute ranges (the table is virtualised).
+- *Not doing:* next/previous match, a match count, a marker for matches cut off in a short row.
+- *Added during implementation (14 Oct 2026):* the Preferences override switch only appears when the active theme actually defines `--text-highlight-bg`; otherwise the picker colour already applies. The tint/mark CSS (`.search-hit`, `.cm-search-hl`) lives in main.css, not the CodeMirror theme, so the static copy shares it.
+
+**Accept:** with `swim* AND "elite athletes" NOT junior` in the global search, "swimming" and "elite athletes" are marked in text cells of every column and "junior" nowhere; a text-column filter marks only that column; typing into a highlighted text cell keeps the marks in step, and scrolling fast shows them on the static copies too; a global search for a dropdown label tints those dropdown cells (the dropdown column filter is a picker, so it tints nothing); `>2015` in a number filter tints nothing; with an Obsidian theme the colour is the theme's highlight, the Preferences override switches to the picked colour, and Cancel/Reset put it back; the built-in light and dark themes both stay readable; clearing the search removes every mark; works with no API key.
+
+### M10b – Menu tidy-up
+- **Decisions (agreed 14 Oct 2026):** the View menu is gone (Ctrl+F and the 🔍 button already toggle search). Help → About becomes **File → About Review Assistant**, above Exit with separators. The native message box becomes an in-app dialog (like Preferences) with selectable text: version, Electron, Windows version, settings and log folders; *Open settings folder*, *Open logs*, *Copy details*, *Close*. New IPC: `app:info` (no input) and `app:open-folder` (`'settings' | 'logs'` only, Zod-validated).
+
+**Accept:** the menu bar shows File · Edit · Settings (+ Developer under `npm run dev`); Ctrl+F still toggles search; File → About opens the dialog with or without a review open; its paths can be selected and copied; Copy details puts the plain-text block on the clipboard; both Open buttons open Explorer.
+
+### M10c – Themed title bar and menu
+- **Decisions (agreed 14 Oct 2026):** Windows draws the native menu bar and Electron can't style it, so the native title bar is hidden (`titleBarStyle: 'hidden'`) and the page draws one row, VS Code style: app icon · File · Edit · Settings (· Developer) · the review's name centred · Windows' own minimise/maximise/close (`titleBarOverlay`, recoloured to match the theme, so snapping still works). Menus use Radix Menubar (already in `radix-ui`; no new dependency) and the app's theme tokens, so Obsidian themes apply.
+- *One menu definition:* main keeps building the menu (`menu.ts`) and keeps it as the (invisible) application menu, so Ctrl+O, Ctrl+, and the Save As hotkey still work. It sends the page a plain copy (labels, shortcuts, enabled, submenus) whenever it changes; clicking an item in the page asks main to run that item (`menu:click`, validated id).
+- *Focus:* choosing an item puts the focus back where it was first, so Cut/Copy/Paste/Undo act on the cell or text box being edited.
+- *Keyboard:* tapping Alt focuses the menu bar (Alt again or Esc leaves it); Alt+F / Alt+E / Alt+S open a menu, with the letter underlined while Alt is in use; arrows move, Enter chooses, Esc closes.
+- *Drag:* empty title-bar space drags the window; double-click maximises (Windows does both).
+- *Added during implementation (14 Oct 2026):* a hidden menu's accelerators didn't fire reliably, so Open, Save As and Preferences use `registerAccelerator: false` and the page runs them (`PAGE_SHORTCUTS`; skipped while a dialog is open, so Preferences can still record a hotkey). Alt+F/E/S joined the fixed shortcuts the hotkey picker refuses. A menu click carries the item's label as well as its position, so a menu that changed meanwhile (Open Recent reordered) does nothing rather than the wrong thing. Alt+Tab and Alt+click don't arm the Alt toggle. Windows' button strip is 31 px so the bar's bottom border runs the full width.
+
+**Accept:** title bar and menus follow Light/Dark and an Obsidian theme, including the window buttons; every menu item works as before (Open Recent and Export submenus, greyed-out items, Undo label); Copy/Paste from the Edit menu act on the focused cell; Alt, Alt+F/E/S, arrows, Enter and Esc work; Ctrl+O, Ctrl+, and Save As shortcuts still work; the window drags, snaps and maximises from the title bar; works on the Welcome screen.
+
+### M11 – Synthesis tabs (was M8) — deferred
 - Start by reviewing spec §11 with the owner (it may have changed)
 - Read-only table, per-column include and text panels, instructions line, Synthesise (one LLM call per included column), loading states, saved results
 - Consider adding a read-only MCP tool for synthesis results (M8a)
@@ -411,4 +444,7 @@ Lets people who pay for a Claude subscription (Pro/Max) use it with their review
 - [X] M9 Packaging
 - [X] M9a Polish (undo, keyboard navigation, search bar)
 - [X] M10 Markdown / Obsidian export (long-term)
-- [ ] M11 Synthesis (was M8)
+- [X] M10a Search highlighting
+- [X] M10b Menu tidy-up (no View menu, About in File)
+- [X] M10c Themed title bar and menu
+- [ ] M11 Synthesis (was M8) — deferred

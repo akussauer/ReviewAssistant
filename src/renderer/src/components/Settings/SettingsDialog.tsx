@@ -86,7 +86,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
         ...saved,
         markdownColour: next.markdownColour,
         markdownColourOverride: next.markdownColourOverride,
-        markdownColours: next.markdownColours
+        markdownColours: next.markdownColours,
+        searchHighlightColour: next.searchHighlightColour,
+        searchHighlightOverride: next.searchHighlightOverride
       })
     setDraft(next)
   }
@@ -164,6 +166,15 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
               Markdown colour
             </Label>
             <MarkdownColour
+              settings={draft}
+              themeName={themeName}
+              onChange={(patch) => preview({ ...draft, ...patch })}
+            />
+
+            <Label htmlFor="pref-highlight" className="self-start pt-2.5">
+              Search highlight
+            </Label>
+            <SearchHighlight
               settings={draft}
               themeName={themeName}
               onChange={(patch) => preview({ ...draft, ...patch })}
@@ -377,6 +388,52 @@ function MarkdownColour(props: {
           })}
         </div>
       </details>
+    </div>
+  )
+}
+
+// The colour that marks search matches (spec §7, §12). An Obsidian theme's own highlight
+// colour wins unless "Override theme colour" is on; a theme without one uses this colour.
+function SearchHighlight(props: {
+  settings: Settings
+  themeName: string | null
+  onChange(patch: Partial<Settings>): void
+}): React.JSX.Element {
+  const { settings, themeName, onChange } = props
+  // The theme's variables sit on <html> (obsidianTheme.ts), so this finds out if it sets one.
+  const themeSetsIt =
+    themeName !== null &&
+    getComputedStyle(document.documentElement).getPropertyValue('--text-highlight-bg').trim() !== ''
+  const byTheme = themeSetsIt && !settings.searchHighlightOverride
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex items-center gap-2">
+        <input
+          id="pref-highlight"
+          type="color"
+          className={`${pickerBase} h-9 w-12`}
+          value={settings.searchHighlightColour}
+          disabled={byTheme}
+          onChange={(e) => onChange({ searchHighlightColour: e.target.value })}
+        />
+        {/* Shows the live colour: <html> carries it while previewing (App.tsx). */}
+        <span className="text-sm">
+          Pacing in elite <span className="search-hit rounded-[2px]">swimming</span>
+        </span>
+      </div>
+      {themeSetsIt && (
+        <div className="grid gap-1">
+          {byTheme && <p className="text-xs text-muted-foreground">Set by theme {themeName}</p>}
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={settings.searchHighlightOverride}
+              onChange={(e) => onChange({ searchHighlightOverride: e.target.checked })}
+            />
+            Override theme colour
+          </label>
+        </div>
+      )}
     </div>
   )
 }

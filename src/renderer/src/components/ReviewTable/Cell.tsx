@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import type { CellValue, Column } from '../../../../shared/ipc'
+import type { Highlighter } from '../../../../shared/search'
 import { CheckboxCell, DateCell, DropdownCell, NumberCell } from './cells/FieldCells'
 import { TextCell } from './cells/TextCell'
 
@@ -8,11 +9,18 @@ type Props = {
   column: Column
   value: CellValue | undefined
   live: boolean // false while the table scrolls (see TextCell)
+  highlight?: Highlighter // search matches to mark (text cells; others are tinted by the row)
 }
 
 // One always-editable cell, picked by column type (spec §4.1).
 // memo: a cell re-renders only when its own value or column changes.
-export const Cell = memo(function Cell({ rowId, column, value, live }: Props): React.JSX.Element {
+export const Cell = memo(function Cell({
+  rowId,
+  column,
+  value,
+  live,
+  highlight
+}: Props): React.JSX.Element {
   switch (column.type) {
     case 'text':
       return (
@@ -22,6 +30,7 @@ export const Cell = memo(function Cell({ rowId, column, value, live }: Props): R
           label={column.label}
           value={value}
           live={live}
+          highlight={highlight}
         />
       )
     case 'dropdown':

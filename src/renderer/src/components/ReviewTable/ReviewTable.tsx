@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Column, Row } from '../../../../shared/ipc'
 import { matchesHotkey } from '../../lib/hotkeys'
 import { moveColumn } from '../../lib/columns'
-import { isFiltered } from '../../lib/filter'
+import { columnHighlighters, isFiltered } from '../../lib/filter'
 import { nextSort } from '../../lib/sort'
 import { reviewStore, useReview } from '../../store'
 import { checkState, MIN_COLUMN_WIDTH } from '../../store/review'
@@ -48,6 +48,26 @@ export function ReviewTable({ tabId, rows }: { tabId: number; rows: TabRows }): 
   // ---- Which rows, in which order: the tab's rows, filtered, then sorted
   const { shownIds: ids, sorted } = rows
   const filtered = view ? isFiltered(view, columns) : false
+  // What to mark in each column's cells (spec §7). Rebuilt only when the query or a
+  // column's id/type changes: a new highlighter makes every open text cell redo its marks,
+  // so a width change or rename shouldn't.
+  const search = view?.search
+  const filters = view?.filters
+  const columnShape = columns.map((c) => `${c.id}:${c.type}`).join()
+  const highlighters = useMemo(
+    () =>
+      columnHighlighters(
+        columnShape
+          .split(',')
+          .filter(Boolean)
+          .map((s) => {
+            const [id, type] = s.split(':')
+            return { id: Number(id), type: type as Column['type'] }
+          }),
+        { search, filters }
+      ),
+    [columnShape, search, filters]
+  )
 
   // ---- Columns and resizing (TanStack Table)
   // Rows are drawn by us, not by TanStack, so it gets no data; it handles the column
@@ -267,6 +287,7 @@ export function ReviewTable({ tabId, rows }: { tabId: number; rows: TabRows }): 
                 widths={stableWidths}
                 top={item.start + HEADER_HEIGHT}
                 live={!virtualizer.isScrolling}
+                highlighters={highlighters}
               />
             )
           })}

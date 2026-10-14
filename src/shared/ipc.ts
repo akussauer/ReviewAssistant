@@ -65,8 +65,13 @@ export const IPC = {
   claudeDesktopStatus: 'claude-desktop:status',
   claudeDesktopSaveExtension: 'claude-desktop:save-extension',
   menuSetEditState: 'menu:set-edit-state',
+  menuGet: 'menu:get',
+  menuClick: 'menu:click',
+  windowTitleBarColours: 'window:title-bar-colours',
   uiSearchBar: 'ui:search-bar',
   uiSetSearchBar: 'ui:set-search-bar',
+  appInfo: 'app:info',
+  appOpenFolder: 'app:open-folder',
   markdownState: 'markdown:state',
   markdownChooseFolder: 'markdown:choose-folder',
   markdownExport: 'markdown:export',
@@ -75,6 +80,7 @@ export const IPC = {
   fileChanged: 'file:changed',
   fileOpenRequest: 'file:open-request', // a double-clicked file is waiting (plan M9)
   menuCommand: 'menu:command',
+  menuChanged: 'menu:changed',
   themeChanged: 'theme:changed',
   activeThemeChanged: 'themes:active-changed',
   assistantStatusChanged: 'assistant:status-changed',
@@ -276,8 +282,37 @@ export type MenuCommand =
   | 'plugins'
   | 'undo'
   | 'redo'
-  | 'toggleSearch'
+  | 'about'
   | 'devSeed'
+
+// The menu as the page draws it in the title bar (plan M10c): a plain copy of main's
+// application menu. `id` is the item's position, e.g. "0.3" = 4th item of the 1st menu.
+export type MenuNode =
+  | { kind: 'separator' }
+  | {
+      kind: 'item'
+      id: string
+      label: string
+      sublabel?: string // e.g. an Open Recent file's full path
+      accelerator?: string // shown, e.g. "Ctrl+Shift+S"
+      shortcut?: string // the page runs the item on this key, e.g. "CmdOrCtrl+Shift+S"
+      enabled: boolean
+      submenu?: MenuNode[]
+    }
+
+// Colours for Windows' own minimise/maximise/close buttons, to match the page's title bar.
+export type TitleBarColours = { color: string; symbolColor: string } // #rrggbb
+
+// File > About (spec §2).
+export type AppInfo = {
+  version: string
+  settingsDir: string
+  logsDir: string
+  electron: string
+  os: string // e.g. "Windows 11 Pro (10.0.26200, x64)"
+}
+export const APP_FOLDERS = ['settings', 'logs'] as const
+export type AppFolder = (typeof APP_FOLDERS)[number]
 
 // What the Edit menu's Undo and Redo say (spec §6). null = greyed out; '' = plain "Undo"
 // (e.g. while typing in a text box, which has its own undo); otherwise what will be
@@ -411,6 +446,10 @@ export type Settings = {
   markdownColourOverride: boolean
   // Per element (heading level, bold, list marker, …); a missing one uses markdownColour.
   markdownColours: Partial<Record<MarkdownKind, string>>
+  // Marks search matches (spec §7), drawn at ~40% so text shows through. While an Obsidian
+  // theme is active, its highlight colour is used unless this override is on.
+  searchHighlightColour: string // e.g. #FFD400
+  searchHighlightOverride: boolean
   hotkeys: Record<HotkeyName, string>
   assistant: AssistantSettings
   // Settings > Preferences > Connect to Claude Desktop (spec §10.1): the local pipe that the
@@ -425,6 +464,8 @@ export const DEFAULT_SETTINGS: Settings = {
   markdownColour: '#0E80A3',
   markdownColourOverride: false,
   markdownColours: {},
+  searchHighlightColour: '#FFD400',
+  searchHighlightOverride: false,
   hotkeys: {
     newRow: 'CmdOrCtrl+N',
     newColumn: 'CmdOrCtrl+Shift+N',
@@ -455,7 +496,11 @@ export const FIXED_SHORTCUTS: Record<string, string> = {
   'CmdOrCtrl+Y': 'Redo',
   'CmdOrCtrl+Shift+Z': 'Redo',
   'CmdOrCtrl+F': 'Search',
-  'Alt+F4': 'Close window'
+  'Alt+F4': 'Close window',
+  // Open the title bar's menus (plan M10c).
+  'Alt+F': 'the File menu',
+  'Alt+E': 'the Edit menu',
+  'Alt+S': 'the Settings menu'
 }
 
 // The reference app's list (SettingsWindow._LANG_OPTIONS).
@@ -548,6 +593,13 @@ export type Api = {
   menu: {
     onCommand(cb: (command: MenuCommand) => void): Unsubscribe
     setEditState(state: EditState): Promise<void>
+    // The title bar's menu (plan M10c).
+    get(): Promise<MenuNode[]>
+    onChanged(cb: (menu: MenuNode[]) => void): Unsubscribe
+    // Runs that item, as a click on the native menu would. The label guards against a
+    // menu that changed meanwhile (e.g. Open Recent reordered): then nothing happens.
+    click(id: string, label: string): Promise<void>
+    setTitleBarColours(colours: TitleBarColours): Promise<void>
   }
   // Markdown / Obsidian export (spec §9.1). The folder is only ever picked with main's
   // own dialog, so the page can't make main write somewhere else.
@@ -561,6 +613,8 @@ export type Api = {
   ui: {
     searchBar(): Promise<boolean> // whether the search bar is shown (spec §7)
     setSearchBar(shown: boolean): Promise<void>
+    appInfo(): Promise<AppInfo> // File > About
+    openFolder(folder: AppFolder): Promise<void>
   }
   settings: {
     get(): Promise<Settings>

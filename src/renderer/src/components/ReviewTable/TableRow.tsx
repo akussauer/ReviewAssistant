@@ -1,5 +1,7 @@
 import { memo, useState } from 'react'
+import { displayText } from '../../../../shared/conversion'
 import type { Column, Row } from '../../../../shared/ipc'
+import type { Highlighter } from '../../../../shared/search'
 import { reviewStore } from '../../store'
 import { Cell } from './Cell'
 import { ContextMenu, ContextMenuTrigger } from '../ui/context-menu'
@@ -12,13 +14,21 @@ type Props = {
   widths: number[] // current width of each column, live while resizing
   top: number
   live: boolean // false while the table scrolls
+  highlighters: Map<number, Highlighter> // search matches to mark, by column id
 }
 
 // One table row, absolutely positioned by the virtualiser (only visible rows exist).
 // data-row-id / data-col let keyboard navigation find a cell (useCellNavigation); the
 // scroll margins keep a cell scrolled to by the keyboard clear of the sticky header and
 // row-header strip.
-export const TableRow = memo(function TableRow({ row, columns, widths, top, live }: Props) {
+export const TableRow = memo(function TableRow({
+  row,
+  columns,
+  widths,
+  top,
+  live,
+  highlighters
+}: Props) {
   return (
     <div
       data-row-id={row.id}
@@ -26,20 +36,35 @@ export const TableRow = memo(function TableRow({ row, columns, widths, top, live
       style={{ transform: `translateY(${top}px)`, height: row.height }}
     >
       <RowHeader row={row} />
-      {columns.map((column, i) => (
-        <div
-          key={column.id}
-          data-col={i}
-          className="shrink-0 overflow-hidden border-r px-2 py-1 text-sm"
-          style={{
-            width: widths[i],
-            scrollMarginTop: HEADER_HEIGHT,
-            scrollMarginLeft: ROW_HEADER_WIDTH
-          }}
-        >
-          <Cell rowId={row.id} column={column} value={row.data[String(column.id)]} live={live} />
-        </div>
-      ))}
+      {columns.map((column, i) => {
+        const value = row.data[String(column.id)]
+        const highlight = highlighters.get(column.id)
+        // Form fields can't mark part of their text, so a matching one is tinted whole.
+        const tinted =
+          column.type !== 'text' &&
+          highlight !== undefined &&
+          highlight(displayText(column, value)).length > 0
+        return (
+          <div
+            key={column.id}
+            data-col={i}
+            className={`shrink-0 overflow-hidden border-r px-2 py-1 text-sm${tinted ? ' search-hit' : ''}`}
+            style={{
+              width: widths[i],
+              scrollMarginTop: HEADER_HEIGHT,
+              scrollMarginLeft: ROW_HEADER_WIDTH
+            }}
+          >
+            <Cell
+              rowId={row.id}
+              column={column}
+              value={value}
+              live={live}
+              highlight={column.type === 'text' ? highlight : undefined}
+            />
+          </div>
+        )
+      })}
     </div>
   )
 })

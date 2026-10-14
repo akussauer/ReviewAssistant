@@ -1,4 +1,5 @@
 import { nativeTheme } from 'electron'
+import { clickMenu, currentMenu, setTitleBarColours } from '../titleBar'
 import { IPC, type ReviewSnapshot } from '../../shared/ipc'
 import {
   ActiveThemeIdSchema,
@@ -19,6 +20,9 @@ import {
   ProviderSchema,
   RowCreateSchema,
   SearchBarSchema,
+  AppFolderSchema,
+  MenuClickSchema,
+  TitleBarColoursSchema,
   SeedCountSchema,
   SendInputSchema,
   SetKeySchema,
@@ -111,7 +115,7 @@ import {
 } from '../assistant'
 import { listMessages } from '../db/messages'
 import { getMarkdownState } from '../db/markdownExport'
-import { searchBarShown, setEditState, setSearchBarShown } from '../ui'
+import { appInfo, openAppFolder, searchBarShown, setEditState, setSearchBarShown } from '../ui'
 import { handle } from './handle'
 
 export function registerIpc({ dev }: { dev: boolean }): void {
@@ -153,8 +157,13 @@ export function registerIpc({ dev }: { dev: boolean }): void {
 
   // ---- Menu and window state (plan M9a)
   handle(IPC.menuSetEditState, EditStateSchema, setEditState)
+  handle(IPC.menuGet, NoInput, currentMenu)
+  handle(IPC.menuClick, MenuClickSchema, clickMenu)
+  handle(IPC.windowTitleBarColours, TitleBarColoursSchema, setTitleBarColours)
   handle(IPC.uiSearchBar, NoInput, searchBarShown)
   handle(IPC.uiSetSearchBar, SearchBarSchema, setSearchBarShown)
+  handle(IPC.appInfo, NoInput, appInfo)
+  handle(IPC.appOpenFolder, AppFolderSchema, openAppFolder)
 
   // ---- Themes and plugins (Settings > Plugins)
   handle(IPC.themesList, NoInput, themesState)

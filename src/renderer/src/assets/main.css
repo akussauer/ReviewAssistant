@@ -25,6 +25,10 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+  /* Search matches (spec §7). App.tsx sets it from Preferences; an Obsidian theme maps
+     its --text-highlight-bg here (obsidianTheme.ts). */
+  --search-hl-own: color-mix(in srgb, #ffd400 40%, transparent);
+  --search-hl: var(--search-hl-own);
 }
 
 .dark {
@@ -255,4 +259,14 @@
 }
 .cell-flash {
   animation: cell-flash 1.2s ease-out;
+}
+
+/* Search matches (spec §7): marked characters in text cells, and whole form-field cells
+   (dropdown, number, date) whose value matches. */
+.cm-search-hl {
+  background-color: var(--search-hl);
+  border-radius: 2px;
+}
+.search-hit {
+  background-color: var(--search-hl);
 }

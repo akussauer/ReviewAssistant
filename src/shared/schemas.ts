@@ -3,6 +3,7 @@
 // `satisfies z.ZodType<T>` makes TypeScript check that each schema matches its type in ipc.ts.
 import { z } from 'zod'
 import {
+  APP_FOLDERS,
   COLUMN_TYPES,
   EXPORT_MODES,
   FIXED_SHORTCUTS,
@@ -87,6 +88,7 @@ export const SetCheckedSchema = z.object({ rowIds: IdList, checked: z.boolean() 
 export const CheckAllSchema = z.boolean()
 
 export const SearchBarSchema = z.boolean()
+export const AppFolderSchema = z.enum(APP_FOLDERS)
 
 const MenuLabel = z.string().max(200).nullable()
 export const EditStateSchema = z.object({
@@ -158,6 +160,13 @@ export const ThemeSchema = z.enum(['light', 'dark', 'system'])
 
 export const HexColour = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Expected a colour like #0E80A3')
 
+// A menu item's position in the application menu (plan M10c), e.g. "0.3".
+export const MenuClickSchema = z.object({
+  id: z.string().regex(/^\d{1,3}(\.\d{1,3}){0,4}$/),
+  label: z.string().max(1000)
+})
+export const TitleBarColoursSchema = z.object({ color: HexColour, symbolColor: HexColour })
+
 export const ProviderSchema = z.enum(PROVIDERS)
 
 // '' = the provider's usual address. Only http(s), so a typo can't point at a file.
@@ -185,6 +194,8 @@ export const SettingsSchema = z.object({
   markdownColour: HexColour,
   markdownColourOverride: z.boolean(),
   markdownColours: z.partialRecord(z.enum(MARKDOWN_KINDS), HexColour),
+  searchHighlightColour: HexColour,
+  searchHighlightOverride: z.boolean(),
   hotkeys: z
     .object({
       newRow: AcceleratorSchema,

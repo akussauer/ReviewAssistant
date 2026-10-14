@@ -7,7 +7,8 @@ import {
   type AssistantStatus,
   type ClaudeDesktopStatus,
   type FileInfo,
-  type MenuCommand
+  type MenuCommand,
+  type MenuNode
 } from '../shared/ipc'
 
 // The preload script is the only bridge between the web page (renderer) and Node/Electron.
@@ -52,11 +53,21 @@ const api: Api = {
       ipcRenderer.on(IPC.menuCommand, listener)
       return () => ipcRenderer.removeListener(IPC.menuCommand, listener)
     },
-    setEditState: (state) => invoke(IPC.menuSetEditState, state)
+    setEditState: (state) => invoke(IPC.menuSetEditState, state),
+    get: () => invoke(IPC.menuGet),
+    onChanged: (cb) => {
+      const listener = (_e: IpcRendererEvent, menu: MenuNode[]): void => cb(menu)
+      ipcRenderer.on(IPC.menuChanged, listener)
+      return () => ipcRenderer.removeListener(IPC.menuChanged, listener)
+    },
+    click: (id, label) => invoke(IPC.menuClick, { id, label }),
+    setTitleBarColours: (colours) => invoke(IPC.windowTitleBarColours, colours)
   },
   ui: {
     searchBar: () => invoke(IPC.uiSearchBar),
-    setSearchBar: (shown) => invoke(IPC.uiSetSearchBar, shown)
+    setSearchBar: (shown) => invoke(IPC.uiSetSearchBar, shown),
+    appInfo: () => invoke(IPC.appInfo),
+    openFolder: (folder) => invoke(IPC.appOpenFolder, folder)
   },
   settings: {
     get: () => invoke(IPC.settingsGet),

@@ -3,10 +3,11 @@ import { Annotation, Compartment, EditorState, Transaction } from '@codemirror/s
 import { EditorView, keymap } from '@codemirror/view'
 import { useEffect, useRef, useState } from 'react'
 import type { CellValue } from '../../../../../shared/ipc'
+import type { Highlighter, MatchRange } from '../../../../../shared/search'
 import { highlightLine, kindColour } from '../../../lib/markdown'
 import { registerFlush } from '../../../lib/pendingEdits'
 import { reviewStore } from '../../../store'
-import { cellTheme, markdownHighlight } from './codemirror'
+import { cellTheme, markdownHighlight, searchHighlight } from './codemirror'
 
 // Saves this long after the last keystroke (spec §3: text typing is debounced ~300 ms).
 const SAVE_DELAY_MS = 300
@@ -17,6 +18,9 @@ const FromStore = Annotation.define<boolean>()
 
 // Holds the editor's own undo history, so it can be emptied (see replaceFromStore).
 const historySlot = new Compartment()
+
+// Holds the search-match marks, swapped when the search or filter changes.
+const searchSlot = new Compartment()
 
 // Each visit to a text cell (focus until it's left) is one entry in the app's undo list.
 let visits = 0
@@ -32,10 +36,18 @@ type Props = {
   // scrolling stutter, so cells that scroll into view show a lightweight highlighted copy
   // and become real editors once scrolling pauses (or as soon as they're clicked).
   live: boolean
+  highlight?: Highlighter // search matches to mark (spec §7)
 }
 
 // A text cell: a small CodeMirror editor (spec §6: always editable, a single click edits).
-export function TextCell({ rowId, columnId, label, value, live }: Props): React.JSX.Element {
+export function TextCell({
+  rowId,
+  columnId,
+  label,
+  value,
+  live,
+  highlight
+}: Props): React.JSX.Element {
   const text = typeof value === 'string' ? value : ''
   const [mounted, setMounted] = useState(live)
   // How the placeholder was activated, so the new editor can take over: a click (put the
@@ -51,6 +63,7 @@ export function TextCell({ rowId, columnId, label, value, live }: Props): React.
       <StaticText
         text={text}
         label={label}
+        highlight={highlight}
         onActivate={(how) => {
           setActivation(how)
           setMounted(true)
@@ -59,7 +72,14 @@ export function TextCell({ rowId, columnId, label, value, live }: Props): React.
     )
   }
   return (
-    <Editor rowId={rowId} columnId={columnId} label={label} text={text} activation={activation} />
+    <Editor
+      rowId={rowId}
+      columnId={columnId}
+      label={label}
+      text={text}
+      activation={activation}
+      highlight={highlight}
+    />
   )
 }
 
@@ -68,13 +88,15 @@ function Editor({
   columnId,
   label,
   text,
-  activation
+  activation,
+  highlight
 }: {
   rowId: number
   columnId: number
   label: string
   text: string
   activation: Activation
+  highlight: Highlighter | undefined
 }): React.JSX.Element {
   const host = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -119,6 +141,7 @@ function Editor({
           // spellcheck=true lets Electron's spellchecker underline misspellings.
           EditorView.contentAttributes.of({ spellcheck: 'true', 'aria-label': label }),
           markdownHighlight,
+          searchSlot.of(searchHighlight(highlight)),
           cellTheme,
           EditorView.updateListener.of((u) => {
             const typed = u.transactions.some((t) => t.docChanged && !t.annotation(FromStore))
@@ -169,6 +192,14 @@ function Editor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowId, columnId])
 
+  // A new search or filter: swap the marks (the first ones were set when it was created).
+  const firstHighlight = useRef(highlight)
+  useEffect(() => {
+    if (highlight === firstHighlight.current) return
+    firstHighlight.current = highlight
+    viewRef.current?.dispatch({ effects: searchSlot.reconfigure(searchHighlight(highlight)) })
+  }, [highlight])
+
   // Show changes made elsewhere, unless the user is typing here (their text wins).
   useEffect(() => {
     const view = viewRef.current
@@ -199,10 +230,12 @@ function replaceFromStore(view: EditorView, text: string): void {
 function StaticText({
   text,
   label,
+  highlight,
   onActivate
 }: {
   text: string
   label: string
+  highlight: Highlighter | undefined
   onActivate: (how: Activation) => void
 }): React.JSX.Element {
   return (
@@ -219,32 +252,51 @@ function StaticText({
     >
       {text.split('\n').map((line, i) => (
         <div key={i} className="px-[2px]">
-          {line === '' ? '​' : <HighlightedLine line={line} />}
+          {line === '' ? '​' : <HighlightedLine line={line} marks={highlight?.(line) ?? []} />}
         </div>
       ))}
     </div>
   )
 }
 
-function HighlightedLine({ line }: { line: string }): React.JSX.Element {
+// A line with its markdown colouring and, over that, the search marks (as the editor
+// draws them). The line is cut wherever either changes.
+function HighlightedLine({
+  line,
+  marks
+}: {
+  line: string
+  marks: MatchRange[]
+}): React.JSX.Element {
+  const spans = highlightLine(line)
+  const cuts = new Set([0, line.length])
+  for (const s of spans) cuts.add(s.from).add(s.to)
+  for (const [a, b] of marks) cuts.add(a).add(b)
+  const points = [...cuts].sort((a, b) => a - b)
   const parts: React.ReactNode[] = []
-  let at = 0
-  for (const s of highlightLine(line)) {
-    if (s.from > at) parts.push(line.slice(at, s.from))
+  for (let i = 0; i + 1 < points.length; i++) {
+    const [from, to] = [points[i], points[i + 1]]
+    const s = spans.find((x) => x.from <= from && to <= x.to)
+    const marked = marks.some(([a, b]) => a <= from && to <= b)
+    if (!s && !marked) {
+      parts.push(line.slice(from, to))
+      continue
+    }
     parts.push(
       <span
-        key={s.from}
-        style={{
-          color: kindColour(s.kind),
-          fontWeight: s.bold ? 700 : undefined,
-          fontStyle: s.italic ? 'italic' : undefined
-        }}
+        key={from}
+        className={marked ? 'cm-search-hl' : undefined}
+        style={
+          s && {
+            color: kindColour(s.kind),
+            fontWeight: s.bold ? 700 : undefined,
+            fontStyle: s.italic ? 'italic' : undefined
+          }
+        }
       >
-        {line.slice(s.from, s.to)}
+        {line.slice(from, to)}
       </span>
     )
-    at = s.to
   }
-  if (at < line.length) parts.push(line.slice(at))
   return <>{parts}</>
 }

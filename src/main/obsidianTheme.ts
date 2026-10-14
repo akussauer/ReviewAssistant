@@ -157,7 +157,10 @@ const TOKENS: Record<string, string> = {
   '--md-code': role('--code-normal', MD),
   '--md-quote': role('--blockquote-color', role('--quote-color', MD)),
   '--md-link': role('--link-color', MD),
-  '--md-rule': role('--hr-color', MD)
+  '--md-rule': role('--hr-color', MD),
+  // Search matches: the theme's ==highlight== colour, else the Preferences one (App.tsx),
+  // which replaces this altogether while "Override theme colour" is on.
+  '--search-hl': role('--text-highlight-bg', 'var(--search-hl-own)')
 }
 
 // A theme can't set our tokens directly, in any scope: only through Obsidian's roles.

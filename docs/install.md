@@ -14,7 +14,7 @@ The installer adds a Start-menu entry and a desktop shortcut, and makes `.review
 - Old `.json` files from the PySide app: use **File → Import old JSON…** (or **File → Open…** and pick the `.json`). The JSON is never changed.
 
 ## Where your settings live
-`%APPDATA%\ReviewAssistant`: settings, your API key (encrypted), themes, plugins, automatic backups (`Backups`) and logs (`Logs`). **Help → About** shows the version and opens these folders. Your reviews are wherever you saved the `.review` files.
+`%APPDATA%\ReviewAssistant`: settings, your API key (encrypted), themes, plugins, automatic backups (`Backups`) and logs (`Logs`). **File → About Review Assistant** shows the version and opens these folders. Your reviews are wherever you saved the `.review` files.
 
 ## Updating
 Run the newer installer. It replaces the program and keeps your settings. There's no automatic update.

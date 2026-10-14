@@ -1,6 +1,12 @@
 import { displayText } from '../../../shared/conversion'
 import type { CellValue, Column, Row, TabView } from '../../../shared/ipc'
-import { compileQuery, joinCells } from '../../../shared/search'
+import {
+  compileHighlighter,
+  compileQuery,
+  joinCells,
+  mergeRanges,
+  type Highlighter
+} from '../../../shared/search'
 
 // Which rows a tab shows, given its column filters and global search (spec §7). Like
 // Proxy.filterAcceptsRow in the reference app: case-insensitive, every column filter must
@@ -131,3 +137,29 @@ export function visibleRowIds(
 export const isFiltered = (view: TabView, columns: Column[]): boolean =>
   Boolean(view.search?.trim()) ||
   columns.some((c) => columnFilterTest(c, view.filters?.[String(c.id)]) !== null)
+
+// ---- Highlighting matches (spec §7)
+
+// What to mark in each column's cells: the global search's terms (every column but
+// checkboxes) plus the column's own text filter. Pickers (dropdown, checkbox) and number/
+// date comparisons mark nothing, as every row shown passes them. A column that marks
+// nothing is left out.
+export function columnHighlighters(
+  columns: Pick<Column, 'id' | 'type'>[],
+  view: TabView
+): Map<number, Highlighter> {
+  const search = view.search?.trim() ? compileHighlighter(view.search) : null
+  const result = new Map<number, Highlighter>()
+  for (const c of columns) {
+    if (c.type === 'checkbox') continue
+    const filter = view.filters?.[String(c.id)]?.trim()
+    const comparison =
+      (c.type === 'number' || c.type === 'date') && comparisonTest(filter ?? '', c.type) !== null
+    const own = filter && c.type !== 'dropdown' && !comparison ? compileHighlighter(filter) : null
+    const both = [search, own].filter((h): h is Highlighter => h !== null)
+    if (both.length === 1) result.set(c.id, both[0])
+    else if (both.length === 2)
+      result.set(c.id, (text) => mergeRanges(both.flatMap((h) => h(text))))
+  }
+  return result
+}

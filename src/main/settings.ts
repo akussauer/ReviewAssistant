@@ -15,6 +15,8 @@ export function currentSettings(): Settings {
     markdownColour: c.markdownColour,
     markdownColourOverride: c.markdownColourOverride,
     markdownColours: c.markdownColours,
+    searchHighlightColour: c.searchHighlightColour,
+    searchHighlightOverride: c.searchHighlightOverride,
     hotkeys: c.hotkeys,
     assistant: c.assistant,
     claudeDesktop: c.claudeDesktop

@@ -1,23 +1,32 @@
-import { Menu, type MenuItemConstructorOptions } from 'electron'
+import { Menu, type BrowserWindow, type MenuItem, type MenuItemConstructorOptions } from 'electron'
 import { basename } from 'path'
-import type { EditState, MenuCommand } from '../shared/ipc'
+import type { EditState, MenuCommand, MenuNode } from '../shared/ipc'
 
-// The native application menu (File / Edit / View / Settings / Help, spec §2).
+// The native application menu (File / Edit / Settings, spec §2). Search has no menu item:
+// Ctrl+F and the 🔍 button by the tabs show it.
 
 export type MenuActions = {
   newFile(): void
   openFile(): void
   openRecent(path: string): void
-  // Save As, import, export and Preferences are done by the renderer (see MenuCommand).
+  // Save As, import, export, Preferences and About are done by the renderer (see MenuCommand).
   command(command: MenuCommand): void
-  about(): void
   recent: string[]
   hasFile: boolean // Save As and Export need an open review
   saveAsKey: string // the Save As hotkey from the settings
   edit: EditState // what Undo / Redo will do (reported by the page)
-  searchBar: boolean // whether the search bar is shown
   dev: boolean // `npm run dev`: adds the Developer menu
 }
+
+// Shortcuts the page runs (plan M10c): the menu bar is hidden, and Electron doesn't
+// reliably fire a hidden menu's accelerators, so the title bar matches these keys itself
+// (TitleBar.tsx) and asks main to run the item. Not registered here, so never twice.
+const PAGE_SHORTCUTS = new Set(['open', 'saveAs', 'preferences'])
+const pageKey = (id: string, accelerator: string): Partial<MenuItemConstructorOptions> => ({
+  id,
+  accelerator,
+  registerAccelerator: false
+})
 
 export function buildMenu(actions: MenuActions): Menu {
   const run = (
@@ -40,10 +49,13 @@ export function buildMenu(actions: MenuActions): Menu {
       label: 'File',
       submenu: [
         { label: 'New…', click: actions.newFile },
-        { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: actions.openFile },
+        { label: 'Open…', click: actions.openFile, ...pageKey('open', 'CmdOrCtrl+O') },
         { label: 'Open Recent', submenu: recent },
         { type: 'separator' },
-        run('Save As…', 'saveAs', { accelerator: actions.saveAsKey, enabled: actions.hasFile }),
+        run('Save As…', 'saveAs', {
+          enabled: actions.hasFile,
+          ...pageKey('saveAs', actions.saveAsKey)
+        }),
         { type: 'separator' },
         run('Import old JSON…', 'importJson'),
         {
@@ -56,11 +68,13 @@ export function buildMenu(actions: MenuActions): Menu {
           ]
         },
         { type: 'separator' },
+        run('About Review Assistant', 'about'),
+        { type: 'separator' },
         { role: 'quit' }
       ]
     },
-    // Undo, Redo and Search go to the page, which decides what they act on (a cell, or the
-    // text box being typed in). Their shortcuts are shown but not registered here: the
+    // Undo and Redo go to the page, which decides what they act on (a cell, or the text box
+    // being typed in). Their shortcuts are shown but not registered here: the
     // page handles the keys itself, so a text box keeps its own Ctrl+Z.
     {
       label: 'Edit',
@@ -84,21 +98,9 @@ export function buildMenu(actions: MenuActions): Menu {
       ]
     },
     {
-      label: 'View',
-      submenu: [
-        run('Search', 'toggleSearch', {
-          type: 'checkbox',
-          checked: actions.searchBar,
-          accelerator: 'CmdOrCtrl+F',
-          registerAccelerator: false,
-          enabled: actions.hasFile
-        })
-      ]
-    },
-    {
       label: 'Settings',
       submenu: [
-        run('Preferences…', 'preferences', { accelerator: 'CmdOrCtrl+,' }),
+        run('Preferences…', 'preferences', pageKey('preferences', 'CmdOrCtrl+,')),
         run('Plugins…', 'plugins')
       ]
     },
@@ -110,8 +112,60 @@ export function buildMenu(actions: MenuActions): Menu {
             submenu: [run('Seed 2,000 rows', 'devSeed', { enabled: actions.hasFile })]
           }
         ]
-      : []),
-    { label: 'Help', submenu: [{ label: 'About Review Assistant', click: actions.about }] }
+      : [])
   ]
   return Menu.buildFromTemplate(template)
+}
+
+// ---- The page's copy (plan M10c)
+//
+// The native menu bar can't be themed, so the window has no visible one: the page draws
+// the menu in its own title bar from this copy, and asks main to run an item by its id.
+// The application menu itself stays set (but hidden), so its shortcuts keep working.
+
+// Items with a role (Cut, Exit, …) have no accelerator of their own; these are Windows'.
+const ROLE_KEYS: Record<string, string> = {
+  cut: 'Ctrl+X',
+  copy: 'Ctrl+C',
+  paste: 'Ctrl+V',
+  selectAll: 'Ctrl+A',
+  quit: 'Alt+F4'
+}
+
+const shownKey = (accelerator: string): string =>
+  accelerator.replace(/CmdOrCtrl|CommandOrControl/g, 'Ctrl')
+
+export function menuModel(menu: Menu, prefix = ''): MenuNode[] {
+  return menu.items.flatMap((item, i): MenuNode[] => {
+    if (!item.visible) return []
+    if (item.type === 'separator') return [{ kind: 'separator' }]
+    const key = item.accelerator ?? (item.role ? ROLE_KEYS[item.role] : undefined)
+    return [
+      {
+        kind: 'item',
+        id: prefix + i,
+        label: item.label,
+        sublabel: item.sublabel || undefined,
+        accelerator: key ? shownKey(String(key)) : undefined,
+        shortcut: PAGE_SHORTCUTS.has(item.id) && key ? String(key) : undefined,
+        enabled: item.enabled,
+        submenu: item.submenu ? menuModel(item.submenu, `${prefix}${i}.`) : undefined
+      }
+    ]
+  })
+}
+
+// Runs the item with this id (from menuModel), as a click on the native menu would.
+// Disabled or unknown items (the menu changed meanwhile) do nothing.
+export function clickMenuItem(menu: Menu, id: string, label: string, win: BrowserWindow): void {
+  let item: MenuItem | undefined
+  let items = menu.items
+  for (const part of id.split('.')) {
+    item = items[Number(part)]
+    if (!item) return
+    items = item.submenu?.items ?? []
+  }
+  if (!item || item.label !== label || !item.enabled || item.type === 'separator' || item.submenu)
+    return
+  item.click(undefined, win, win.webContents)
 }

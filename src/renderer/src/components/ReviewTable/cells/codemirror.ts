@@ -1,4 +1,4 @@
-import { RangeSetBuilder } from '@codemirror/state'
+import { RangeSetBuilder, type Extension } from '@codemirror/state'
 import {
   Decoration,
   EditorView,
@@ -7,6 +7,7 @@ import {
   type ViewUpdate
 } from '@codemirror/view'
 import { MARKDOWN_KINDS } from '../../../../../shared/ipc'
+import type { Highlighter } from '../../../../../shared/search'
 import { highlightLine, kindColour, type Span } from '../../../lib/markdown'
 
 // CodeMirror extensions for text cells.
@@ -59,6 +60,38 @@ export const markdownHighlight = ViewPlugin.fromClass(
   },
   { decorations: (plugin) => plugin.decorations }
 )
+
+// Search matches (spec §7), marked line by line: a match never spans a line break.
+// .cm-search-hl is styled in main.css, as the static copy (TextCell) uses it too.
+const searchMark = Decoration.mark({ class: 'cm-search-hl' })
+
+export function searchHighlight(highlight: Highlighter | undefined): Extension {
+  if (!highlight) return []
+  const build = (view: EditorView): DecorationSet => {
+    const builder = new RangeSetBuilder<Decoration>()
+    for (const { from, to } of view.visibleRanges) {
+      for (let pos = from; pos <= to;) {
+        const line = view.state.doc.lineAt(pos)
+        for (const [a, b] of highlight(line.text))
+          builder.add(line.from + a, line.from + b, searchMark)
+        pos = line.to + 1
+      }
+    }
+    return builder.finish()
+  }
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet
+      constructor(view: EditorView) {
+        this.decorations = build(view)
+      }
+      update(update: ViewUpdate): void {
+        if (update.docChanged || update.viewportChanged) this.decorations = build(update.view)
+      }
+    },
+    { decorations: (plugin) => plugin.decorations }
+  )
+}
 
 // Makes the editor look like the rest of the cell. Markdown colours come from the
 // --md-<kind> / --md-colour CSS variables (set from the settings or the Obsidian theme).

@@ -1,7 +1,10 @@
-import type { EditState } from '../shared/ipc'
+import { app, shell } from 'electron'
+import os from 'os'
+import type { AppFolder, AppInfo, EditState } from '../shared/ipc'
+import { logsDir } from './userData'
 import { config, settingsChanged } from './review'
 
-// Window state the menu shows that isn't part of Preferences (plan M9a).
+// Window state kept in main that isn't part of Preferences (plan M9a), and File > About.
 
 // What Edit > Undo / Redo say. The page owns the undo list and reports it after each
 // change; it's empty (greyed out) until a review is open.
@@ -20,5 +23,21 @@ export const searchBarShown = (): boolean => config.get().showSearchBar
 
 export function setSearchBarShown(shown: boolean): void {
   config.update({ showSearchBar: shown })
-  settingsChanged() // View > Search shows a tick
+}
+
+// File > About (spec §2): what the dialog shows and copies.
+export function appInfo(): AppInfo {
+  return {
+    version: app.getVersion(),
+    settingsDir: app.getPath('userData'),
+    logsDir: logsDir(),
+    electron: process.versions.electron,
+    os: `${os.version()} (${os.release()}, ${process.arch})`
+  }
+}
+
+// The About dialog's buttons; only these two folders can be opened this way.
+export async function openAppFolder(folder: AppFolder): Promise<void> {
+  const error = await shell.openPath(folder === 'settings' ? app.getPath('userData') : logsDir())
+  if (error) throw new Error(error)
 }

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { CellValue, Column, Row } from '../../../shared/ipc'
-import { columnFilterTest, comparisonTest, isFiltered, visibleRowIds } from './filter'
+import {
+  columnFilterTest,
+  columnHighlighters,
+  comparisonTest,
+  isFiltered,
+  visibleRowIds
+} from './filter'
 
 const columns: Column[] = [
   { id: 1, label: 'Title', type: 'text', options: {}, width: 150, position: 0 },
@@ -143,5 +149,35 @@ describe('visibleRowIds (Proxy.filterAcceptsRow)', () => {
 
   it('ignores filters for columns that no longer exist', () => {
     expect(shown({ filters: { 99: 'x' } })).toEqual([1, 2, 3])
+  })
+})
+
+describe('columnHighlighters', () => {
+  const marks = (view: Parameters<typeof columnHighlighters>[1]): Record<number, string[]> =>
+    Object.fromEntries(
+      [...columnHighlighters(columns, view)].map(([id, h]) => [
+        id,
+        h('RCT 2015 2015-03-01').map(String)
+      ])
+    )
+
+  it('marks nothing without a search or text filter', () => {
+    expect(columnHighlighters(columns, {}).size).toBe(0)
+  })
+
+  it('uses the search in every column but checkboxes', () => {
+    expect(Object.keys(marks({ search: 'rct' })).map(Number)).toEqual([1, 2, 3, 4])
+  })
+
+  it('adds a column filter to its own column only', () => {
+    expect(marks({ search: 'rct', filters: { '1': '2015' } })[1]).toEqual(['0,3', '4,8', '9,13'])
+    expect(marks({ search: 'rct', filters: { '1': '2015' } })[3]).toEqual(['0,3'])
+  })
+
+  it('skips pickers and number/date comparisons, but not text that looks like one', () => {
+    expect(columnHighlighters(columns, { filters: { '2': 'o_rct', '5': 'checked' } }).size).toBe(0)
+    expect(columnHighlighters(columns, { filters: { '3': '>2015', '4': '2015..' } }).size).toBe(0)
+    expect(marks({ filters: { '3': '2015' } })[3]).toEqual(['4,8', '9,13'])
+    expect(columnHighlighters(columns, { filters: { '1': '>2015' } }).has(1)).toBe(true)
   })
 })

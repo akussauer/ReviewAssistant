@@ -11,6 +11,8 @@ import { AssistantPanel } from './components/Assistant/AssistantPanel'
 import { BotButton } from './components/Assistant/BotButton'
 import { MarkdownExportDialog } from './components/Export/MarkdownExportDialog'
 import { ReviewTable } from './components/ReviewTable/ReviewTable'
+import { AboutDialog } from './components/Settings/AboutDialog'
+import { TitleBar } from './components/TitleBar/TitleBar'
 import { PluginsDialog } from './components/Settings/PluginsDialog'
 import { SettingsDialog } from './components/Settings/SettingsDialog'
 import { useTabRows, type TabRows } from './components/ReviewTable/useTabRows'
@@ -47,8 +49,8 @@ function runMenuCommand(command: MenuCommand, openDialog: (d: AppDialog) => void
   }
   // A dialog is open (e.g. Preferences, where the Save As hotkey is being set): ignore.
   if (dialogOpen()) return
-  if (command === 'toggleSearch') return toggleSearchBar()
-  if (command === 'preferences' || command === 'plugins') return openDialog(command)
+  if (command === 'preferences' || command === 'plugins' || command === 'about')
+    return openDialog(command)
   flushPending()
   // After the flush, so the preview and the export include the latest edits.
   if (command === 'exportMarkdown') return openDialog('markdownExport')
@@ -184,14 +186,30 @@ function useMarkdownColours(): void {
   }, [settings, byTheme])
 }
 
+// The search-match colour (spec §7) as --search-hl on <html>: the Preferences colour at
+// 40%, so text shows through. With an Obsidian theme (no override) it's left to the
+// theme's stylesheet, which uses the theme's highlight colour, else --search-hl-own.
+function useSearchHighlightColour(): void {
+  const settings = useReview((s) => s.settings)
+  const byTheme = useReview((s) => s.themeName !== null && !s.settings?.searchHighlightOverride)
+  useEffect(() => {
+    const style = document.documentElement.style
+    if (!settings) return
+    const own = `color-mix(in srgb, ${settings.searchHighlightColour} 40%, transparent)`
+    style.setProperty('--search-hl-own', own)
+    if (byTheme) style.removeProperty('--search-hl')
+    else style.setProperty('--search-hl', own)
+  }, [settings, byTheme])
+}
+
 // Dialogs opened from the menu.
-type AppDialog = 'preferences' | 'plugins' | 'markdownExport'
+type AppDialog = 'preferences' | 'plugins' | 'about' | 'markdownExport'
 
 const isMac = navigator.platform.startsWith('Mac')
 
 // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z undo and redo cell edits (spec §6), unless the focus is
 // in something with its own undo (a text cell's editor, a text box); Ctrl+F shows or hides
-// the search bar (spec §7). The Edit and View menus show these keys but leave them to us.
+// the search bar (spec §7). The Edit menu shows the undo keys but leaves them to us.
 function useEditKeys(): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -264,6 +282,7 @@ function App(): React.JSX.Element | null {
   useDarkClass()
   useObsidianTheme()
   useMarkdownColours()
+  useSearchHighlightColour()
   useOpenRequests()
   useEffect(() => window.api.menu.onCommand((command) => runMenuCommand(command, setDialog)), [])
   // The assistant's status and streamed replies (main pushes both).
@@ -288,16 +307,20 @@ function App(): React.JSX.Element | null {
 
   if (file === undefined) return null
   return (
-    <>
-      {file === null ? (
-        <Welcome />
-      ) : (
-        // `key` makes React build a fresh ReviewView (and reload) whenever a file is
-        // opened, including when the same path is recreated with New.
-        <ReviewView key={`${file.path}#${file.generation}`} />
-      )}
+    <div className="flex h-screen flex-col">
+      <TitleBar title={file ? `${file.name} – Review Assistant` : 'Review Assistant'} />
+      <div className="min-h-0 flex-1">
+        {file === null ? (
+          <Welcome />
+        ) : (
+          // `key` makes React build a fresh ReviewView (and reload) whenever a file is
+          // opened, including when the same path is recreated with New.
+          <ReviewView key={`${file.path}#${file.generation}`} />
+        )}
+      </div>
       {dialog === 'preferences' && <SettingsDialog onClose={() => setDialog(null)} />}
       {dialog === 'plugins' && <PluginsDialog onClose={() => setDialog(null)} />}
+      {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
       {dialog === 'markdownExport' && file && (
         // key: a file opened while the dialog is up starts it afresh.
         <MarkdownExportDialog
@@ -305,7 +328,7 @@ function App(): React.JSX.Element | null {
           onClose={() => setDialog(null)}
         />
       )}
-    </>
+    </div>
   )
 }
 
@@ -360,7 +383,7 @@ function ReviewView(): React.JSX.Element | null {
   }
   if (status === 'loading' || !activeTab) return null
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-full flex-col">
       <TabStrip />
       <div className="flex min-h-0 flex-1">
         {activeTab.type === 'synthesis' ? (

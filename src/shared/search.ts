@@ -15,7 +15,11 @@
 type Node =
   | { kind: 'and' | 'or'; items: Node[] }
   | { kind: 'not'; item: Node }
-  | { kind: 'match'; test: (text: string) => boolean }
+  | { kind: 'match'; test: (text: string) => boolean; find: Finder }
+
+// Where a term occurs in a (lower-cased) text, for highlighting: [from, to) offsets.
+export type MatchRange = [number, number]
+type Finder = (text: string) => MatchRange[]
 
 type Token = { type: 'word' | 'phrase' | 'and' | 'or' | 'not' | '(' | ')'; value: string }
 
@@ -50,6 +54,7 @@ function wordMatcher(word: string): (text: string) => boolean {
   // word, and queries also come from Claude Desktop (spec §10.1), running in main.
   const parts = lower.split('*')
   return (text) => {
+    const n = text.length
     // dead[i][p] = 1: parts i.. can't match from position p. That doesn't depend on where
     // the match started, and a scan from p covers every later start in the same run of
     // letters, so it stops at a dead position. Each (part, position) is scanned once.
@@ -70,12 +75,61 @@ function wordMatcher(word: string): (text: string) => boolean {
       d.fill(1, pos, p)
       return false
     }
-    for (let s = text.indexOf(parts[0]); s >= 0; s = text.indexOf(parts[0], s + 1)) {
+    // (s < n: indexOf('') never runs out, it finds the end of the text again and again.)
+    for (let s = text.indexOf(parts[0]); s >= 0; s = s < n ? text.indexOf(parts[0], s + 1) : -1) {
       if (s > 0 && WORD_CHAR.test(text[s - 1])) continue // not a word start
       if (rest(1, s + parts[0].length)) return true
     }
     return false
   }
+}
+
+// Every place a word occurs (see wordMatcher). A wildcard match takes in as much as its
+// stars can cover, so "swim*" marks all of "swimming", not just "swim".
+function wordFinder(word: string): Finder {
+  const lower = word.toLowerCase()
+  if (!lower.includes('*')) {
+    return (text) => {
+      const found: MatchRange[] = []
+      for (let s = text.indexOf(lower); s >= 0; s = text.indexOf(lower, s + 1))
+        found.push([s, s + lower.length])
+      return found
+    }
+  }
+  const parts = lower.split('*')
+  return (text) => {
+    // end[i][p]: the furthest the match can reach when parts i.. are matched with the
+    // star before part i starting at p, or -1. Filled from the back, so each (part,
+    // position) is worked out once, as in wordMatcher.
+    const first = text.indexOf(parts[0])
+    if (first < 0) return []
+    const n = text.length
+    const end: Int32Array[] = []
+    end[parts.length] = Int32Array.from({ length: n + 1 }, (_, p) => p)
+    for (let i = parts.length - 1; i >= 1; i--) {
+      const row = new Int32Array(n + 1)
+      for (let p = n; p >= 0; p--) {
+        const here = text.startsWith(parts[i], p) ? end[i + 1][p + parts[i].length] : -1
+        const later = p < n && WILD_CHAR.test(text[p]) ? row[p + 1] : -1
+        row[p] = Math.max(here, later)
+      }
+      end[i] = row
+    }
+    const found: MatchRange[] = []
+    for (let s = first; s >= 0; s = s < n ? text.indexOf(parts[0], s + 1) : -1) {
+      if (s > 0 && WORD_CHAR.test(text[s - 1])) continue // not a word start
+      const e = end[1][s + parts[0].length]
+      if (e > s) found.push([s, e])
+    }
+    return found
+  }
+}
+
+function phraseFinder(phrase: string): Finder {
+  const words = phrase.toLowerCase().trim().split(/\s+/).map(escapeRe)
+  const re = new RegExp(words.join('[^\\S\\n]+'), 'gu')
+  return (text) =>
+    Array.from(text.matchAll(re), (m): MatchRange => [m.index, m.index + m[0].length])
 }
 
 function phraseMatcher(phrase: string): (text: string) => boolean {
@@ -136,8 +190,10 @@ function parse(tokens: Token[]): Node | null {
       if (peek()?.type === ')') i++
       return inner
     }
-    if (t.type === 'phrase') return { kind: 'match', test: phraseMatcher(t.value) }
-    if (t.type === 'word') return { kind: 'match', test: wordMatcher(t.value) }
+    if (t.type === 'phrase')
+      return { kind: 'match', test: phraseMatcher(t.value), find: phraseFinder(t.value) }
+    if (t.type === 'word')
+      return { kind: 'match', test: wordMatcher(t.value), find: wordFinder(t.value) }
     return null // a stray ")" or operator
   }
 
@@ -172,6 +228,69 @@ export function compileQuery(query: string): Matcher {
   const tree = parse(tokenize(query))
   if (!tree) return () => true
   return (text) => evaluate(tree, text.toLowerCase())
+}
+
+// The terms a matching text must contain: those under an even number of NOTs.
+function positiveFinders(node: Node, negated = false): Finder[] {
+  switch (node.kind) {
+    case 'and':
+    case 'or':
+      return node.items.flatMap((n) => positiveFinders(n, negated))
+    case 'not':
+      return positiveFinders(node.item, !negated)
+    case 'match':
+      return negated ? [] : [node.find]
+  }
+}
+
+export type Highlighter = (text: string) => MatchRange[]
+
+// Compiles a query for highlighting (spec §7): the returned function gives where its
+// terms occur in a text, sorted, with overlapping ranges merged. NOT terms are never
+// marked, and AND/OR aren't traced per occurrence. Null for an empty query.
+export function compileHighlighter(query: string): Highlighter | null {
+  const tree = parse(tokenize(query))
+  const finders = tree ? positiveFinders(tree) : []
+  if (finders.length === 0) return null
+  return (text) => {
+    const { lower, start, end } = lowerCased(text)
+    const found = finders.flatMap((f) => f(lower))
+    return mergeRanges(start ? found.map(([a, b]) => [start[a], end![b]]) : found)
+  }
+}
+
+// The text lower-cased, as the search sees it. A few characters get longer (e.g. "İ"
+// becomes "i̇"); then start/end map each position in `lower` back to the text: start[k] is
+// where the character holding lower[k] starts, end[k] where the one holding lower[k-1] ends.
+function lowerCased(text: string): { lower: string; start?: number[]; end?: number[] } {
+  const lower = text.toLowerCase()
+  if (lower.length === text.length) return { lower }
+  let built = ''
+  const start: number[] = []
+  const end: number[] = [0]
+  for (let i = 0; i < text.length;) {
+    const ch = String.fromCodePoint(text.codePointAt(i)!)
+    const low = ch.toLowerCase()
+    for (let k = 0; k < low.length; k++) {
+      start.push(i)
+      end.push(i + ch.length)
+    }
+    built += low
+    i += ch.length
+  }
+  start.push(text.length)
+  return { lower: built, start, end }
+}
+
+// Sorted, with overlapping or touching ranges joined into one.
+export function mergeRanges(ranges: MatchRange[]): MatchRange[] {
+  const merged: MatchRange[] = []
+  for (const [a, b] of [...ranges].sort((x, y) => x[0] - y[0])) {
+    const last = merged[merged.length - 1]
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b)
+    else merged.push([a, b])
+  }
+  return merged
 }
 
 // Several cells searched as one text: a line break between them, so a phrase can't

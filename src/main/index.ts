@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, Menu, nativeTheme } from 'electron'
+import { app, shell, BrowserWindow, nativeTheme } from 'electron'
 // First: pins the settings folder before any module reads it.
 import { logsDir } from './userData'
 import { dialog } from './dialogs'
@@ -31,49 +31,25 @@ import { fileFromArgv } from './launchFile'
 import { recheck } from './assistant'
 import { applyClaudeDesktop, stopClaudeDesktop } from './claudeDesktop'
 import { applyTheme } from './settings'
-import { currentEditState, searchBarShown } from './ui'
+import { currentEditState } from './ui'
+import { applyMenu, initialTitleBarOverlay } from './titleBar'
 
 // Rebuilt whenever the Recent list, the open file or the settings change, so Open Recent,
 // the items that need a file, and the Save As hotkey stay current.
 function refreshMenu(): void {
-  Menu.setApplicationMenu(
+  applyMenu(
     buildMenu({
       newFile: () => safely('Could not create the review file', newReviewDialog),
       openFile: () => safely('Could not open the review file', openReviewDialog),
       openRecent: (path) => safely('Could not open the review file', () => openRecent(path)),
-      command: (command) => {
-        sendMenuCommand(command)
-        // A checkbox item ticks itself when clicked; put it back until the page has acted.
-        if (command === 'toggleSearch') refreshMenu()
-      },
-      about: () => safely('Could not show About', showAbout),
+      command: sendMenuCommand,
       recent: recentFiles(),
       hasFile: currentFile() !== null,
       saveAsKey: config.get().hotkeys.saveAs,
       edit: currentEditState(),
-      searchBar: searchBarShown(),
       dev: import.meta.env.DEV
     })
   )
-}
-
-// Help > About: the version, and where settings and logs live.
-async function showAbout(): Promise<void> {
-  const win = liveWindow()
-  if (!win) return
-  const settings = app.getPath('userData')
-  const { response } = await dialog.showMessageBox(win, {
-    type: 'info',
-    title: 'About Review Assistant',
-    message: `Review Assistant ${app.getVersion()}`,
-    detail: `Settings folder:\n${settings}\n\nLog files:\n${logsDir()}`,
-    buttons: ['Close', 'Open settings folder', 'Open logs'],
-    defaultId: 0,
-    cancelId: 0,
-    noLink: true
-  })
-  if (response === 1) await shell.openPath(settings)
-  if (response === 2) await shell.openPath(logsDir())
 }
 
 // A saved hotkey that is now a fixed shortcut (e.g. Ctrl+F became Search) went back to its
@@ -106,6 +82,10 @@ function createWindow(): void {
     height: 800,
     show: false,
     title: 'Review Assistant',
+    // No native title bar or menu bar: the page draws a themed one (titleBar.ts), and
+    // Windows draws its own window buttons over it.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: initialTitleBarOverlay(),
     // The app logo in the title bar and taskbar (the installed .exe gets its own icon from
     // electron-builder.yml).
     icon,

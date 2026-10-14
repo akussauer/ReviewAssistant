@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compileQuery, joinCells, tokenize } from './search'
+import { compileHighlighter, compileQuery, joinCells, tokenize } from './search'
 
 const matches = (query: string, text: string): boolean => compileQuery(query)(text)
 
@@ -112,5 +112,70 @@ describe('compileQuery', () => {
     const row = joinCells(['Pacing study', 'Smith, J.'])
     expect(matches('pacing smith', row)).toBe(true)
     expect(matches('"study smith"', row)).toBe(false)
+  })
+})
+
+describe('leading-star wildcards', () => {
+  it("don't hang when nothing matches", () => {
+    expect(matches('*ing', 'abc')).toBe(false)
+    expect(matches('*ing', 'abc swimming')).toBe(true)
+  })
+})
+
+describe('compileHighlighter', () => {
+  // The marked parts of a text, for readable expectations.
+  const marked = (query: string, text: string): string[] =>
+    (compileHighlighter(query)?.(text) ?? []).map(([a, b]) => text.slice(a, b))
+
+  it('marks nothing for an empty query', () => {
+    expect(compileHighlighter('  ')).toBeNull()
+  })
+
+  it('marks just the matching characters of a word, everywhere, ignoring case', () => {
+    expect(marked('swim', 'Swimmers swim')).toEqual(['Swim', 'swim'])
+  })
+
+  it('marks the whole span a wildcard matched', () => {
+    expect(marked('swim*', 'elite swimming, swims')).toEqual(['swimming', 'swims'])
+    expect(marked('sw*ng', 'swimming swing')).toEqual(['swimming', 'swing'])
+    expect(marked('swim*', 'freeswimming')).toEqual([]) // not at a word start
+  })
+
+  it('marks a whole phrase, but not across a line break', () => {
+    expect(marked('"elite  athletes"', 'Elite athletes and elite\nathletes')).toEqual([
+      'Elite athletes'
+    ])
+  })
+
+  it('marks every positive term, but never NOT terms', () => {
+    expect(marked('(pacing OR junior) NOT elite', 'elite junior pacing')).toEqual([
+      'junior',
+      'pacing'
+    ])
+    expect(marked('NOT NOT pacing', 'pacing')).toEqual(['pacing'])
+    expect(compileHighlighter('NOT elite')).toBeNull()
+  })
+
+  it('merges overlapping marks', () => {
+    expect(marked('swim swimming', 'swimming')).toEqual(['swimming'])
+    expect(compileHighlighter('ab bc')!('abc')).toEqual([[0, 3]])
+  })
+
+  it('keeps marks in place when lower-casing makes a character longer', () => {
+    expect(marked('abc', 'İİ abc')).toEqual(['abc'])
+    expect(marked('stan', 'İstanbul')).toEqual(['stan'])
+  })
+
+  it('handles wildcards that start with a star, without hanging', () => {
+    expect(marked('*ming', 'swimming')).toEqual(['swimming'])
+    expect(marked('*ing', 'abc')).toEqual([])
+    expect(marked('*', 'ab cd')).toEqual(['ab', 'cd'])
+  })
+
+  it('handles long wildcard words quickly', () => {
+    const word = 'a'.repeat(20_000)
+    const start = Date.now()
+    expect(marked('a*a*a*a*b', word)).toEqual([])
+    expect(Date.now() - start).toBeLessThan(1000)
   })
 })
