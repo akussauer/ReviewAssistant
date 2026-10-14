@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useState } from 'react'
 import type { Column, Row } from '../../../../shared/ipc'
 import type { DropSide } from '../../lib/columns'
+import { useT } from '../../lib/i18n'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -31,6 +32,7 @@ type Props = {
 export function HeaderCell(props: Props): React.JSX.Element {
   const { header, column, sortDir, dragging } = props
   const [dropSide, setDropSide] = useState<DropSide | null>(null)
+  const t = useT()
   const canDrop = dragging !== null && dragging !== column.id
 
   const sideOf = (e: React.DragEvent<HTMLDivElement>): DropSide => {
@@ -67,7 +69,7 @@ export function HeaderCell(props: Props): React.JSX.Element {
           <div
             className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-1 px-2 select-none"
             draggable
-            title={`${column.label}: click to sort, drag to move`}
+            title={t('table.headerTooltip', { name: column.label })}
             onClick={props.onSort}
             onDragStart={(e) => {
               e.dataTransfer.effectAllowed = 'move'
@@ -93,15 +95,17 @@ export function HeaderCell(props: Props): React.JSX.Element {
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onSelect={() => props.onMenu('insert-before')}>
-          Insert column before
+          {t('table.insertColumnBefore')}
         </ContextMenuItem>
         <ContextMenuItem onSelect={() => props.onMenu('insert-after')}>
-          Insert column after
+          {t('table.insertColumnAfter')}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => props.onMenu('edit')}>Edit…</ContextMenuItem>
+        <ContextMenuItem onSelect={() => props.onMenu('edit')}>
+          {t('table.editColumn')}
+        </ContextMenuItem>
         <ContextMenuItem variant="destructive" onSelect={() => props.onMenu('delete')}>
-          Delete…
+          {t('table.deleteColumn')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

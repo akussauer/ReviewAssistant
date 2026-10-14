@@ -13,6 +13,13 @@ import { matchesHotkey } from '../../lib/hotkeys'
 
 type Item = Extract<MenuNode, { kind: 'item' }>
 
+// A menu's Alt letter: the first of its name, without accents, so Alt+E opens "Édition".
+const firstLetter = (label: string): string =>
+  (label[0] ?? '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+
 const dialogOpen = (): boolean =>
   document.querySelector('[role=dialog], [role=alertdialog]') !== null
 
@@ -141,7 +148,7 @@ export function TitleBar({ title }: { title: string }): React.JSX.Element {
       // By the physical key ("KeyF"), so it works on non-Latin keyboard layouts too.
       const letter = /^Key([A-Z])$/.exec(e.code)?.[1].toLowerCase()
       const target = latest.current.top.find(
-        (m) => letter !== undefined && m.label[0]?.toLowerCase() === letter
+        (m) => letter !== undefined && firstLetter(m.label) === letter
       )
       if (!target?.enabled) return
       e.preventDefault()
@@ -307,6 +314,7 @@ function Entries({
             onSelect={() => run(n.id, n.label)}
           >
             <span className="min-w-0 flex-1">
+              {n.checked && '✓ '}
               {n.label}
               {n.sublabel && (
                 <span className="block truncate text-xs text-muted-foreground">{n.sublabel}</span>

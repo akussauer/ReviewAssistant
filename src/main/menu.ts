@@ -1,6 +1,7 @@
 import { Menu, type BrowserWindow, type MenuItem, type MenuItemConstructorOptions } from 'electron'
 import { basename } from 'path'
 import type { EditState, MenuCommand, MenuNode } from '../shared/ipc'
+import { t } from './i18n'
 
 // The native application menu (File / Edit / Settings, spec §2). Search has no menu item:
 // Ctrl+F and the 🔍 button by the tabs show it.
@@ -16,6 +17,8 @@ export type MenuActions = {
   saveAsKey: string // the Save As hotkey from the settings
   edit: EditState // what Undo / Redo will do (reported by the page)
   dev: boolean // `npm run dev`: adds the Developer menu
+  pseudo: boolean // the Developer menu's test language is on
+  togglePseudo(): void
 }
 
 // Shortcuts the page runs (plan M10c): the menu bar is hidden, and Electron doesn't
@@ -42,66 +45,79 @@ export function buildMenu(actions: MenuActions): Menu {
         toolTip: path,
         click: () => actions.openRecent(path)
       }))
-    : [{ label: '(empty)', enabled: false }]
+    : [{ label: t('menu.file.recentEmpty'), enabled: false }]
 
   const template: MenuItemConstructorOptions[] = [
     {
-      label: 'File',
+      label: t('menu.file.title'),
       submenu: [
-        { label: 'New…', click: actions.newFile },
-        { label: 'Open…', click: actions.openFile, ...pageKey('open', 'CmdOrCtrl+O') },
-        { label: 'Open Recent', submenu: recent },
+        { label: t('menu.file.new'), click: actions.newFile },
+        { label: t('menu.file.open'), click: actions.openFile, ...pageKey('open', 'CmdOrCtrl+O') },
+        { label: t('menu.file.openRecent'), submenu: recent },
         { type: 'separator' },
-        run('Save As…', 'saveAs', {
+        run(t('menu.file.saveAs'), 'saveAs', {
           enabled: actions.hasFile,
           ...pageKey('saveAs', actions.saveAsKey)
         }),
         { type: 'separator' },
-        run('Import old JSON…', 'importJson'),
+        run(t('menu.file.importJson'), 'importJson'),
         {
-          label: 'Export',
+          label: t('menu.file.export'),
           enabled: actions.hasFile,
           submenu: [
-            run('CSV…', 'exportCsv'),
-            run('JSON…', 'exportJson'),
-            run('Markdown…', 'exportMarkdown')
+            run(t('menu.file.exportCsv'), 'exportCsv'),
+            run(t('menu.file.exportJson'), 'exportJson'),
+            run(t('menu.file.exportMarkdown'), 'exportMarkdown')
           ]
         },
         { type: 'separator' },
-        run('About Review Assistant', 'about'),
+        run(t('menu.file.about'), 'about'),
         { type: 'separator' },
-        { role: 'quit' }
+        { role: 'quit', label: t('menu.file.exit') }
       ]
     },
     // Undo and Redo go to the page, which decides what they act on (a cell, or the text box
     // being typed in). Their shortcuts are shown but not registered here: the
     // page handles the keys itself, so a text box keeps its own Ctrl+Z.
     {
-      label: 'Edit',
+      label: t('menu.edit.title'),
       submenu: [
-        run(actions.edit.undo ? `Undo ${actions.edit.undo}` : 'Undo', 'undo', {
-          accelerator: 'CmdOrCtrl+Z',
-          registerAccelerator: false,
-          enabled: actions.edit.undo !== null
-        }),
-        run(actions.edit.redo ? `Redo ${actions.edit.redo}` : 'Redo', 'redo', {
-          accelerator: 'CmdOrCtrl+Y',
-          registerAccelerator: false,
-          enabled: actions.edit.redo !== null
-        }),
+        run(
+          actions.edit.undo
+            ? t('menu.edit.undoWhat', { what: actions.edit.undo })
+            : t('menu.edit.undo'),
+          'undo',
+          {
+            accelerator: 'CmdOrCtrl+Z',
+            registerAccelerator: false,
+            enabled: actions.edit.undo !== null
+          }
+        ),
+        run(
+          actions.edit.redo
+            ? t('menu.edit.redoWhat', { what: actions.edit.redo })
+            : t('menu.edit.redo'),
+          'redo',
+          {
+            accelerator: 'CmdOrCtrl+Y',
+            registerAccelerator: false,
+            enabled: actions.edit.redo !== null
+          }
+        ),
         { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
+        // Electron's own labels for these are always English, so they get ours.
+        { role: 'cut', label: t('menu.edit.cut') },
+        { role: 'copy', label: t('menu.edit.copy') },
+        { role: 'paste', label: t('menu.edit.paste') },
         { type: 'separator' },
-        { role: 'selectAll' }
+        { role: 'selectAll', label: t('menu.edit.selectAll') }
       ]
     },
     {
-      label: 'Settings',
+      label: t('menu.settings.title'),
       submenu: [
-        run('Preferences…', 'preferences', pageKey('preferences', 'CmdOrCtrl+,')),
-        run('Plugins…', 'plugins')
+        run(t('menu.settings.preferences'), 'preferences', pageKey('preferences', 'CmdOrCtrl+,')),
+        run(t('menu.settings.plugins'), 'plugins')
       ]
     },
     // Development only: never built into a packaged app (see index.ts).
@@ -109,7 +125,16 @@ export function buildMenu(actions: MenuActions): Menu {
       ? [
           {
             label: 'Developer',
-            submenu: [run('Seed 2,000 rows', 'devSeed', { enabled: actions.hasFile })]
+            // Not translated: only developers see this menu.
+            submenu: [
+              run('Seed 2,000 rows', 'devSeed', { enabled: actions.hasFile }),
+              {
+                label: 'Pseudo-language',
+                type: 'checkbox' as const,
+                checked: actions.pseudo,
+                click: actions.togglePseudo
+              }
+            ]
           }
         ]
       : [])
@@ -149,6 +174,7 @@ export function menuModel(menu: Menu, prefix = ''): MenuNode[] {
         accelerator: key ? shownKey(String(key)) : undefined,
         shortcut: PAGE_SHORTCUTS.has(item.id) && key ? String(key) : undefined,
         enabled: item.enabled,
+        checked: item.type === 'checkbox' && item.checked ? true : undefined,
         submenu: item.submenu ? menuModel(item.submenu, `${prefix}${i}.`) : undefined
       }
     ]

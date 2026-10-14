@@ -10,6 +10,7 @@ import {
   type MenuCommand,
   type MenuNode
 } from '../shared/ipc'
+import type { ActiveLocale } from '../shared/i18n/locales'
 
 // The preload script is the only bridge between the web page (renderer) and Node/Electron.
 // contextBridge copies `api` into the page as `window.api`; the page gets these few
@@ -67,12 +68,30 @@ const api: Api = {
     searchBar: () => invoke(IPC.uiSearchBar),
     setSearchBar: (shown) => invoke(IPC.uiSetSearchBar, shown),
     appInfo: () => invoke(IPC.appInfo),
-    openFolder: (folder) => invoke(IPC.appOpenFolder, folder)
+    openFolder: (folder) => invoke(IPC.appOpenFolder, folder),
+    takeNotices: () => invoke(IPC.uiTakeNotices),
+    onNotice: (cb) => {
+      const listener = (): void => cb()
+      ipcRenderer.on(IPC.notice, listener)
+      return () => ipcRenderer.removeListener(IPC.notice, listener)
+    }
+  },
+  spellcheck: {
+    languages: () => invoke(IPC.spellcheckLanguages)
   },
   settings: {
     get: () => invoke(IPC.settingsGet),
     update: (settings) => invoke(IPC.settingsUpdate, settings),
-    previewTheme: (theme) => invoke(IPC.settingsPreviewTheme, theme)
+    previewTheme: (theme) => invoke(IPC.settingsPreviewTheme, theme),
+    previewLanguage: (language) => invoke(IPC.settingsPreviewLanguage, language)
+  },
+  i18n: {
+    locale: () => invoke(IPC.i18nLocale),
+    onChange: (cb) => {
+      const listener = (_e: IpcRendererEvent, locale: ActiveLocale): void => cb(locale)
+      ipcRenderer.on(IPC.localeChanged, listener)
+      return () => ipcRenderer.removeListener(IPC.localeChanged, listener)
+    }
   },
   theme: {
     isDark: () => invoke(IPC.themeIsDark),

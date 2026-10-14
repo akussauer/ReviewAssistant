@@ -1,4 +1,5 @@
 import type { CellValue, Column, ColumnType, Row } from '../../../shared/ipc'
+import { tNow } from '../lib/i18n'
 
 // Undo history for cell edits (spec §6). Only cell values are undoable; the lists live in
 // the review store and are cleared when another file opens. These are pure functions so
@@ -74,5 +75,5 @@ export function rowName(row: Row, columns: Column[], rowOrder: number[]): string
     if (!text) continue
     return `“${text.length > 40 ? `${text.slice(0, 40)}…` : text}”`
   }
-  return `row ${rowOrder.indexOf(row.id) + 1}`
+  return tNow()('undo.rowN', { n: rowOrder.indexOf(row.id) + 1 })
 }

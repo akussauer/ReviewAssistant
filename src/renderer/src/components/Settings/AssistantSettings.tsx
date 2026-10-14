@@ -6,6 +6,7 @@ import {
   suggestedModels
 } from '../../../../shared/assistant'
 import type { AssistantSettings, ModelInfo, Provider, TestResult } from '../../../../shared/ipc'
+import { useT } from '../../lib/i18n'
 import { useAssistant } from '../../store'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -14,12 +15,7 @@ import { Label } from '../ui/label'
 // Preferences > Assistant (spec §12, plan M7): provider, key, models, meter and costs.
 // The key is typed here and sent to main on Save; it never comes back to the page.
 
-const PROVIDER_LABELS: Record<Provider, string> = {
-  openrouter: 'OpenRouter',
-  anthropic: 'Anthropic (Claude)',
-  openai: 'OpenAI-compatible',
-  ollama: 'Ollama (on this computer)'
-}
+const PROVIDERS: Provider[] = ['openrouter', 'anthropic', 'openai', 'ollama']
 const ADDRESS_HINT: Record<Provider, string> = {
   openrouter: 'https://openrouter.ai/api/v1',
   anthropic: 'https://api.anthropic.com',
@@ -42,6 +38,7 @@ export function AssistantSection(props: {
 }): React.JSX.Element {
   const { settings, keyDraft, onChange } = props
   const status = useAssistant((s) => s.status)
+  const t = useT()
   const needsKey = settings.provider !== 'ollama'
   const sameAsSaved =
     settings.provider === props.savedProvider && settings.baseUrl === props.savedBaseUrl
@@ -101,18 +98,18 @@ export function AssistantSection(props: {
   }
 
   const keyPlaceholder = keyDraft.remove
-    ? 'Removed on Save'
+    ? t('assistantSettings.keyRemoved')
     : hasKey
-      ? 'Saved (type to replace)'
-      : 'Paste your API key'
+      ? t('assistantSettings.keySaved')
+      : t('assistantSettings.keyPaste')
 
   return (
     <>
       <p className="col-span-2 mt-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-        Assistant
+        {t('assistant.label')}
       </p>
 
-      <Label htmlFor="pref-provider">Provider</Label>
+      <Label htmlFor="pref-provider">{t('assistantSettings.provider')}</Label>
       <select
         id="pref-provider"
         className={selectClass}
@@ -127,16 +124,16 @@ export function AssistantSection(props: {
           })
         }
       >
-        {(Object.keys(PROVIDER_LABELS) as Provider[]).map((p) => (
+        {PROVIDERS.map((p) => (
           <option key={p} value={p}>
-            {PROVIDER_LABELS[p]}
+            {t(`assistantSettings.providers.${p}`)}
           </option>
         ))}
       </select>
 
       {(settings.provider === 'openai' || settings.provider === 'ollama') && (
         <>
-          <Label htmlFor="pref-address">Address</Label>
+          <Label htmlFor="pref-address">{t('assistantSettings.address')}</Label>
           <Input
             id="pref-address"
             value={settings.baseUrl}
@@ -148,7 +145,7 @@ export function AssistantSection(props: {
 
       {needsKey && (
         <>
-          <Label htmlFor="pref-key">API key</Label>
+          <Label htmlFor="pref-key">{t('assistantSettings.key')}</Label>
           <div className="flex items-center gap-2">
             <Input
               id="pref-key"
@@ -165,7 +162,7 @@ export function AssistantSection(props: {
                 size="sm"
                 onClick={() => props.onKeyDraft({ value: '', remove: true })}
               >
-                Remove
+                {t('assistantSettings.remove')}
               </Button>
             )}
           </div>
@@ -180,7 +177,7 @@ export function AssistantSection(props: {
           disabled={test === 'testing' || (needsKey && !hasKey && !keyDraft.value.trim())}
           onClick={() => void runTest()}
         >
-          {test === 'testing' ? 'Testing…' : 'Test'}
+          {test === 'testing' ? t('assistantSettings.testing') : t('assistantSettings.test')}
         </Button>
         {test && test !== 'testing' && (
           <span
@@ -194,15 +191,15 @@ export function AssistantSection(props: {
         {!test && status && sameAsSaved && (
           <span className="text-xs text-muted-foreground">
             {status.state === 'ok'
-              ? 'Connected'
+              ? t('assistantMain.connected')
               : status.state === 'checking'
-                ? 'Checking…'
+                ? t('assistantSettings.checking')
                 : status.reason}
           </span>
         )}
       </div>
 
-      <Label className="self-start pt-2">Models</Label>
+      <Label className="self-start pt-2">{t('assistantSettings.models')}</Label>
       <ModelPicker
         settings={settings}
         models={models}
@@ -213,7 +210,7 @@ export function AssistantSection(props: {
         onChange={onChange}
       />
 
-      <Label htmlFor="pref-fallback">Context if unknown</Label>
+      <Label htmlFor="pref-fallback">{t('assistantSettings.fallback')}</Label>
       <div className="flex items-center gap-2 text-sm">
         <Input
           id="pref-fallback"
@@ -227,7 +224,7 @@ export function AssistantSection(props: {
             if (Number.isFinite(k) && k >= 1 && k <= 10000) onChange({ fallbackContext: k * 1000 })
           }}
         />
-        <span className="text-muted-foreground">thousand tokens</span>
+        <span className="text-muted-foreground">{t('assistantSettings.thousandTokens')}</span>
       </div>
 
       <span />
@@ -238,7 +235,7 @@ export function AssistantSection(props: {
             checked={settings.showMeter}
             onChange={(e) => onChange({ showMeter: e.target.checked })}
           />
-          Show token meter
+          {t('assistantSettings.showMeter')}
         </label>
         <label className="flex items-center gap-2">
           <input
@@ -246,7 +243,7 @@ export function AssistantSection(props: {
             checked={settings.showCosts}
             onChange={(e) => onChange({ showCosts: e.target.checked })}
           />
-          Show costs (where the provider gives prices)
+          {t('assistantSettings.showCosts')}
         </label>
       </div>
     </>
@@ -265,6 +262,7 @@ function ModelPicker(props: {
 }): React.JSX.Element {
   const { settings, models, onChange } = props
   const [query, setQuery] = useState('')
+  const t = useT()
   const offered = effectiveModels(settings, models)
   const enabled = new Set(offered.enabled)
   const suggested = suggestedModels(settings.provider, models)
@@ -303,7 +301,11 @@ function ModelPicker(props: {
           disabled={props.loading || !props.canLoad}
           onClick={props.onLoad}
         >
-          {props.loading ? 'Loading…' : models.length ? 'Refresh' : 'Load models'}
+          {props.loading
+            ? t('markdownExport.loading')
+            : models.length
+              ? t('assistantSettings.refresh')
+              : t('assistantSettings.load')}
         </Button>
         {suggested.length > 0 && (
           <Button
@@ -312,7 +314,7 @@ function ModelPicker(props: {
             title={suggested.join('\n')}
             onClick={() => onChange({ enabledModels: suggested, defaultModel: suggested[0] })}
           >
-            Use suggested
+            {t('assistantSettings.useSuggested')}
           </Button>
         )}
       </div>
@@ -322,15 +324,13 @@ function ModelPicker(props: {
         </p>
       )}
       {offered.suggested && offered.enabled.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          Using the suggested models until you pick some.
-        </p>
+        <p className="text-xs text-muted-foreground">{t('assistantSettings.usingSuggested')}</p>
       )}
       {models.length > 0 && (
         <>
           <Input
-            aria-label="Search models"
-            placeholder={`Search ${models.length} models…`}
+            aria-label={t('assistantSettings.searchModels')}
+            placeholder={t('assistantSettings.searchN', { count: models.length })}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -339,14 +339,14 @@ function ModelPicker(props: {
               <thead className="sticky top-0 bg-muted text-left text-muted-foreground">
                 <tr>
                   <th className="w-6 px-1 py-1" />
-                  <th className="w-6 px-1 py-1" title="Default">
+                  <th className="w-6 px-1 py-1" title={t('assistantSettings.default')}>
                     ★
                   </th>
-                  <th className="px-1 py-1">Model</th>
-                  <th className="px-1 py-1 text-right" title="USD per million tokens, in / out">
-                    $/1M in · out
+                  <th className="px-1 py-1">{t('assistant.model')}</th>
+                  <th className="px-1 py-1 text-right" title={t('assistantSettings.priceTooltip')}>
+                    {t('assistantSettings.price')}
                   </th>
-                  <th className="px-1 py-1 text-right">Context</th>
+                  <th className="px-1 py-1 text-right">{t('assistantSettings.context')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -355,7 +355,7 @@ function ModelPicker(props: {
                     <td className="px-1 py-0.5">
                       <input
                         type="checkbox"
-                        aria-label={`Enable ${m.name}`}
+                        aria-label={t('assistantSettings.enable', { name: m.name })}
                         checked={enabled.has(m.id)}
                         onChange={() => toggle(m.id)}
                       />
@@ -363,7 +363,7 @@ function ModelPicker(props: {
                     <td className="px-1 py-0.5">
                       <button
                         type="button"
-                        aria-label={`Make ${m.name} the default`}
+                        aria-label={t('assistantSettings.makeDefault', { name: m.name })}
                         aria-pressed={offered.defaultModel === m.id}
                         className={
                           offered.defaultModel === m.id

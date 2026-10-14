@@ -1,19 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Column } from '../../../../shared/ipc'
+import { useT } from '../../lib/i18n'
 import { reviewStore, useReview } from '../../store'
 
 const DEBOUNCE_MS = 150
-
-const PLACEHOLDER: Record<string, string> = {
-  text: 'Filter…',
-  number: '>2015, 2010..2020',
-  date: '>2019, 2019..2020'
-}
-const HELP: Record<string, string> = {
-  text: 'Words must all appear. "exact phrase", a OR b, a NOT b, (…), swim*. Not case-sensitive.',
-  number: 'Compare: >2015, >=2015, <2020, <=2020, 2010..2020 (inclusive). Other text: contains.',
-  date: 'Compare: >2019, <2020-06, 2019..2020 (whole years/months count). Other text: contains.'
-}
 
 // One filter under a column name (spec §7): a text box for text, number and date columns,
 // a picker for dropdown and checkbox columns. Stored per tab in the tab's view.
@@ -27,6 +17,7 @@ export function FilterCell({
   const key = String(column.id)
   const saved = useReview((s) => s.tabs.find((t) => t.id === tabId)?.view.filters?.[key] ?? '')
   const [text, setText] = useState(saved)
+  const t = useT()
 
   // Follow changes made elsewhere (e.g. "Clear filters"). Adjusting state during render
   // when the saved value changes is React's recommended alternative to an effect here.
@@ -69,16 +60,16 @@ export function FilterCell({
   if (column.type === 'dropdown' || column.type === 'checkbox') {
     return (
       <select
-        aria-label={`Filter ${column.label}`}
+        aria-label={t('filter.label', { name: column.label })}
         className={cls}
         value={saved}
         onChange={(e) => apply(e.target.value)}
       >
-        <option value="">Any</option>
+        <option value="">{t('filter.any')}</option>
         {column.type === 'checkbox' ? (
           <>
-            <option value="checked">☑ Checked</option>
-            <option value="unchecked">☐ Unchecked</option>
+            <option value="checked">☑ {t('filter.checked')}</option>
+            <option value="unchecked">☐ {t('filter.unchecked')}</option>
           </>
         ) : (
           column.options.choices?.map((c) => (
@@ -93,10 +84,22 @@ export function FilterCell({
 
   return (
     <input
-      aria-label={`Filter ${column.label}`}
+      aria-label={t('filter.label', { name: column.label })}
       className={cls}
-      placeholder={PLACEHOLDER[column.type]}
-      title={HELP[column.type]}
+      placeholder={
+        column.type === 'number'
+          ? '>2015, 2010..2020'
+          : column.type === 'date'
+            ? '>2019, 2019..2020'
+            : t('filter.placeholder')
+      }
+      title={t(
+        column.type === 'number'
+          ? 'filter.helpNumber'
+          : column.type === 'date'
+            ? 'filter.helpDate'
+            : 'filter.helpText'
+      )}
       maxLength={2000}
       value={text}
       onChange={(e) => setText(e.target.value)}

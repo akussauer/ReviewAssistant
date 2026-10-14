@@ -1,17 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   DEFAULT_SETTINGS,
   HOTKEY_NAMES,
   MARKDOWN_KINDS,
-  SPELLCHECK_LANGUAGES,
+  MAX_SPELLCHECK_LANGUAGES,
   type HotkeyName,
   type MarkdownKind,
   type Settings,
-  type SpellcheckLanguage,
+  type SpellcheckOption,
   type Theme
 } from '../../../../shared/ipc'
-import { captureHotkey, describeHotkey, HOTKEY_LABELS } from '../../lib/hotkeys'
+import { INTL_TAGS, LOCALE_NAMES, LOCALES, type UiLanguage } from '../../../../shared/i18n/locales'
+import { captureHotkey, describeHotkey } from '../../lib/hotkeys'
+import { useLocale, useT } from '../../lib/i18n'
 import { kindColour } from '../../lib/markdown'
+import { rich } from '../../lib/rich'
 import { assistantStore, reviewStore, useReview } from '../../store'
 import {
   AlertDialog,
@@ -40,11 +43,7 @@ import { ClaudeDesktopSection } from './ClaudeDesktopSettings'
 // markdown colour preview straight away; Save keeps the changes, Cancel puts back the
 // saved ones. Hotkeys are set by pressing the key combination.
 
-const THEMES: { value: Theme; label: string }[] = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' }
-]
+const THEMES: Theme[] = ['system', 'light', 'dark']
 const HOTKEYS = HOTKEY_NAMES
 const isMac = navigator.platform.startsWith('Mac')
 // The reason from an IPC error, without Electron's "Error invoking remote method…" prefix.
@@ -54,6 +53,12 @@ const previewTheme = (theme: Theme): void => {
   window.api.settings
     .previewTheme(theme)
     .catch((err) => console.error('Could not preview the theme', err))
+}
+// The UI language, live like the theme (plan M10d): main switches its menus and the page.
+const previewLanguage = (language: UiLanguage): void => {
+  window.api.settings
+    .previewLanguage(language)
+    .catch((err) => console.error('Could not preview the language', err))
 }
 const selectClass = 'h-9 rounded-md border border-input bg-background px-2 text-sm'
 
@@ -66,6 +71,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
   const [error, setError] = useState<string | null>(null)
   const [keyDraft, setKeyDraft] = useState<KeyDraft>({ value: '', remove: false })
   const themeName = useReview((s) => s.themeName)
+  const t = useT()
 
   useEffect(() => {
     window.api.settings
@@ -80,6 +86,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
   // Shows a change straight away without saving it.
   const preview = (next: Settings): void => {
     if (next.theme !== draft?.theme) previewTheme(next.theme)
+    if (next.uiLanguage !== draft?.uiLanguage) previewLanguage(next.uiLanguage)
     const live = reviewStore.getState().settings
     if (live && saved)
       reviewStore.getState().setSettings({
@@ -96,6 +103,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
   const cancel = (): void => {
     if (saved) {
       previewTheme(saved.theme)
+      previewLanguage(saved.uiLanguage)
       if (reviewStore.getState().settings) reviewStore.getState().setSettings(saved)
     }
     onClose()
@@ -126,7 +134,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
     if (e.key === 'Escape') return setCapturing(null)
     const others = { ...draft.hotkeys }
     delete others[name]
-    const result = captureHotkey(e.nativeEvent, others, isMac)
+    const result = captureHotkey(e.nativeEvent, others, isMac, t)
     if (result.kind === 'waiting') return
     if (result.kind === 'error') return setKeyErrors((k) => ({ ...k, [name]: result.message }))
     setKeyErrors((k) => ({ ...k, [name]: undefined }))
@@ -142,28 +150,49 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
         onEscapeKeyDown={(e) => capturing && e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>Preferences</DialogTitle>
-          <DialogDescription>These apply to every review.</DialogDescription>
+          <DialogTitle>{t('preferences.title')}</DialogTitle>
+          <DialogDescription>{t('preferences.description')}</DialogDescription>
         </DialogHeader>
 
         {draft && (
           <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
-            <Label htmlFor="pref-theme">Theme</Label>
+            <Label htmlFor="pref-ui-language" className="self-start pt-2.5">
+              {t('preferences.language')}
+            </Label>
+            <div className="grid gap-1">
+              <select
+                id="pref-ui-language"
+                className={selectClass}
+                value={draft.uiLanguage}
+                onChange={(e) => preview({ ...draft, uiLanguage: e.target.value as UiLanguage })}
+              >
+                <option value="system">{t('preferences.languageSystem')}</option>
+                {/* Each in its own language, so it can be found whatever is showing now. */}
+                {LOCALES.map((l) => (
+                  <option key={l} value={l} lang={l}>
+                    {LOCALE_NAMES[l]}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">{t('preferences.languageRestart')}</p>
+            </div>
+
+            <Label htmlFor="pref-theme">{t('preferences.theme')}</Label>
             <select
               id="pref-theme"
               className={selectClass}
               value={draft.theme}
               onChange={(e) => preview({ ...draft, theme: e.target.value as Theme })}
             >
-              {THEMES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
+              {THEMES.map((theme) => (
+                <option key={theme} value={theme}>
+                  {t(`preferences.themes.${theme}`)}
                 </option>
               ))}
             </select>
 
             <Label htmlFor="pref-colour" className="self-start pt-2.5">
-              Markdown colour
+              {t('preferences.markdownColour')}
             </Label>
             <MarkdownColour
               settings={draft}
@@ -172,7 +201,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
             />
 
             <Label htmlFor="pref-highlight" className="self-start pt-2.5">
-              Search highlight
+              {t('preferences.searchHighlight')}
             </Label>
             <SearchHighlight
               settings={draft}
@@ -180,24 +209,16 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
               onChange={(patch) => preview({ ...draft, ...patch })}
             />
 
-            <Label htmlFor="pref-language">Spellcheck language</Label>
-            <select
-              id="pref-language"
-              className={selectClass}
-              value={draft.spellcheckLanguage}
-              onChange={(e) =>
-                preview({ ...draft, spellcheckLanguage: e.target.value as SpellcheckLanguage })
-              }
-            >
-              {SPELLCHECK_LANGUAGES.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
+            <Label htmlFor="pref-spell-0" className="self-start pt-2.5">
+              {t('preferences.spellcheck')}
+            </Label>
+            <SpellcheckPicker
+              value={draft.spellcheckLanguages}
+              onChange={(spellcheckLanguages) => preview({ ...draft, spellcheckLanguages })}
+            />
 
             <p className="col-span-2 mt-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Hotkeys
+              {t('preferences.hotkeys')}
             </p>
             {HOTKEYS.map((name) => (
               <HotkeyRow
@@ -239,14 +260,14 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
 
         <DialogFooter className="sm:justify-between">
           <Button variant="ghost" onClick={() => setConfirmReset(true)} disabled={!draft}>
-            Reset to defaults
+            {t('preferences.reset')}
           </Button>
           <div className="flex gap-2">
             <Button variant="outline" onClick={cancel}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button onClick={() => void save()} disabled={!draft}>
-              Save
+              {t('common.save')}
             </Button>
           </div>
         </DialogFooter>
@@ -255,22 +276,18 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
       <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reset to defaults?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Theme, markdown colours (and the override), spellcheck language, hotkeys and the
-              assistant’s provider and models go back to their defaults (a saved API key is kept).
-              Nothing is saved until you click Save.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t('preferences.resetTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('preferences.resetBody')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setKeyErrors({})
                 preview(DEFAULT_SETTINGS)
               }}
             >
-              Reset
+              {t('preferences.resetButton')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -279,23 +296,6 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
   )
 }
 
-const KIND_LABELS: Record<MarkdownKind, string> = {
-  h1: '# Heading 1',
-  h2: '## Heading 2',
-  h3: '### Heading 3',
-  h4: '#### Heading 4',
-  h5: '##### Heading 5',
-  h6: '###### Heading 6',
-  bold: '**Bold**',
-  italic: '*Italic*',
-  strike: '~~Strikethrough~~',
-  list: '- / 1. List marker',
-  task: '- [ ] Task (and checkboxes)',
-  code: '`Inline code`',
-  quote: '> Quote',
-  link: '[Link](url)',
-  rule: '--- Rule, <br>'
-}
 const BOLD_KINDS = new Set<MarkdownKind>(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'bold'])
 const pickerBase =
   'shrink-0 cursor-pointer rounded-md border border-input bg-background p-1 disabled:cursor-not-allowed disabled:opacity-50'
@@ -309,6 +309,8 @@ function MarkdownColour(props: {
   onChange(patch: Partial<Settings>): void
 }): React.JSX.Element {
   const { settings, themeName, onChange } = props
+  const t = useT()
+  const kindLabel = (k: MarkdownKind): string => t(`preferences.kinds.${k}`)
   const byTheme = themeName !== null && !settings.markdownColourOverride
   // While previewing, <html> carries the live colours (App.tsx), so the samples can read
   // them; the theme's when it sets them.
@@ -339,20 +341,24 @@ function MarkdownColour(props: {
       </div>
       {themeName !== null && (
         <div className="grid gap-1">
-          {byTheme && <p className="text-xs text-muted-foreground">Set by theme {themeName}</p>}
+          {byTheme && (
+            <p className="text-xs text-muted-foreground">
+              {t('preferences.setByTheme', { name: themeName })}
+            </p>
+          )}
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={settings.markdownColourOverride}
               onChange={(e) => onChange({ markdownColourOverride: e.target.checked })}
             />
-            Override theme colour
+            {t('preferences.override')}
           </label>
         </div>
       )}
       <details className="text-sm">
         <summary className="cursor-pointer text-muted-foreground select-none">
-          Colours per element
+          {t('preferences.perElement')}
         </summary>
         <div className="mt-2 grid gap-1">
           {MARKDOWN_KINDS.map((k) => {
@@ -361,7 +367,7 @@ function MarkdownColour(props: {
               <div key={k} className="flex items-center gap-2">
                 <input
                   type="color"
-                  aria-label={`${KIND_LABELS[k]} colour`}
+                  aria-label={t('preferences.kindColour', { name: kindLabel(k) })}
                   className={`${pickerBase} h-8 w-10`}
                   value={own ?? settings.markdownColour}
                   disabled={byTheme}
@@ -371,13 +377,13 @@ function MarkdownColour(props: {
                   className="min-w-0 flex-1 truncate font-mono text-xs"
                   style={{ color: colourOf(k), fontWeight: BOLD_KINDS.has(k) ? 700 : undefined }}
                 >
-                  {KIND_LABELS[k]}
+                  {kindLabel(k)}
                 </span>
                 {own !== undefined && !byTheme && (
                   <button
                     type="button"
                     className="rounded-sm px-1 text-xs text-muted-foreground hover:bg-accent"
-                    title="Use the main markdown colour"
+                    title={t('preferences.useMain')}
                     onClick={() => setKind(k, null)}
                   >
                     ↺
@@ -400,6 +406,7 @@ function SearchHighlight(props: {
   onChange(patch: Partial<Settings>): void
 }): React.JSX.Element {
   const { settings, themeName, onChange } = props
+  const t = useT()
   // The theme's variables sit on <html> (obsidianTheme.ts), so this finds out if it sets one.
   const themeSetsIt =
     themeName !== null &&
@@ -418,22 +425,105 @@ function SearchHighlight(props: {
         />
         {/* Shows the live colour: <html> carries it while previewing (App.tsx). */}
         <span className="text-sm">
-          Pacing in elite <span className="search-hit rounded-[2px]">swimming</span>
+          {rich(t('preferences.highlightSample', { hit: '{hit}' }), {
+            hit: (
+              <span className="search-hit rounded-[2px]">
+                {t('preferences.highlightSampleHit')}
+              </span>
+            )
+          })}
         </span>
       </div>
       {themeSetsIt && (
         <div className="grid gap-1">
-          {byTheme && <p className="text-xs text-muted-foreground">Set by theme {themeName}</p>}
+          {byTheme && (
+            <p className="text-xs text-muted-foreground">
+              {t('preferences.setByTheme', { name: themeName ?? '' })}
+            </p>
+          )}
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={settings.searchHighlightOverride}
               onChange={(e) => onChange({ searchHighlightOverride: e.target.checked })}
             />
-            Override theme colour
+            {t('preferences.override')}
           </label>
         </div>
       )}
+    </div>
+  )
+}
+
+// Up to three spellcheck languages (plan M10d). "None" in the first turns spellcheck off;
+// the second and third can only be set once the one before is.
+function SpellcheckPicker(props: {
+  value: string[]
+  onChange(value: string[]): void
+}): React.JSX.Element {
+  const t = useT()
+  const locale = useLocale()
+  const [options, setOptions] = useState<SpellcheckOption[]>([])
+  useEffect(() => {
+    window.api.spellcheck
+      .languages()
+      .then(setOptions)
+      .catch((err) => console.error('Could not list the spellcheck languages', err))
+  }, [])
+
+  // Named in the UI language ("German (Germany)" / "Deutsch (Deutschland)"), by name.
+  const named = useMemo(() => {
+    const names = new Intl.DisplayNames([INTL_TAGS[locale]], { type: 'language' })
+    const nameOf = (code: string): string => {
+      try {
+        return names.of(code) ?? code
+      } catch {
+        return code
+      }
+    }
+    // A saved code the list doesn't have (yet) is still shown.
+    const all = [...options, ...props.value.filter((c) => !options.some((o) => o.code === c))]
+      .map((o) => (typeof o === 'string' ? { code: o, bundled: false } : o))
+      .map((o) => ({ ...o, name: nameOf(o.code) }))
+    return all.sort((a, b) => a.name.localeCompare(b.name, INTL_TAGS[locale]))
+  }, [options, props.value, locale])
+
+  const set = (slot: number, code: string): void => {
+    if (slot === 0 && !code) return props.onChange([])
+    const next = [...props.value]
+    next[slot] = code
+    props.onChange(next.filter(Boolean))
+  }
+
+  return (
+    <div className="grid gap-1.5">
+      {Array.from({ length: MAX_SPELLCHECK_LANGUAGES }, (_, slot) => {
+        const current = props.value[slot] ?? ''
+        const others = new Set(props.value.filter((_, i) => i !== slot))
+        return (
+          <select
+            key={slot}
+            id={`pref-spell-${slot}`}
+            aria-label={t('preferences.spellcheckN', { n: slot + 1 })}
+            className={selectClass}
+            value={current}
+            disabled={slot > props.value.length}
+            onChange={(e) => set(slot, e.target.value)}
+          >
+            <option value="">
+              {slot === 0 ? t('preferences.spellcheckOff') : t('common.none')}
+            </option>
+            {named
+              .filter((o) => !others.has(o.code))
+              .map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.bundled ? t('preferences.spellcheckOffline', { name: o.name }) : o.name}
+                </option>
+              ))}
+          </select>
+        )
+      })}
+      <p className="text-xs text-muted-foreground">{t('preferences.spellcheckHint')}</p>
     </div>
   )
 }
@@ -448,9 +538,10 @@ function HotkeyRow(props: {
   onKeyDown(e: React.KeyboardEvent): void
 }): React.JSX.Element {
   const id = `pref-key-${props.name}`
+  const t = useT()
   return (
     <>
-      <Label htmlFor={id}>{HOTKEY_LABELS[props.name]}</Label>
+      <Label htmlFor={id}>{t(`hotkeys.names.${props.name}`)}</Label>
       <div className="grid gap-1">
         <button
           id={id}
@@ -462,7 +553,7 @@ function HotkeyRow(props: {
           onBlur={props.onStop}
           onKeyDown={props.onKeyDown}
         >
-          {props.capturing ? 'Press a key combination…' : describeHotkey(props.value, isMac)}
+          {props.capturing ? t('preferences.pressKeys') : describeHotkey(props.value, isMac)}
         </button>
         {props.error && (
           <p className="text-xs text-destructive" role="alert">

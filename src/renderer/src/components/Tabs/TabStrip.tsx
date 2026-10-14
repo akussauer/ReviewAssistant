@@ -2,7 +2,9 @@ import { Plus, Redo2, Search, Undo2, X } from 'lucide-react'
 import { useState } from 'react'
 import { MAIN_TAB_ID, type Tab } from '../../../../shared/ipc'
 import { moveItem } from '../../lib/columns'
+import { tNow, useT } from '../../lib/i18n'
 import { flushTextEdits } from '../../lib/pendingEdits'
+import { rich } from '../../lib/rich'
 import { toggleSearchBar } from '../../lib/searchBar'
 import { reviewStore, useReview } from '../../store'
 import {
@@ -35,6 +37,7 @@ export function TabStrip(): React.JSX.Element {
   const [dialog, setDialog] = useState<TabDialogMode | null>(null)
   const [closing, setClosing] = useState<Tab | null>(null)
   const [dragFrom, setDragFrom] = useState<number | null>(null)
+  const t = useT()
 
   const userTabs = tabs.filter((t) => t.id !== MAIN_TAB_ID)
 
@@ -47,7 +50,7 @@ export function TabStrip(): React.JSX.Element {
     reviewStore
       .getState()
       .reorderTabs(order)
-      .catch((err) => reviewStore.getState().reportError('Reordering tabs', err))
+      .catch((err) => reviewStore.getState().reportError(tNow()('tabs.reordering'), err))
   }
 
   return (
@@ -77,13 +80,21 @@ export function TabStrip(): React.JSX.Element {
                 ? 'bg-background font-medium'
                 : 'border-transparent text-muted-foreground hover:bg-background/60'
             }`}
-            title={isMain ? 'All rows' : `${tab.label} (${tab.rowIds.length} rows)`}
+            title={
+              isMain
+                ? t('tabs.allRows')
+                : t('tabs.tooltip', {
+                    name: tab.label,
+                    rows: t('status.rows', { count: tab.rowIds.length })
+                  })
+            }
           >
-            <span className="max-w-48 truncate">{tab.label}</span>
+            {/* The main tab can't be renamed, so its name follows the UI language. */}
+            <span className="max-w-48 truncate">{isMain ? t('tabs.main') : tab.label}</span>
             {tab.type === 'synthesis' && <span className="text-xs text-muted-foreground">Σ</span>}
             {!isMain && (
               <button
-                aria-label={`Close ${tab.label}`}
+                aria-label={t('tabs.close', { name: tab.label })}
                 className="ml-1 rounded-sm p-0.5 opacity-60 hover:bg-accent hover:opacity-100"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -102,7 +113,7 @@ export function TabStrip(): React.JSX.Element {
             <ContextMenuTrigger asChild>{button}</ContextMenuTrigger>
             <ContextMenuContent>
               <ContextMenuItem onSelect={() => setDialog({ kind: 'edit', tab })}>
-                Edit Tab…
+                {t('tabs.editMenu')}
               </ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>
@@ -112,8 +123,8 @@ export function TabStrip(): React.JSX.Element {
         variant="ghost"
         size="icon-sm"
         className="mb-0.5"
-        aria-label="New tab"
-        title="New tab"
+        aria-label={t('tabs.new')}
+        title={t('tabs.new')}
         onClick={() => setDialog({ kind: 'create', rowIds: [] })}
       >
         <Plus />
@@ -123,9 +134,9 @@ export function TabStrip(): React.JSX.Element {
         variant="ghost"
         size="icon-sm"
         className={`mb-0.5 shrink-0 ${searchBar && !isSynthesis ? 'bg-accent' : ''}`}
-        aria-label="Search"
+        aria-label={t('search.button')}
         aria-pressed={searchBar && !isSynthesis}
-        title={searchBar ? 'Hide search (Ctrl+F)' : 'Search (Ctrl+F)'}
+        title={searchBar ? t('search.hideTooltip') : t('search.showTooltip')}
         disabled={isSynthesis}
         onClick={toggleSearchBar}
       >
@@ -140,23 +151,22 @@ export function TabStrip(): React.JSX.Element {
         <AlertDialog open onOpenChange={(open) => !open && setClosing(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete {closing.label}?</AlertDialogTitle>
+              <AlertDialogTitle>{t('tabs.deleteTitle', { name: closing.label })}</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete <i>{closing.label}</i>? Its rows stay in the main
-                table.
+                {rich(t('tabs.deleteBody', { name: '{name}' }), { name: <i>{closing.label}</i> })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>No</AlertDialogCancel>
+              <AlertDialogCancel>{t('common.no')}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() =>
                   reviewStore
                     .getState()
                     .deleteTab(closing.id)
-                    .catch((err) => reviewStore.getState().reportError('Deleting the tab', err))
+                    .catch((err) => reviewStore.getState().reportError(t('tabs.deleting'), err))
                 }
               >
-                Yes
+                {t('common.yes')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -173,9 +183,16 @@ function UndoRedoButtons(): React.JSX.Element {
   const columns = useReview((s) => s.columns)
   const nextUndo = useReview((s) => s.undoStack.at(-1))
   const nextRedo = useReview((s) => s.redoStack.at(-1))
-  const what = (edit: { columnId: number } | undefined): string => {
-    const label = edit && columns.find((c) => c.id === edit.columnId)?.label
-    return label ? ` edit to ${label}` : ''
+  const t = useT()
+  // "Undo edit to Notes (Ctrl+Z)"; plain "Undo (Ctrl+Z)" if the column has no name.
+  const tip = (command: 'undo' | 'redo', edit: { columnId: number }): string => {
+    const label = columns.find((c) => c.id === edit.columnId)?.label
+    const what = label
+      ? t(command === 'undo' ? 'menu.edit.undoWhat' : 'menu.edit.redoWhat', {
+          what: t('undo.editTo', { column: label })
+        })
+      : t(command === 'undo' ? 'menu.edit.undo' : 'menu.edit.redo')
+    return `${what} (${command === 'undo' ? 'Ctrl+Z' : 'Ctrl+Y'})`
   }
   const run = (command: 'undo' | 'redo'): void => {
     flushTextEdits()
@@ -188,8 +205,8 @@ function UndoRedoButtons(): React.JSX.Element {
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label="Undo"
-        title={nextUndo ? `Undo${what(nextUndo)} (Ctrl+Z)` : 'Nothing to undo'}
+        aria-label={t('menu.edit.undo')}
+        title={nextUndo ? tip('undo', nextUndo) : t('tabs.nothingToUndo')}
         disabled={!nextUndo}
         onClick={() => run('undo')}
       >
@@ -198,8 +215,8 @@ function UndoRedoButtons(): React.JSX.Element {
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label="Redo"
-        title={nextRedo ? `Redo${what(nextRedo)} (Ctrl+Y)` : 'Nothing to redo'}
+        aria-label={t('menu.edit.redo')}
+        title={nextRedo ? tip('redo', nextRedo) : t('tabs.nothingToRedo')}
         disabled={!nextRedo}
         onClick={() => run('redo')}
       >

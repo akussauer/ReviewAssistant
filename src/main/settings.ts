@@ -2,8 +2,9 @@ import { nativeTheme } from 'electron'
 import type { Settings, Theme } from '../shared/ipc'
 import { recheck } from './assistant'
 import { applyClaudeDesktop } from './claudeDesktop'
+import { applyLanguage } from './language'
 import { config, settingsChanged } from './review'
-import { applySpellcheckLanguage } from './spellcheck'
+import { applySpellcheckLanguages } from './spellcheck'
 
 // The Preferences dialog's settings (spec §12), stored in config.json.
 
@@ -11,7 +12,8 @@ export function currentSettings(): Settings {
   const c = config.get()
   return {
     theme: c.theme,
-    spellcheckLanguage: c.spellcheckLanguage,
+    uiLanguage: c.uiLanguage,
+    spellcheckLanguages: c.spellcheckLanguages,
     markdownColour: c.markdownColour,
     markdownColourOverride: c.markdownColourOverride,
     markdownColours: c.markdownColours,
@@ -40,7 +42,8 @@ export function saveSettings(settings: Settings): Settings {
     void recheck()
   void applyClaudeDesktop() // starts or stops the pipe if the switch changed
   applyTheme(settings.theme)
-  applySpellcheckLanguage(settings.spellcheckLanguage)
+  applyLanguage(settings.uiLanguage)
+  applySpellcheckLanguages(settings.spellcheckLanguages)
   settingsChanged() // the Save As hotkey lives in the menu
   return currentSettings()
 }

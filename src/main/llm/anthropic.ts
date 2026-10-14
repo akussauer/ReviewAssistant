@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { Usage } from '../../shared/assistant'
 import type { ModelInfo } from '../../shared/ipc'
 import type { ChatMessageIn, Connection, Fetch, StreamPart } from './providers'
+import { t } from '../i18n'
 
 // Claude through Anthropic's own API (spec §10), using the official SDK: it handles the
 // streamed events, retries an overloaded API, and names each kind of error. Only main
@@ -57,18 +58,17 @@ const client = (conn: Connection, fetchFn?: Fetch, timeout?: number): Anthropic 
 // (APIConnectionError is checked before APIError: in this SDK it's a subclass.)
 function friendly(err: unknown): Error {
   if (err instanceof Anthropic.APIUserAbortError) return err
-  if (err instanceof Anthropic.AuthenticationError) return new Error('The key was refused')
-  if (err instanceof Anthropic.PermissionDeniedError)
-    return new Error('This key isn’t allowed to use that model')
-  if (err instanceof Anthropic.NotFoundError) return new Error('Anthropic doesn’t offer that model')
-  if (err instanceof Anthropic.RateLimitError)
-    return new Error('Too many requests; try again shortly')
+  if (err instanceof Anthropic.AuthenticationError) return new Error(t('providers.keyRefused'))
+  if (err instanceof Anthropic.PermissionDeniedError) return new Error(t('providers.notAllowed'))
+  if (err instanceof Anthropic.NotFoundError) return new Error(t('providers.noSuchModel'))
+  if (err instanceof Anthropic.RateLimitError) return new Error(t('providers.tooMany'))
   if (err instanceof Anthropic.APIConnectionError)
-    return new Error('Could not reach api.anthropic.com')
+    return new Error(t('providers.unreachable', { host: 'api.anthropic.com' }))
   if (err instanceof Anthropic.APIError) {
-    if (err.status === 402) return new Error('The account has no credit left')
-    if (err.status === 529) return new Error('Claude is overloaded; try again shortly')
-    return new Error(`Anthropic answered ${err.status ?? 'with an error'}: ${err.message}`)
+    if (err.status === 402) return new Error(t('providers.noCredit'))
+    if (err.status === 529) return new Error(t('providers.overloaded'))
+    const status = err.status === undefined ? '' : ` ${err.status}`
+    return new Error(`${t('providers.anthropicAnswered', { status })}: ${err.message}`)
   }
   return err instanceof Error ? err : new Error(String(err))
 }
@@ -191,7 +191,7 @@ export async function* streamAnthropic(
       // Text so far is kept with the message, marked as cut short.
       if (wrote) yield { text: '\n\n*(Claude declined to continue.)*' }
       const why = final.stop_details?.category ? ` (${final.stop_details.category})` : ''
-      throw new Error(`Claude declined to answer this${why}. Try rephrasing the question.`)
+      throw new Error(t('providers.declined', { why }))
     }
     const u = final.usage
     const usage: Usage = {

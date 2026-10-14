@@ -19,6 +19,7 @@ import { createChat } from './llm/chat'
 import { createKeyStore } from './llm/keys'
 import { checkConnection, fetchModels, needsKey, streamChat } from './llm/providers'
 import { config, currentFile, getDb, liveWindow, onReviewClose } from './review'
+import { t } from './i18n'
 
 // The assistant's main-process side (spec §10): the key check, keys, model lists, attached
 // files and chat. The key stays here; the page gets the status and the replies.
@@ -31,10 +32,18 @@ const reasonOf = (err: unknown): string => (err instanceof Error ? err.message :
 
 let status: AssistantStatus = { state: 'checking', provider: config.get().assistant.provider }
 let checkRun = 0
+// Writes the status's reason in the UI language of the moment (see relabelAssistant).
+let reasonText: (() => string) | null = null
 
-function setStatus(next: AssistantStatus): void {
-  status = next
-  liveWindow()?.webContents.send(IPC.assistantStatusChanged, next)
+function setStatus(next: AssistantStatus, reason: (() => string) | null = null): void {
+  reasonText = reason
+  status = reason ? { ...next, reason: reason() } : next
+  liveWindow()?.webContents.send(IPC.assistantStatusChanged, status)
+}
+
+// The UI language changed: say the same thing in the new one.
+export function relabelAssistant(): void {
+  if (reasonText) setStatus(status, reasonText)
 }
 
 export const assistantStatus = (): AssistantStatus => status
@@ -46,7 +55,7 @@ export async function recheck(): Promise<AssistantStatus> {
   const { provider, baseUrl } = config.get().assistant
   const key = keys.get(provider)
   if (needsKey(provider) && !key) {
-    setStatus({ state: 'none', provider, reason: 'No API key. Set one in Settings → Preferences.' })
+    setStatus({ state: 'none', provider }, () => t('assistantMain.noKey'))
     return status
   }
   setStatus({ state: 'checking', provider })
@@ -64,7 +73,8 @@ export async function recheck(): Promise<AssistantStatus> {
   } catch (err) {
     if (run !== checkRun) return status
     log.warn(`Assistant: ${provider} check failed: ${reasonOf(err)}`)
-    setStatus({ state: 'failed', provider, reason: `Key check failed: ${reasonOf(err)}` })
+    const reason = reasonOf(err)
+    setStatus({ state: 'failed', provider }, () => t('assistantMain.checkFailed', { reason }))
   }
   return status
 }
@@ -89,7 +99,7 @@ function connection(input: ConnectionInput): Parameters<typeof checkConnection>[
 export async function testConnection(input: ConnectionInput): Promise<TestResult> {
   try {
     await checkConnection(connection(input))
-    return { ok: true, message: 'Connected' }
+    return { ok: true, message: t('assistantMain.connected') }
   } catch (err) {
     return { ok: false, message: reasonOf(err) }
   }
@@ -144,7 +154,7 @@ onReviewClose(() => {
 })
 
 export function send(input: SendInput): Promise<SendResult> {
-  if (status.state !== 'ok') throw new Error(status.reason ?? 'The assistant is not available')
+  if (status.state !== 'ok') throw new Error(status.reason ?? t('assistantMain.unavailable'))
   return chat.send(input)
 }
 
@@ -161,9 +171,9 @@ export async function attachDialog(): Promise<AttachedFile[]> {
   const win = liveWindow()
   if (!win) return []
   const pick = await dialog.showOpenDialog(win, {
-    title: 'Attach files',
+    title: t('assistantMain.attachTitle'),
     defaultPath: app.getPath('documents'),
-    filters: [{ name: 'Text, Markdown or PDF', extensions: ATTACHABLE }],
+    filters: [{ name: t('assistantMain.attachFilter'), extensions: ATTACHABLE }],
     properties: ['openFile', 'multiSelections']
   })
   if (pick.canceled) return []
@@ -180,9 +190,8 @@ export async function attachDialog(): Promise<AttachedFile[]> {
   if (failed.length) {
     await dialog.showMessageBox(win, {
       type: 'warning',
-      title: 'Attach files',
-      message:
-        failed.length === 1 ? 'A file could not be attached' : 'Some files could not be attached',
+      title: t('assistantMain.attachTitle'),
+      message: t('assistantMain.attachFailed', { count: failed.length }),
       detail: failed.join('\n')
     })
   }

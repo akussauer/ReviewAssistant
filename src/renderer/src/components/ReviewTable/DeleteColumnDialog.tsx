@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Column } from '../../../../shared/ipc'
+import { useT } from '../../lib/i18n'
 import { reviewStore } from '../../store'
 import {
   AlertDialog,
@@ -22,6 +23,7 @@ export function DeleteColumnDialog({
   onClose: () => void
 }): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
+  const t = useT()
 
   const remove = async (): Promise<void> => {
     try {
@@ -36,11 +38,8 @@ export function DeleteColumnDialog({
     <AlertDialog open onOpenChange={(open) => !open && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete column “{column.label}”?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This permanently deletes the column and all its data. A backup of the file is taken
-            first.
-          </AlertDialogDescription>
+          <AlertDialogTitle>{t('deleteColumn.title', { name: column.label })}</AlertDialogTitle>
+          <AlertDialogDescription>{t('deleteColumn.body')}</AlertDialogDescription>
         </AlertDialogHeader>
         {error && (
           <p className="text-sm text-destructive" role="alert">
@@ -48,7 +47,7 @@ export function DeleteColumnDialog({
           </p>
         )}
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
           <AlertDialogAction
             className="bg-destructive text-white hover:bg-destructive/90"
             onClick={(e) => {
@@ -56,7 +55,7 @@ export function DeleteColumnDialog({
               void remove()
             }}
           >
-            Delete
+            {t('common.delete')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

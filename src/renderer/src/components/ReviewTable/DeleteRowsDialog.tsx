@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { TabUsage } from '../../../../shared/ipc'
+import { tNow, useT } from '../../lib/i18n'
 import { reviewStore } from '../../store'
 import {
   AlertDialog,
@@ -12,8 +13,6 @@ import {
   AlertDialogTitle
 } from '../ui/alert-dialog'
 
-const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`
-
 // Deleting rows from the main table (spec §5). Like the reference app it doesn't ask,
 // unless [New] some of the rows are in tabs: then "3 rows are in 2 tabs". Main backs the
 // file up before deleting either way.
@@ -25,12 +24,13 @@ export function DeleteRowsDialog({
   onClose: () => void
 }): React.JSX.Element | null {
   const [usage, setUsage] = useState<TabUsage | null>(null)
+  const t = useT()
 
   const remove = (): void => {
     reviewStore
       .getState()
       .deleteRows(rowIds)
-      .catch((err) => reviewStore.getState().reportError('Deleting rows', err))
+      .catch((err) => reviewStore.getState().reportError(tNow()('deleteRows.deleting'), err))
       .finally(onClose)
   }
 
@@ -44,7 +44,7 @@ export function DeleteRowsDialog({
         else setUsage(u)
       })
       .catch((err) => {
-        reviewStore.getState().reportError('Checking tab membership', err)
+        reviewStore.getState().reportError(tNow()('deleteRows.checking'), err)
         onClose()
       })
     return () => {
@@ -59,20 +59,22 @@ export function DeleteRowsDialog({
     <AlertDialog open onOpenChange={(open) => !open && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete {plural(rowIds.length, 'row', 'rows')}?</AlertDialogTitle>
+          <AlertDialogTitle>{t('deleteRows.title', { count: rowIds.length })}</AlertDialogTitle>
           <AlertDialogDescription>
-            {plural(usage.rows, 'row is', 'rows are')} in {plural(usage.tabs, 'tab', 'tabs')}.
-            Deleting removes {rowIds.length === 1 ? 'it' : 'them'} from the main table and every
-            tab. A backup of the file is taken first.
+            {t('deleteRows.inTabs', {
+              count: usage.rows,
+              tabs: t('deleteRows.tabs', { count: usage.tabs })
+            })}{' '}
+            {t('deleteRows.body', { count: rowIds.length })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
           <AlertDialogAction
             className="bg-destructive text-white hover:bg-destructive/90"
             onClick={remove}
           >
-            Delete
+            {t('common.delete')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

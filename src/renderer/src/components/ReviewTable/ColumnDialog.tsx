@@ -10,6 +10,8 @@ import {
   type ColumnType
 } from '../../../../shared/ipc'
 import { moveItem } from '../../lib/columns'
+import { useT } from '../../lib/i18n'
+import { rich } from '../../lib/rich'
 import { reviewStore, useReview } from '../../store'
 import { Button } from '../ui/button'
 import {
@@ -29,13 +31,6 @@ import { Label } from '../ui/label'
 
 export type ColumnDialogMode = { kind: 'create'; index: number } | { kind: 'edit'; column: Column }
 
-const TYPE_LABELS: Record<ColumnType, string> = {
-  text: 'Text (multiline)',
-  dropdown: 'Dropdown',
-  checkbox: 'Checkbox',
-  date: 'Date',
-  number: 'Number'
-}
 const LIMIT = 999999 // same range as the reference app's min/max spin boxes
 
 type Props = { mode: ColumnDialogMode; onClose: () => void }
@@ -44,8 +39,10 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
   const original = mode.kind === 'edit' ? mode.column : null
   const rowsById = useReview((s) => s.rowsById)
   const rowOrder = useReview((s) => s.rowOrder)
+  const t = useT()
+  const typeLabel = (type: ColumnType): string => t(`columns.types.${type}`)
 
-  const [label, setLabel] = useState(original?.label ?? 'New Column')
+  const [label, setLabel] = useState(original?.label ?? t('columns.defaultName'))
   const [type, setType] = useState<ColumnType>(original?.type ?? 'text')
   const [choices, setChoices] = useState<ChoiceInput[]>(original?.options.choices ?? [])
   const [min, setMin] = useState(String(original?.options.min ?? 0))
@@ -76,22 +73,22 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
 
   // The options to save, or a message saying what's wrong (rules from the reference app).
   const built = ((): { options: ColumnOptionsInput } | { error: string } => {
-    if (!label.trim()) return { error: 'Column name cannot be empty.' }
+    if (!label.trim()) return { error: t('columns.nameEmpty') }
     if (type === 'dropdown') {
-      if (choices.length === 0) return { error: 'Please add at least one option for the dropdown.' }
+      if (choices.length === 0) return { error: t('columns.needOption') }
       const labels = choices.map((c) => c.label.trim())
-      if (labels.some((l) => !l)) return { error: 'Options cannot be empty.' }
-      if (new Set(labels).size !== labels.length) return { error: 'Each option must be different.' }
+      if (labels.some((l) => !l)) return { error: t('columns.optionEmpty') }
+      if (new Set(labels).size !== labels.length) return { error: t('columns.optionsDiffer') }
       return { options: { choices: choices.map((c) => ({ ...c, label: c.label.trim() })) } }
     }
     if (type === 'number') {
       const lo = min.trim() === '' ? NaN : Number(min)
       const hi = max.trim() === '' ? NaN : Number(max)
       if (!Number.isInteger(lo) || !Number.isInteger(hi))
-        return { error: 'Minimum and maximum must be whole numbers.' }
+        return { error: t('columns.wholeNumbers') }
       if (Math.abs(lo) > LIMIT || Math.abs(hi) > LIMIT)
-        return { error: `Limits must be within ±${LIMIT}.` }
-      if (lo > hi) return { error: 'Minimum value cannot be greater than maximum.' }
+        return { error: t('columns.limits', { limit: String(LIMIT) }) }
+      if (lo > hi) return { error: t('columns.minAboveMax') }
       return { options: { min: lo, max: hi } }
     }
     return { options: {} }
@@ -149,21 +146,23 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
           // Enter in a text box saves, except the "new option" box, where it adds the
           // option. On buttons (Cancel, Remove ×) and the type list, Enter does what it
           // normally does, so Enter on Cancel cancels.
-          const t = e.target as HTMLElement
-          if (e.key === 'Enter' && t instanceof HTMLInputElement && !t.dataset.newChoice) {
+          const el = e.target as HTMLElement
+          if (e.key === 'Enter' && el instanceof HTMLInputElement && !el.dataset.newChoice) {
             e.preventDefault()
             void submit()
           }
         }}
       >
         <DialogHeader>
-          <DialogTitle>{mode.kind === 'create' ? 'New column' : 'Column settings'}</DialogTitle>
-          <DialogDescription>Name, type and options for this column.</DialogDescription>
+          <DialogTitle>
+            {t(mode.kind === 'create' ? 'columns.newTitle' : 'columns.editTitle')}
+          </DialogTitle>
+          <DialogDescription>{t('columns.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="col-name">Column name</Label>
+            <Label htmlFor="col-name">{t('columns.name')}</Label>
             <Input
               id="col-name"
               autoFocus
@@ -173,16 +172,16 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="col-type">Column type</Label>
+            <Label htmlFor="col-type">{t('columns.type')}</Label>
             <select
               id="col-type"
               className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
               value={type}
               onChange={(e) => changeType(e.target.value as ColumnType)}
             >
-              {COLUMN_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {TYPE_LABELS[t]}
+              {COLUMN_TYPES.map((value) => (
+                <option key={value} value={value}>
+                  {typeLabel(value)}
                 </option>
               ))}
             </select>
@@ -190,12 +189,12 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
 
           {type === 'dropdown' && (
             <div className="grid gap-2">
-              <Label>Options</Label>
+              <Label>{t('columns.options')}</Label>
               <ChoiceList choices={choices} onChange={setChoices} />
               <div className="flex gap-2">
                 <Input
                   data-new-choice="true"
-                  placeholder="New option…"
+                  placeholder={t('columns.newOption')}
                   value={newChoice}
                   onChange={(e) => setNewChoice(e.target.value)}
                   onKeyDown={(e) => {
@@ -206,7 +205,7 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
                   }}
                 />
                 <Button variant="outline" onClick={addChoice}>
-                  <Plus /> Add
+                  <Plus /> {t('columns.add')}
                 </Button>
               </div>
             </div>
@@ -215,7 +214,7 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
           {type === 'number' && (
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="col-min">Minimum value</Label>
+                <Label htmlFor="col-min">{t('columns.min')}</Label>
                 <Input
                   id="col-min"
                   inputMode="numeric"
@@ -224,7 +223,7 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="col-max">Maximum value</Label>
+                <Label htmlFor="col-max">{t('columns.max')}</Label>
                 <Input
                   id="col-max"
                   inputMode="numeric"
@@ -240,10 +239,21 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
               className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
               role="status"
             >
-              Changing <b>{TYPE_LABELS[original!.type]}</b> to <b>{TYPE_LABELS[type]}</b>:{' '}
-              {preview.converted} {preview.converted === 1 ? 'value converts' : 'values convert'},{' '}
-              <b>{preview.cleared} will be cleared</b>
-              {preview.empty > 0 && `, ${preview.empty} already empty`}. A backup is taken first.
+              {rich(
+                t('columns.preview', {
+                  from: '{from}',
+                  to: '{to}',
+                  converted: t('columns.converts', { count: preview.converted }),
+                  cleared: '{cleared}',
+                  empty:
+                    preview.empty > 0 ? t('columns.alreadyEmpty', { count: preview.empty }) : ''
+                }),
+                {
+                  from: <b>{typeLabel(original!.type)}</b>,
+                  to: <b>{typeLabel(type)}</b>,
+                  cleared: <b>{t('columns.willBeCleared', { count: preview.cleared })}</b>
+                }
+              )}
             </p>
           )}
 
@@ -256,10 +266,10 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={saving}>
-            {retyping ? 'Change type' : 'OK'}
+            {retyping ? t('columns.changeType') : t('common.ok')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -285,8 +295,9 @@ function ChoiceList({
   onChange: (c: ChoiceInput[]) => void
 }): React.JSX.Element {
   const [dragFrom, setDragFrom] = useState<number | null>(null)
+  const t = useT()
   if (choices.length === 0) {
-    return <p className="text-sm text-muted-foreground">No options yet.</p>
+    return <p className="text-sm text-muted-foreground">{t('columns.noOptions')}</p>
   }
   return (
     <ul className="max-h-56 divide-y overflow-y-auto rounded-md border">
@@ -303,7 +314,7 @@ function ChoiceList({
           <span
             draggable
             className="cursor-grab text-muted-foreground"
-            title="Drag to reorder"
+            title={t('columns.dragToReorder')}
             onDragStart={() => setDragFrom(i)}
             onDragEnd={() => setDragFrom(null)}
           >
@@ -311,7 +322,7 @@ function ChoiceList({
           </span>
           <Input
             className="h-7"
-            aria-label={`Option ${i + 1}`}
+            aria-label={t('columns.optionN', { n: i + 1 })}
             value={choice.label}
             onChange={(e) =>
               onChange(choices.map((c, j) => (j === i ? { ...c, label: e.target.value } : c)))
@@ -320,7 +331,7 @@ function ChoiceList({
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={`Remove ${choice.label}`}
+            aria-label={t('columns.removeOption', { name: choice.label })}
             onClick={() => onChange(choices.filter((_, j) => j !== i))}
           >
             <X />

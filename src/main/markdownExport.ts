@@ -9,6 +9,7 @@ import { ReviewFileError } from './db/open'
 import { listRows } from './db/rows'
 import { listTabs } from './db/tabs'
 import type { DB } from './db/types'
+import { t } from './i18n'
 import { log } from './log'
 
 // Writes the notes of a Markdown export (spec §9.1) into `folder`. One-way: an existing
@@ -64,7 +65,7 @@ export async function exportMarkdown(
   sourceName: string
 ): Promise<MarkdownExportResult> {
   if (!existsSync(folder) || !statSync(folder).isDirectory()) {
-    throw new ReviewFileError(`The target folder no longer exists:\n${folder}`)
+    throw new ReviewFileError(t('errors.folderGone', { path: folder }))
   }
   saveMarkdownChoices(db, input)
   // The columns now carry the modes just saved, so no overrides are needed.

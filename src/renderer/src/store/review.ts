@@ -18,6 +18,7 @@ import {
   type TabView
 } from '../../../shared/ipc'
 import { missingOption, pruneEdits, pushEdit, rowName, type CellEdit } from './undo'
+import { tNow } from '../lib/i18n'
 
 // The renderer's copy of the open review, kept normalised (CLAUDE.md): each row is stored
 // once in rowsById, and the main table and each tab refer to rows by id.
@@ -107,6 +108,18 @@ export const MIN_ROW_HEIGHT = 16
 
 export type ReviewStore = StoreApi<ReviewState>
 
+// What failed, as in "Saving the cell failed: …" (actions.* in the i18n files).
+type Action =
+  | 'savingView'
+  | 'savingCell'
+  | 'savingColumnWidth'
+  | 'reorderingColumns'
+  | 'savingRowHeight'
+  | 'savingCheckboxes'
+  | 'savingSearchBar'
+  | 'savingSort'
+  | 'savingActiveTab'
+
 export function createReviewStore(api: Api): ReviewStore {
   return createStore<ReviewState>()((set, get) => {
     // Logs a failure and shows it to the user. Electron prefixes IPC errors with
@@ -117,11 +130,13 @@ export function createReviewStore(api: Api): ReviewStore {
       clearTimeout(noticeTimer)
       noticeTimer = setTimeout(() => set({ notice: null }), 10_000)
     }
+    // `what` is already in the UI language, e.g. t('actions.savingCell').
     const fail = (what: string, err: unknown): void => {
       console.error(`${what} failed`, err)
       const reason = String(err instanceof Error ? err.message : err).replace(/^.*Error: /, '')
-      notify({ kind: 'error', text: `${what} failed: ${reason}` })
+      notify({ kind: 'error', text: tNow()('notices.failed', { what, reason }) })
     }
+    const failed = (action: Action, err: unknown): void => fail(tNow()(`actions.${action}`), err)
 
     // Ids repeat between files, so a rollback must not run if another file was opened while
     // the save was pending. Each action notes the file's generation when it starts.
@@ -191,7 +206,7 @@ export function createReviewStore(api: Api): ReviewStore {
         viewTimers.delete(tabId)
         const tab = get().tabs.find((t) => t.id === tabId)
         if (!tab || generation() !== gen) return
-        api.tabs.update({ id: tabId, view: tab.view }).catch((err) => fail('Saving the view', err))
+        api.tabs.update({ id: tabId, view: tab.view }).catch((err) => failed('savingView', err))
       }
       viewTimers.set(tabId, { timer: setTimeout(run, 400), run })
     }
@@ -225,7 +240,7 @@ export function createReviewStore(api: Api): ReviewStore {
         return true
       } catch (err) {
         ifSameFile(gen, () => setCell(before.data[key]))
-        fail('Saving the cell', err)
+        failed('savingCell', err)
         return false
       }
     }
@@ -267,12 +282,10 @@ export function createReviewStore(api: Api): ReviewStore {
     ): Promise<boolean> | null => {
       const { columns, rowOrder } = get()
       const column = columns.find((c) => c.id === edit.columnId)!
+      const t = tNow()
       if (missingOption(column, value)) {
-        const action = verb === 'Undid' ? 'undo' : 'redo'
-        notify({
-          kind: 'info',
-          text: `Couldn't ${action} the edit to ${column.label}: that option has been removed`
-        })
+        const key = verb === 'Undid' ? 'notices.undoMissing' : 'notices.redoMissing'
+        notify({ kind: 'info', text: t(key, { column: column.label }) })
         return null
       }
       const saving = saveCell(edit.rowId, edit.columnId, value) // shows the value straight away
@@ -280,7 +293,8 @@ export function createReviewStore(api: Api): ReviewStore {
       const name = rowName(get().rowsById[edit.rowId], columns, rowOrder)
       const seq = (get().reveal?.seq ?? 0) + 1
       set({ reveal: { rowId: edit.rowId, columnId: edit.columnId, seq } })
-      notify({ kind: 'info', text: `${verb} edit to ${column.label} (${name})` })
+      const key = verb === 'Undid' ? 'notices.undid' : 'notices.redid'
+      notify({ kind: 'info', text: t(key, { column: column.label, row: name }) })
       return saving
     }
 
@@ -393,7 +407,7 @@ export function createReviewStore(api: Api): ReviewStore {
           await api.columns.update({ id: columnId, width: w })
         } catch (err) {
           ifSameFile(gen, () => putColumn(before))
-          fail('Saving the column width', err)
+          failed('savingColumnWidth', err)
         }
       },
 
@@ -412,7 +426,7 @@ export function createReviewStore(api: Api): ReviewStore {
           ifSameFile(gen, () => set({ columns: saved }))
         } catch (err) {
           ifSameFile(gen, () => set({ columns: before }))
-          fail('Reordering columns', err)
+          failed('reorderingColumns', err)
         }
       },
 
@@ -439,7 +453,7 @@ export function createReviewStore(api: Api): ReviewStore {
             const now = get().rowsById[rowId]
             if (now) putRows([{ ...now, height: savedHeight }])
           })
-          fail('Saving the row height', err)
+          failed('savingRowHeight', err)
         }
       },
 
@@ -458,7 +472,7 @@ export function createReviewStore(api: Api): ReviewStore {
           ifSameFile(gen, () =>
             putRows(rowsOf(changing.map((r) => r.id)).map((r) => ({ ...r, checked: !checked })))
           )
-          fail('Saving the checkboxes', err)
+          failed('savingCheckboxes', err)
         }
       },
 
@@ -501,7 +515,7 @@ export function createReviewStore(api: Api): ReviewStore {
           if (tab?.view.search) get().setView(tab.id, { search: '' })
         }
         set({ searchBar: shown })
-        api.ui.setSearchBar(shown).catch((err) => fail('Saving the search bar setting', err))
+        api.ui.setSearchBar(shown).catch((err) => failed('savingSearchBar', err))
       },
 
       async setSort(tabId, sort) {
@@ -513,7 +527,7 @@ export function createReviewStore(api: Api): ReviewStore {
           await api.tabs.update({ id: tabId, view: { ...before.view, sort } })
         } catch (err) {
           ifSameFile(gen, () => putTab(before))
-          fail('Saving the sort', err)
+          failed('savingSort', err)
         }
       },
 
@@ -620,7 +634,7 @@ export function createReviewStore(api: Api): ReviewStore {
         get().flushViews()
         // reveal: the new tab's table mustn't replay the last undo's scroll and flash.
         set({ activeTabId: tabId, keptRowIds: [], lastCreatedRowId: null, reveal: null })
-        api.tabs.setActive(tabId).catch((err) => fail('Saving the active tab', err))
+        api.tabs.setActive(tabId).catch((err) => failed('savingActiveTab', err))
         showBarForSearch()
       }
     }

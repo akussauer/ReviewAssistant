@@ -6,11 +6,19 @@ import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { HOTKEY_LABELS, IPC } from '../shared/ipc'
+import { IPC } from '../shared/ipc'
 import { registerIpc } from './ipc'
 import { initLog, log } from './log'
+import { currentLocale, t } from './i18n'
+import { applyLanguage, setChromiumLanguage, togglePseudo } from './language'
 import { buildMenu } from './menu'
-import { applySpellcheckLanguage, attachEditMenu } from './spellcheck'
+import {
+  applySpellcheckLanguages,
+  attachEditMenu,
+  firstRunSpellcheck,
+  installDictionaries,
+  watchDictionaryDownloads
+} from './spellcheck'
 import {
   attachWindow,
   config,
@@ -39,15 +47,17 @@ import { applyMenu, initialTitleBarOverlay } from './titleBar'
 function refreshMenu(): void {
   applyMenu(
     buildMenu({
-      newFile: () => safely('Could not create the review file', newReviewDialog),
-      openFile: () => safely('Could not open the review file', openReviewDialog),
-      openRecent: (path) => safely('Could not open the review file', () => openRecent(path)),
+      newFile: () => safely(t('errors.couldNotCreate'), newReviewDialog),
+      openFile: () => safely(t('errors.couldNotOpen'), openReviewDialog),
+      openRecent: (path) => safely(t('errors.couldNotOpen'), () => openRecent(path)),
       command: sendMenuCommand,
       recent: recentFiles(),
       hasFile: currentFile() !== null,
       saveAsKey: config.get().hotkeys.saveAs,
       edit: currentEditState(),
-      dev: import.meta.env.DEV
+      dev: import.meta.env.DEV,
+      pseudo: currentLocale() === 'pseudo',
+      togglePseudo
     })
   )
 }
@@ -57,16 +67,19 @@ function refreshMenu(): void {
 function showHotkeyResets(win: BrowserWindow): void {
   const resets = config.takeHotkeyResets()
   if (!resets.length) return
-  const lines = resets.map(
-    (r) =>
-      `${HOTKEY_LABELS[r.name]}: ${r.accelerator.replace('CmdOrCtrl', 'Ctrl')} is now used by ` +
-      `${r.usedBy}, so it is back to ${config.get().hotkeys[r.name].replace('CmdOrCtrl', 'Ctrl')}.`
+  const lines = resets.map((r) =>
+    t('hotkeys.resetLine', {
+      name: t(`hotkeys.names.${r.name}`),
+      key: r.accelerator.replace('CmdOrCtrl', 'Ctrl'),
+      usedBy: t(`hotkeys.fixed.${r.usedBy}`),
+      now: config.get().hotkeys[r.name].replace('CmdOrCtrl', 'Ctrl')
+    })
   )
   void dialog.showMessageBox(win, {
     type: 'info',
-    title: 'Hotkeys changed',
-    message: resets.length === 1 ? 'A hotkey was reset' : 'Some hotkeys were reset',
-    detail: `${lines.join('\n')}\n\nYou can choose another in Settings > Preferences.`,
+    title: t('hotkeys.resetTitle'),
+    message: t('hotkeys.resetMessage', { count: resets.length }),
+    detail: `${lines.join('\n')}\n\n${t('hotkeys.resetHint')}`,
     noLink: true
   })
 }
@@ -146,6 +159,10 @@ const argvSkip = process.defaultApp ? 2 : 1
 
 initLog(logsDir())
 log.info('Application started.')
+// Before the app is ready, or Chromium ignores it (plan M10d).
+setChromiumLanguage(config.get().uiLanguage)
+// The bundled dictionaries, where Chromium looks before it downloads one.
+installDictionaries()
 
 app.on('second-instance', (_e, argv, cwd) => {
   const path = fileFromArgv(argv, argvSkip, cwd)
@@ -160,7 +177,7 @@ app.on('second-instance', (_e, argv, cwd) => {
 const fatal = (err: unknown): void => {
   const text = err instanceof Error ? (err.stack ?? err.message) : String(err)
   log.error(`Fatal: ${text}`)
-  dialog.showErrorBox('Review Assistant crashed', text)
+  dialog.showErrorBox(t('errors.crashed'), text)
   app.exit(1)
 }
 process.on('uncaughtException', fatal)
@@ -174,7 +191,11 @@ app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.mps.reviewassistant')
 
   applyTheme(config.get().theme)
-  applySpellcheckLanguage(config.get().spellcheckLanguage)
+  applyLanguage(config.get().uiLanguage) // before anything builds a menu or a dialog
+  // A fresh install also checks Windows' language, if the app has its dictionary.
+  if (config.firstRun) config.update({ spellcheckLanguages: firstRunSpellcheck() })
+  watchDictionaryDownloads()
+  applySpellcheckLanguages(config.get().spellcheckLanguages)
   // A double-clicked file wins over reopening the last one.
   const launched = fileFromArgv(process.argv, argvSkip, process.cwd())
   if (launched) openAtLaunch(launched)

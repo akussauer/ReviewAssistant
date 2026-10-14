@@ -6,13 +6,13 @@ import {
   APP_FOLDERS,
   COLUMN_TYPES,
   EXPORT_MODES,
-  FIXED_SHORTCUTS,
+  fixedShortcut,
   IF_EXISTS,
   MARKDOWN_SCOPES,
   HOTKEY_NAMES,
   MARKDOWN_KINDS,
   PROVIDERS,
-  SPELLCHECK_LANGUAGES,
+  MAX_SPELLCHECK_LANGUAGES,
   type AssistantSettings,
   type ConnectionInput,
   type EditState,
@@ -31,6 +31,7 @@ import {
   type TabView,
   type TabUpdateInput
 } from './ipc'
+import { UI_LANGUAGES } from './i18n/locales'
 
 export const NoInput = z.undefined()
 
@@ -154,9 +155,10 @@ export const AcceleratorSchema = z
     'Use Ctrl or Alt with a letter, digit or F-key'
   )
   .refine((a) => /CmdOrCtrl|Alt/.test(a), 'Add Ctrl or Alt')
-  .refine((a) => !FIXED_SHORTCUTS[a], 'Already used by a fixed shortcut')
+  .refine((a) => !fixedShortcut(a), 'Already used by a fixed shortcut')
 
 export const ThemeSchema = z.enum(['light', 'dark', 'system'])
+export const UiLanguageSchema = z.enum(UI_LANGUAGES)
 
 export const HexColour = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Expected a colour like #0E80A3')
 
@@ -188,9 +190,18 @@ export const AssistantSettingsSchema = z.object({
   showCosts: z.boolean()
 }) satisfies z.ZodType<AssistantSettings>
 
+// A Chromium spellcheck code, e.g. "de-DE", "es-419", "en-GB-oxendict", "hy". Main also
+// drops ones the spellchecker doesn't offer.
+export const SpellcheckCode = z.string().regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/)
+export const SpellcheckLanguagesSchema = z
+  .array(SpellcheckCode)
+  .max(MAX_SPELLCHECK_LANGUAGES)
+  .refine((codes) => new Set(codes).size === codes.length, 'A language is chosen twice')
+
 export const SettingsSchema = z.object({
   theme: ThemeSchema,
-  spellcheckLanguage: z.enum(SPELLCHECK_LANGUAGES),
+  uiLanguage: UiLanguageSchema,
+  spellcheckLanguages: SpellcheckLanguagesSchema,
   markdownColour: HexColour,
   markdownColourOverride: z.boolean(),
   markdownColours: z.partialRecord(z.enum(MARKDOWN_KINDS), HexColour),

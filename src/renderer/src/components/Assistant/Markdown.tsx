@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useT } from '../../lib/i18n'
 
 // A reply rendered as markdown (spec §10), with GitHub extras (tables, task lists,
 // strikethrough). react-markdown builds React elements and ignores raw HTML, so text the
@@ -12,7 +13,16 @@ const components: Components = {
       {children}
     </a>
   ),
-  img: ({ alt }) => <span className="text-muted-foreground">[image{alt ? `: ${alt}` : ''}]</span>
+  img: ({ alt }) => <ImagePlaceholder alt={alt} />
+}
+
+function ImagePlaceholder({ alt }: { alt?: string }): React.JSX.Element {
+  const t = useT()
+  return (
+    <span className="text-muted-foreground">
+      {alt ? t('assistant.imageAlt', { alt }) : t('assistant.image')}
+    </span>
+  )
 }
 
 export const Markdown = memo(function Markdown({ text }: { text: string }): React.JSX.Element {

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { join } from 'path'
 import { PROVIDERS, type Provider } from '../../shared/ipc'
 import { log } from '../log'
+import { t } from '../i18n'
 
 // API keys, one per provider, encrypted with Electron's safeStorage (Windows: DPAPI, tied
 // to the user's Windows account) in <userData>/assistant-keys.json. Only main ever sees a
@@ -54,7 +55,7 @@ export function createKeyStore(dir: string, crypto: Crypto): KeyStore {
       if (key === null) delete all[provider]
       else {
         if (!crypto.isEncryptionAvailable()) {
-          throw new Error('This computer can’t store the key securely, so it was not saved')
+          throw new Error(t('assistantMain.noSafeStorage'))
         }
         all[provider] = crypto.encryptString(key).toString('base64')
       }

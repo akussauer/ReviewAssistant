@@ -57,7 +57,7 @@ const sel = {
 
 async function waitForApp() {
   // Ready = welcome screen or the table's status bar.
-  await page.waitForSelector('text=/New review|rows( shown)? ·/', { timeout: 30000 })
+  await page.waitForSelector('text=/New review|rows?( shown)? ·/', { timeout: 30000 })
 }
 
 const COMMANDS = {
@@ -128,7 +128,7 @@ const COMMANDS = {
 
   async status() {
     need()
-    out('status:', (await page.locator('text=/rows( shown)? ·/').textContent().catch(() => null)) ?? '(no table: welcome screen?)')
+    out('status:', (await page.locator('text=/rows?( shown)? ·/').textContent().catch(() => null)) ?? '(no table: welcome screen?)')
   },
 
   async headers() {

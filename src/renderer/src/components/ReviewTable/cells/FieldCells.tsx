@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { isValidDate, parseInteger } from '../../../../../shared/conversion'
 import type { CellValue, Column } from '../../../../../shared/ipc'
+import { useT } from '../../../lib/i18n'
 import { clampNumber, parseNumberDraft } from '../../../lib/numbers'
 import { reviewStore } from '../../../store'
 
@@ -80,6 +81,7 @@ export function DateCell({ rowId, column, value }: Props): React.JSX.Element {
 export function NumberCell({ rowId, column, value }: Props): React.JSX.Element {
   // While typing, the text lives here; it's saved on Enter or when leaving the cell.
   const [draft, setDraft] = useState<string | null>(null)
+  const t = useT()
   const current = typeof value === 'number' ? value : null
   const shown = draft ?? (current === null ? '' : String(current))
   const visit = useRef<string | undefined>(undefined)
@@ -125,7 +127,10 @@ export function NumberCell({ rowId, column, value }: Props): React.JSX.Element {
       inputMode="numeric"
       className={`${FIELD} tabular-nums`}
       aria-label={column.label}
-      title={`Whole number from ${column.options.min} to ${column.options.max}; ↑/↓ to step`}
+      title={t('table.numberTooltip', {
+        min: String(column.options.min),
+        max: String(column.options.max)
+      })}
       value={shown}
       onChange={(e) => setDraft(e.target.value)}
       onFocus={() => (visit.current = `number-${++visits}`)}

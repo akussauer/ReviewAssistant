@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { Tab } from '../../../../shared/ipc'
+import { useT } from '../../lib/i18n'
 import { reviewStore, useReview } from '../../store'
 import { Button } from '../ui/button'
 import {
@@ -19,10 +20,7 @@ import { Label } from '../ui/label'
 
 export type TabDialogMode = { kind: 'create'; rowIds: number[] } | { kind: 'edit'; tab: Tab }
 
-const TYPES = [
-  { value: 'review', label: 'Review Table' },
-  { value: 'synthesis', label: 'Synthesis' }
-] as const
+const TYPES = ['review', 'synthesis'] as const
 
 export function TabDialog({
   mode,
@@ -32,9 +30,10 @@ export function TabDialog({
   onClose: () => void
 }): React.JSX.Element {
   const tabs = useReview((s) => s.tabs)
+  const t = useT()
   // "Tab N", as in the reference (the main table counts as Tab 1).
   const [label, setLabel] = useState(
-    mode.kind === 'edit' ? mode.tab.label : `Tab ${tabs.length + 1}`
+    mode.kind === 'edit' ? mode.tab.label : t('tabs.defaultName', { n: tabs.length + 1 })
   )
   const [type, setType] = useState<'review' | 'synthesis'>(
     mode.kind === 'edit' && mode.tab.type !== 'main' ? mode.tab.type : 'review'
@@ -45,9 +44,9 @@ export function TabDialog({
   const submit = async (): Promise<void> => {
     if (busy.current) return
     const name = label.trim()
-    if (!name) return setError('Tab name must not be empty.')
-    if (tabs.some((t) => t.label === name && (mode.kind === 'create' || t.id !== mode.tab.id))) {
-      return setError(`A tab named "${name}" already exists.`)
+    if (!name) return setError(t('tabs.nameEmpty'))
+    if (tabs.some((x) => x.label === name && (mode.kind === 'create' || x.id !== mode.tab.id))) {
+      return setError(t('tabs.nameTaken', { name }))
     }
     busy.current = true
     try {
@@ -66,16 +65,18 @@ export function TabDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>{mode.kind === 'create' ? 'New Tab' : 'Edit Tab'}</DialogTitle>
+          <DialogTitle>
+            {t(mode.kind === 'create' ? 'tabs.newTitle' : 'tabs.editTitle')}
+          </DialogTitle>
           <DialogDescription>
             {mode.kind === 'create' && mode.rowIds.length > 0
-              ? `Starts with ${mode.rowIds.length} ${mode.rowIds.length === 1 ? 'row' : 'rows'}.`
-              : 'A tab shows a chosen set of rows from the main table.'}
+              ? t('tabs.startsWith', { count: mode.rowIds.length })
+              : t('tabs.description')}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="tab-name">Name</Label>
+            <Label htmlFor="tab-name">{t('tabs.name')}</Label>
             <Input
               id="tab-name"
               autoFocus
@@ -91,16 +92,16 @@ export function TabDialog({
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="tab-type">Type</Label>
+            <Label htmlFor="tab-type">{t('tabs.type')}</Label>
             <select
               id="tab-type"
               className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
               value={type}
               onChange={(e) => setType(e.target.value as 'review' | 'synthesis')}
             >
-              {TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
+              {TYPES.map((value) => (
+                <option key={value} value={value}>
+                  {t(`tabs.types.${value}`)}
                 </option>
               ))}
             </select>
@@ -113,9 +114,9 @@ export function TabDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
-          <Button onClick={() => void submit()}>OK</Button>
+          <Button onClick={() => void submit()}>{t('common.ok')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

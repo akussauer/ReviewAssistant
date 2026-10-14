@@ -1,3 +1,5 @@
+import type { ActiveLocale, UiLanguage } from './i18n/locales'
+
 // The single source of truth for the renderer <-> main boundary.
 // Channel names live here so main (ipcMain.handle) and preload (ipcRenderer.invoke)
 // can't drift apart, and `Api` describes exactly what the renderer sees as `window.api`.
@@ -36,6 +38,8 @@ export const IPC = {
   settingsGet: 'settings:get',
   settingsUpdate: 'settings:update',
   settingsPreviewTheme: 'settings:preview-theme',
+  settingsPreviewLanguage: 'settings:preview-language',
+  i18nLocale: 'i18n:locale',
   themeIsDark: 'theme:is-dark',
   themesList: 'themes:list',
   themesActive: 'themes:active',
@@ -72,6 +76,8 @@ export const IPC = {
   uiSetSearchBar: 'ui:set-search-bar',
   appInfo: 'app:info',
   appOpenFolder: 'app:open-folder',
+  spellcheckLanguages: 'spellcheck:languages',
+  uiTakeNotices: 'ui:take-notices',
   markdownState: 'markdown:state',
   markdownChooseFolder: 'markdown:choose-folder',
   markdownExport: 'markdown:export',
@@ -82,6 +88,8 @@ export const IPC = {
   menuCommand: 'menu:command',
   menuChanged: 'menu:changed',
   themeChanged: 'theme:changed',
+  localeChanged: 'i18n:locale-changed',
+  notice: 'ui:notice', // main has status-bar messages waiting (ui.takeNotices)
   activeThemeChanged: 'themes:active-changed',
   assistantStatusChanged: 'assistant:status-changed',
   assistantChunk: 'assistant:chunk',
@@ -297,6 +305,7 @@ export type MenuNode =
       accelerator?: string // shown, e.g. "Ctrl+Shift+S"
       shortcut?: string // the page runs the item on this key, e.g. "CmdOrCtrl+Shift+S"
       enabled: boolean
+      checked?: boolean // a checkbox item that is ticked
       submenu?: MenuNode[]
     }
 
@@ -346,13 +355,6 @@ export const MARKDOWN_KINDS = [
 export type MarkdownKind = (typeof MARKDOWN_KINDS)[number]
 export const HOTKEY_NAMES = ['newRow', 'newColumn', 'saveAs', 'toggleAssistant'] as const
 export type HotkeyName = (typeof HOTKEY_NAMES)[number]
-
-export const HOTKEY_LABELS: Record<HotkeyName, string> = {
-  newRow: 'New row',
-  newColumn: 'New column',
-  saveAs: 'Save As',
-  toggleAssistant: 'Toggle assistant'
-}
 
 // ---- Assistant (spec §10) -----------------------------------------------------------
 
@@ -440,7 +442,11 @@ export type ClaudeDesktopStatus = {
 // e.g. "CmdOrCtrl+Shift+N".
 export type Settings = {
   theme: Theme
-  spellcheckLanguage: SpellcheckLanguage // e.g. en_GB
+  // The UI language (plan M10d); 'system' = Windows' language if the app has it.
+  uiLanguage: UiLanguage
+  // 0–3 Chromium codes, e.g. ['de-DE', 'en-GB'] (plan M10d); a word passes if any of
+  // them accepts it. Empty = spellcheck off.
+  spellcheckLanguages: string[]
   markdownColour: string // e.g. #0E80A3
   // While an Obsidian theme is active, markdown uses the theme's accent unless this is on.
   markdownColourOverride: boolean
@@ -460,7 +466,8 @@ export type Settings = {
 // Reset to defaults in the Preferences dialog returns to these (main's config uses them too).
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
-  spellcheckLanguage: 'en_GB',
+  uiLanguage: 'system',
+  spellcheckLanguages: ['en-GB'],
   markdownColour: '#0E80A3',
   markdownColourOverride: false,
   markdownColours: {},
@@ -484,51 +491,42 @@ export const DEFAULT_SETTINGS: Settings = {
   claudeDesktop: false
 }
 
-// Shortcuts the app or every text field already uses, which a hotkey must not take.
-export const FIXED_SHORTCUTS: Record<string, string> = {
-  'CmdOrCtrl+O': 'Open',
-  'CmdOrCtrl+,': 'Preferences',
-  'CmdOrCtrl+A': 'Select all',
-  'CmdOrCtrl+C': 'Copy',
-  'CmdOrCtrl+X': 'Cut',
-  'CmdOrCtrl+V': 'Paste',
-  'CmdOrCtrl+Z': 'Undo',
-  'CmdOrCtrl+Y': 'Redo',
-  'CmdOrCtrl+Shift+Z': 'Redo',
-  'CmdOrCtrl+F': 'Search',
-  'Alt+F4': 'Close window',
+// Shortcuts the app or every text field already uses, which a hotkey must not take. The
+// value names what uses it (its text is hotkeys.fixed.<value> in the i18n files).
+// Alt + a menu's first letter opens it (plan M10c); the letters of every UI language are
+// kept free, since the language can change at any time: File/Edit/Settings,
+// Datei/Bearbeiten/Einstellungen, Fichier/Édition/Paramètres, Archivo/Edición/Configuración.
+export const FIXED_SHORTCUTS = {
+  'CmdOrCtrl+O': 'open',
+  'CmdOrCtrl+,': 'preferences',
+  'CmdOrCtrl+A': 'selectAll',
+  'CmdOrCtrl+C': 'copy',
+  'CmdOrCtrl+X': 'cut',
+  'CmdOrCtrl+V': 'paste',
+  'CmdOrCtrl+Z': 'undo',
+  'CmdOrCtrl+Y': 'redo',
+  'CmdOrCtrl+Shift+Z': 'redo',
+  'CmdOrCtrl+F': 'search',
+  'Alt+F4': 'closeWindow',
   // Open the title bar's menus (plan M10c).
-  'Alt+F': 'the File menu',
-  'Alt+E': 'the Edit menu',
-  'Alt+S': 'the Settings menu'
-}
+  'Alt+F': 'menus',
+  'Alt+E': 'menus',
+  'Alt+S': 'menus',
+  'Alt+D': 'menus',
+  'Alt+B': 'menus',
+  'Alt+P': 'menus',
+  'Alt+A': 'menus',
+  'Alt+C': 'menus'
+} as const satisfies Record<string, string>
+export type FixedShortcut = (typeof FIXED_SHORTCUTS)[keyof typeof FIXED_SHORTCUTS]
+export const fixedShortcut = (accelerator: string): FixedShortcut | undefined =>
+  (FIXED_SHORTCUTS as Record<string, FixedShortcut>)[accelerator]
 
-// The reference app's list (SettingsWindow._LANG_OPTIONS).
-export const SPELLCHECK_LANGUAGES = [
-  'en_AU',
-  'en_AG',
-  'en_BS',
-  'en_BW',
-  'en_BZ',
-  'en_CA',
-  'en_DK',
-  'en_GB',
-  'en_GH',
-  'en_HK',
-  'en_IE',
-  'en_IN',
-  'en_JM',
-  'en_NA',
-  'en_NG',
-  'en_NZ',
-  'en_PH',
-  'en_SG',
-  'en_TT',
-  'en_US',
-  'en_ZA',
-  'en_ZW'
-] as const
-export type SpellcheckLanguage = (typeof SPELLCHECK_LANGUAGES)[number]
+export const MAX_SPELLCHECK_LANGUAGES = 3
+
+// A language the spellchecker offers (Electron's list). bundled = its dictionary ships
+// with the app, so it works offline.
+export type SpellcheckOption = { code: string; bundled: boolean }
 
 // ---- Themes and plugins (spec §12.1) ------------------------------------------------
 
@@ -615,12 +613,26 @@ export type Api = {
     setSearchBar(shown: boolean): Promise<void>
     appInfo(): Promise<AppInfo> // File > About
     openFolder(folder: AppFolder): Promise<void>
+    // Status-bar messages from main (e.g. a dictionary didn't download), already in the
+    // UI language. Main keeps them until taken; onNotice says some are waiting.
+    takeNotices(): Promise<string[]>
+    onNotice(cb: () => void): Unsubscribe
+  }
+  spellcheck: {
+    languages(): Promise<SpellcheckOption[]> // for Preferences' pickers
   }
   settings: {
     get(): Promise<Settings>
     update(settings: Settings): Promise<Settings>
     // Switches the theme without saving, for the Preferences dialog's live preview.
     previewTheme(theme: Theme): Promise<void>
+    // The same for the UI language: main switches its menus and tells the page.
+    previewLanguage(language: UiLanguage): Promise<void>
+  }
+  // The UI language in use (never 'system': main has worked out which one that is).
+  i18n: {
+    locale(): Promise<ActiveLocale>
+    onChange(cb: (locale: ActiveLocale) => void): Unsubscribe
   }
   // Whether the app is dark right now (the Theme setting, or the system's when "System").
   theme: {

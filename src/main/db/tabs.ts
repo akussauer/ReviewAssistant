@@ -1,5 +1,6 @@
 import { MAIN_TAB_ID, type Tab, type TabCreateInput, type TabUpdateInput } from '../../shared/ipc'
 import type { DB } from './types'
+import { t } from '../i18n'
 
 type TabRecord = {
   id: number
@@ -48,7 +49,7 @@ export function getTab(db: DB, id: number): Tab {
 
 function assertLabelFree(db: DB, label: string, exceptId = 0): void {
   if (db.prepare('SELECT 1 FROM tabs WHERE label = ? AND id != ?').get(label, exceptId)) {
-    throw new Error(`A tab named "${label}" already exists`)
+    throw new Error(t('errors.tabExists', { name: label }))
   }
 }
 

@@ -1,6 +1,5 @@
-import { FIXED_SHORTCUTS, HOTKEY_LABELS, type HotkeyName } from '../../../shared/ipc'
-
-export { HOTKEY_LABELS }
+import { fixedShortcut, type HotkeyName } from '../../../shared/ipc'
+import { translator, type T } from '../../../shared/i18n/translate'
 
 // Matches a keyboard event against an Electron-style accelerator from the settings,
 // e.g. "CmdOrCtrl+Shift+N" (Ctrl on Windows/Linux, Cmd on macOS).
@@ -44,23 +43,28 @@ export type Capture =
 
 // Turns a key press into an accelerator like "CmdOrCtrl+Shift+N", or explains why it
 // can't be used. `others` are the other hotkeys, so two can't share a combination.
+// `t` gives the messages in the UI language (English by default, for the tests).
 export function captureHotkey(
   e: KeyLike & { code: string },
   others: Partial<Record<HotkeyName, string>>,
-  isMac = false
+  isMac = false,
+  t: T = translator('en')
 ): Capture {
   if (['Control', 'Meta', 'Shift', 'Alt', 'AltGraph'].includes(e.key)) return { kind: 'waiting' }
   const cmd = isMac ? e.metaKey : e.ctrlKey
   const key = keyName(e.code)
-  if (!key) return { kind: 'error', message: 'Use a letter, digit or F-key' }
-  if (!cmd && !e.altKey) return { kind: 'error', message: `Add ${isMac ? 'Cmd' : 'Ctrl'} or Alt` }
+  if (!key) return { kind: 'error', message: t('hotkeys.useKey') }
+  if (!cmd && !e.altKey)
+    return { kind: 'error', message: t('hotkeys.addModifier', { key: isMac ? 'Cmd' : 'Ctrl' }) }
   const accelerator = [cmd && 'CmdOrCtrl', e.altKey && 'Alt', e.shiftKey && 'Shift', key]
     .filter(Boolean)
     .join('+')
-  const fixed = FIXED_SHORTCUTS[accelerator]
-  if (fixed) return { kind: 'error', message: `Already used by ${fixed}` }
+  const fixed = fixedShortcut(accelerator)
+  if (fixed)
+    return { kind: 'error', message: t('hotkeys.usedBy', { what: t(`hotkeys.fixed.${fixed}`) }) }
   const clash = (Object.keys(others) as HotkeyName[]).find((n) => others[n] === accelerator)
-  if (clash) return { kind: 'error', message: `Already used by ${HOTKEY_LABELS[clash]}` }
+  if (clash)
+    return { kind: 'error', message: t('hotkeys.usedBy', { what: t(`hotkeys.names.${clash}`) }) }
   return { kind: 'ok', accelerator }
 }
 

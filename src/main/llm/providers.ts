@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { Usage } from '../../shared/assistant'
 import type { ModelInfo, Provider } from '../../shared/ipc'
 import { checkAnthropic, fetchAnthropicModels, streamAnthropic } from './anthropic'
+import { t } from '../i18n'
 
 // Talking to the model providers over HTTP (spec §10). No SDK: all three speak the OpenAI
 // chat-completions format, so plain fetch() plus a small stream reader is enough. Replies
@@ -52,12 +53,12 @@ async function failure(res: Response): Promise<Error> {
   }
   const what =
     res.status === 401 || res.status === 403
-      ? 'The key was refused'
+      ? t('providers.keyRefused')
       : res.status === 402
-        ? 'The account has no credit left'
+        ? t('providers.noCredit')
         : res.status === 429
-          ? 'Too many requests; try again shortly'
-          : `The provider answered ${res.status}`
+          ? t('providers.tooMany')
+          : t('providers.answered', { status: String(res.status) })
   return new Error(detail ? `${what}: ${detail.slice(0, 300)}` : what)
 }
 
@@ -74,7 +75,7 @@ async function request(
   } catch (err) {
     if (init.signal?.aborted) throw err
     const cause = err instanceof Error && err.cause instanceof Error ? `: ${err.cause.message}` : ''
-    throw new Error(`Could not reach ${new URL(url).host}${cause}`)
+    throw new Error(t('providers.unreachable', { host: new URL(url).host }) + cause)
   }
   if (!res.ok) throw await failure(res)
   return res
@@ -85,7 +86,7 @@ const TIMEOUT_MS = 15_000
 // The key check (spec §10): a free call, never a chat request. OpenRouter has a key-info
 // endpoint; the others list their models (Ollama: is the server running?).
 export async function checkConnection(conn: Connection, fetchFn: Fetch = fetch): Promise<void> {
-  if (needsKey(conn.provider) && !conn.key) throw new Error('No API key saved')
+  if (needsKey(conn.provider) && !conn.key) throw new Error(t('providers.noKey'))
   if (conn.provider === 'anthropic') return checkAnthropic(conn, fetchFn)
   const path = conn.provider === 'openrouter' ? '/key' : '/models'
   await request(conn, path, fetchFn, { signal: AbortSignal.timeout(TIMEOUT_MS) })
@@ -164,7 +165,7 @@ export async function* streamChat(
     body: JSON.stringify(body),
     signal
   })
-  if (!res.body) throw new Error('The provider sent an empty reply')
+  if (!res.body) throw new Error(t('providers.emptyBody'))
   for await (const data of sseData(res.body)) {
     if (data === '[DONE]') return
     let json: unknown
@@ -177,7 +178,7 @@ export async function* streamChat(
     if (!chunk.success) continue
     if (chunk.data.error) {
       const e = chunk.data.error
-      throw new Error(typeof e === 'string' ? e : (e.message ?? 'The provider reported an error'))
+      throw new Error(typeof e === 'string' ? e : (e.message ?? t('providers.reportedError')))
     }
     const text = chunk.data.choices?.[0]?.delta?.content
     if (text) yield { text }

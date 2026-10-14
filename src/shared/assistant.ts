@@ -1,5 +1,6 @@
 import { displayText } from './conversion'
 import type { AssistantSettings, ChatMessage, Column, ModelInfo, Provider, Row } from './ipc'
+import type { T } from './i18n/translate'
 
 // The assistant's prompt, token estimates and costs (spec §10, plan M7). Shared so the chat
 // panel's meter and the request main actually sends are worked out the same way.
@@ -120,9 +121,11 @@ export function buildUserContent(
   return parts.join('\n')
 }
 
-// The chip's label, also saved with the message.
-export const rowsChipLabel = (count: number): string =>
-  `This tab (${count} ${count === 1 ? 'row' : 'rows'})`
+// The chip's label, also saved with the message, in the UI language of the moment. (Only
+// the type is imported, so this file doesn't pull every translation in; without `t`,
+// English.)
+export const rowsChipLabel = (count: number, t?: T): string =>
+  t ? t('assistant.thisTab', { count }) : `This tab (${count} ${count === 1 ? 'row' : 'rows'})`
 
 // The tokens the model may take in: its context length (or the fallback from Preferences
 // when the provider doesn't say), minus room for the reply.

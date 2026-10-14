@@ -26,6 +26,7 @@ import { getTab } from '../db/tabs'
 import type { DB } from '../db/types'
 import type { AttachmentStore } from './attachments'
 import type { streamChat } from './providers'
+import { t } from '../i18n'
 
 // Sending a chat message (spec §10): builds the prompt from the tab's rows, the attached
 // files and the conversation so far, streams the reply, and saves both messages.
@@ -56,13 +57,13 @@ export function createChat(deps: ChatDeps): {
   const clears = new Map<number, number>()
 
   async function send(input: SendInput): Promise<SendResult> {
-    if (input.generation !== deps.generation()) throw new Error('A different file is open now')
-    if (running.has(input.tabId)) throw new Error('The assistant is still replying in this tab')
+    if (input.generation !== deps.generation()) throw new Error(t('assistantMain.otherFile'))
+    if (running.has(input.tabId)) throw new Error(t('assistantMain.stillReplying'))
     const db = deps.db()
     const tab = getTab(db, input.tabId)
     const files = input.fileIds.map((id) => {
       const file = deps.attachments.get(id)
-      if (!file) throw new Error('An attached file is no longer available. Attach it again.')
+      if (!file) throw new Error(t('assistantMain.fileGone'))
       return file
     })
 
@@ -80,11 +81,11 @@ export function createChat(deps: ChatDeps): {
     const limit = contextLimit(model, settings.fallbackContext)
     const plan = planRequest(history, estimateTokens(content), limit)
     if (!plan.fits) {
-      throw new Error(
-        'This message is too large for the model. Remove the tab chip or some files, or pick a model with a larger context.'
-      )
+      throw new Error(t('assistantMain.tooLarge'))
     }
 
+    // Saved in English whatever the UI language: it's part of the file (the page knows it
+    // as the chip by this wording, and shows the chip itself translated).
     const context = [...(rows ? [rowsChipLabel(rows.count)] : []), ...files.map((f) => f.name)]
     const user = addMessage(db, tab.id, { role: 'user', content: input.text, context })
     input.fileIds.forEach((id) => deps.attachments.remove(id)) // one-shot (spec §10)
@@ -120,14 +121,15 @@ export function createChat(deps: ChatDeps): {
 
     const base = { user, droppedMessages: plan.dropped }
     // The file was closed or switched while replying: don't write into another file.
-    if (deps.generation() !== input.generation) return { ...base, reply: null, error: 'Stopped' }
+    if (deps.generation() !== input.generation)
+      return { ...base, reply: null, error: t('assistantMain.stopped') }
     // New chat was started meanwhile: this conversation is gone.
     if ((clears.get(tab.id) ?? 0) !== clearsAtStart) return { ...base, reply: null }
     if (!text)
       return {
         ...base,
         reply: null,
-        error: error ?? (controller.signal.aborted ? undefined : 'The reply was empty')
+        error: error ?? (controller.signal.aborted ? undefined : t('assistantMain.emptyReply'))
       }
 
     // Without reported usage (stopped, or the provider doesn't say), estimate from sizes.

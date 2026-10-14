@@ -11,6 +11,7 @@ import { convertValue } from '../../shared/conversion'
 import { cellPath, defaultValue } from './cells'
 import type { DB } from './types'
 import { regenerateViews } from './views'
+import { t } from '../i18n'
 
 type ColumnRecord = {
   id: number
@@ -87,7 +88,7 @@ export function normaliseOptions(
 
 function assertLabelFree(db: DB, label: string, exceptId = 0): void {
   const clash = db.prepare('SELECT 1 FROM columns WHERE label = ? AND id != ?').get(label, exceptId)
-  if (clash) throw new Error(`A column named "${label}" already exists`)
+  if (clash) throw new Error(t('errors.columnExists', { name: label }))
 }
 
 export function createColumn(db: DB, input: ColumnCreateInput): Column[] {

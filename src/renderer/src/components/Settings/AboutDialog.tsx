@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AppFolder, AppInfo } from '../../../../shared/ipc'
+import { useT } from '../../lib/i18n'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -21,6 +22,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }): React.JSX.Ele
   const [info, setInfo] = useState<AppInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const t = useT()
 
   useEffect(() => {
     window.api.ui
@@ -36,6 +38,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }): React.JSX.Ele
 
   const copy = (): void => {
     if (!info) return
+    // In English whatever the UI language: these go into bug reports.
     const text = [
       `Review Assistant ${info.version}`,
       `Electron ${info.electron}`,
@@ -53,45 +56,43 @@ export function AboutDialog({ onClose }: { onClose: () => void }): React.JSX.Ele
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>About Review Assistant</DialogTitle>
-          <DialogDescription>
-            A tool for reviewing and analyzing your notes. Designed for reviewing academic articles
-            and performing sub-group analyses.
-          </DialogDescription>
+          <DialogTitle>{t('menu.file.about')}</DialogTitle>
+          <DialogDescription>{t('about.description')}</DialogDescription>
         </DialogHeader>
 
         {info && (
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm select-text">
-            <dt className="text-muted-foreground">Version</dt>
+            <dt className="text-muted-foreground">{t('about.version')}</dt>
             <dd>{info.version}</dd>
             <dt className="text-muted-foreground">Electron</dt>
             <dd>{info.electron}</dd>
-            <dt className="text-muted-foreground">System</dt>
+            <dt className="text-muted-foreground">{t('about.system')}</dt>
             <dd>{info.os}</dd>
-            <dt className="text-muted-foreground">Settings folder</dt>
+            <dt className="text-muted-foreground">{t('about.settingsFolder')}</dt>
             <dd className="font-mono text-xs break-all">{info.settingsDir}</dd>
-            <dt className="text-muted-foreground">Log files</dt>
+            <dt className="text-muted-foreground">{t('about.logFiles')}</dt>
             <dd className="font-mono text-xs break-all">{info.logsDir}</dd>
           </dl>
         )}
+        <p className="text-xs text-muted-foreground select-text">{t('about.dictionaries')}</p>
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <DialogFooter className="sm:justify-between">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => open('settings')}>
-              Open settings folder
+              {t('about.openSettings')}
             </Button>
             <Button variant="outline" onClick={() => open('logs')}>
-              Open logs
+              {t('about.openLogs')}
             </Button>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={copy} disabled={!info}>
-              {copied ? 'Copied' : 'Copy details'}
+              {copied ? t('about.copied') : t('about.copy')}
             </Button>
             {/* Focused first, so Enter just closes (not "Open settings folder"). */}
             <Button onClick={onClose} autoFocus>
-              Close
+              {t('common.close')}
             </Button>
           </div>
         </DialogFooter>

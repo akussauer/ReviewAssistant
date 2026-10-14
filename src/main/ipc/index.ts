@@ -34,6 +34,7 @@ import {
   TabUpdateSchema,
   ThemeIdSchema,
   ThemeSchema,
+  UiLanguageSchema,
   UpdateCellSchema
 } from '../../shared/schemas'
 import {
@@ -84,6 +85,9 @@ import {
   showInFolder
 } from '../review'
 import { applyTheme, currentSettings, saveSettings } from '../settings'
+import { currentLocale, t } from '../i18n'
+import { applyLanguage } from '../language'
+import { spellcheckOptions, takeNotices } from '../spellcheck'
 import { claudeDesktopStatus, saveExtension } from '../claudeDesktop'
 import {
   activeTheme,
@@ -153,6 +157,10 @@ export function registerIpc({ dev }: { dev: boolean }): void {
   handle(IPC.settingsGet, NoInput, currentSettings)
   handle(IPC.settingsUpdate, SettingsSchema, saveSettings)
   handle(IPC.settingsPreviewTheme, ThemeSchema, applyTheme)
+  handle(IPC.settingsPreviewLanguage, UiLanguageSchema, applyLanguage)
+  handle(IPC.i18nLocale, NoInput, currentLocale)
+  handle(IPC.spellcheckLanguages, NoInput, spellcheckOptions)
+  handle(IPC.uiTakeNotices, NoInput, takeNotices)
   handle(IPC.themeIsDark, NoInput, () => nativeTheme.shouldUseDarkColors)
 
   // ---- Menu and window state (plan M9a)
@@ -196,7 +204,7 @@ export function registerIpc({ dev }: { dev: boolean }): void {
   handle(IPC.rowsCreate, RowCreateSchema, (input) => createRow(getDb(), input))
   handle(IPC.rowsUpdateCell, UpdateCellSchema, ({ rowId, columnId, value, generation }) => {
     if (generation !== undefined && generation !== currentFile()?.generation) {
-      throw new Error('Edit not saved: a different file was opened before it arrived')
+      throw new Error(t('errors.lateEdit'))
     }
     return updateCell(getDb(), rowId, columnId, value)
   })

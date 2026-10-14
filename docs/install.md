@@ -1,12 +1,15 @@
 # Installing Review Assistant (Windows)
 
 ## Install
-1. Run `ReviewAssistant-2.0.0-setup.exe`.
+1. Run `ReviewAssistant-2.0.0-setup.exe`. It appears in English, German, French or Spanish, following Windows' language.
 2. **Windows protected your PC?** The installer isn't code-signed yet, so SmartScreen warns about it. Click **More info**, then **Run anyway**.
 3. Click through the wizard. It installs for your user only (no administrator rights needed), into `%LOCALAPPDATA%\Programs\Review Assistant` unless you choose another folder.
 4. Leave **Run Review Assistant** ticked on the last page to start it.
 
 The installer adds a Start-menu entry and a desktop shortcut, and makes `.review` files open with Review Assistant when double-clicked.
+
+## Language and spellcheck
+The app starts in Windows' language if it's English, German, French or Spanish (otherwise English). To change it, use **Settings → Preferences → Language**. Spellcheck can check up to three languages at once (**Settings → Preferences → Spellcheck**). English, German, French and Spanish work offline; other languages are downloaded the first time you choose them, so they need an internet connection once.
 
 ## Opening files
 - Double-click a `.review` file. If the app is already open, its window switches to that file. Anything you were typing is saved first.
@@ -14,7 +17,7 @@ The installer adds a Start-menu entry and a desktop shortcut, and makes `.review
 - Old `.json` files from the PySide app: use **File → Import old JSON…** (or **File → Open…** and pick the `.json`). The JSON is never changed.
 
 ## Where your settings live
-`%APPDATA%\ReviewAssistant`: settings, your API key (encrypted), themes, plugins, automatic backups (`Backups`) and logs (`Logs`). **File → About Review Assistant** shows the version and opens these folders. Your reviews are wherever you saved the `.review` files.
+`%APPDATA%\ReviewAssistant`: settings, your API key (encrypted), themes, plugins, spellcheck dictionaries (`Dictionaries`), automatic backups (`Backups`) and logs (`Logs`). **File → About Review Assistant** shows the version and opens these folders. Your reviews are wherever you saved the `.review` files.
 
 ## Updating
 Run the newer installer. It replaces the program and keeps your settings. There's no automatic update.

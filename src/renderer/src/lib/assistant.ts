@@ -1,4 +1,5 @@
 import { assistantStore, reviewStore } from '../store'
+import { tNow } from './i18n'
 
 // Turns the active tab's assistant panel on or off (the status-bar button and its hotkey).
 // Turning it on needs a passing key check; turning it off always works.
@@ -10,5 +11,5 @@ export function toggleAssistant(): void {
   reviewStore
     .getState()
     .updateTab({ id: tab.id, assistantEnabled: !tab.assistantEnabled })
-    .catch((err) => reviewStore.getState().reportError('Turning the assistant on or off', err))
+    .catch((err) => reviewStore.getState().reportError(tNow()('assistant.toggling'), err))
 }

@@ -20,6 +20,7 @@ import { getMarkdownFolder, setMarkdownFolder } from './db/markdownExport'
 import { exportMarkdown } from './markdownExport'
 import { openReviewDb, ReviewFileError } from './db/open'
 import type { DB } from './db/types'
+import { t } from './i18n'
 import { log } from './log'
 
 // The currently open review: one file, one better-sqlite3 connection (CLAUDE.md).
@@ -37,8 +38,13 @@ let startupError: { title: string; err: unknown } | null = null
 export const config = createConfigStore(app.getPath('userData'))
 const backupRoot = (): string => join(app.getPath('userData'), 'Backups')
 
-const FILTERS = [{ name: 'Review files', extensions: ['review'] }]
-const JSON_FILTERS = [{ name: 'Old Review Assistant files', extensions: ['json'] }]
+// Functions, so they're in the language of the moment.
+const FILTERS = (): Electron.FileFilter[] => [
+  { name: t('files.filterReview'), extensions: ['review'] }
+]
+const JSON_FILTERS = (): Electron.FileFilter[] => [
+  { name: t('files.filterOldJson'), extensions: ['json'] }
+]
 
 export function attachWindow(win: BrowserWindow, menuChanged: () => void): void {
   window = win
@@ -104,7 +110,7 @@ export function closeReview(): void {
 function showError(title: string, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err)
   log.error(`${title}: ${message}`)
-  const detail = err instanceof ReviewFileError ? message : `Unexpected error: ${message}`
+  const detail = err instanceof ReviewFileError ? message : t('errors.unexpected', { message })
   const win = liveWindow()
   if (win) dialog.showMessageBoxSync(win, { type: 'error', title, message: title, detail })
 }
@@ -135,12 +141,12 @@ function switchTo(path: string, create: boolean): FileInfo | null {
         backupOnOpen(backupRoot(), full)
       } catch (err) {
         log.warn(`Backup on open failed for ${full}: ${String(err)}`)
-        if (!existsSync(full)) throw new ReviewFileError(`File not found:\n${full}`)
+        if (!existsSync(full)) throw new ReviewFileError(t('errors.fileNotFound', { path: full }))
       }
     }
     db = openReviewDb(full, { create })
   } catch (err) {
-    showError(create ? 'Could not create the review file' : 'Could not open the review file', err)
+    showError(t(create ? 'errors.couldNotCreate' : 'errors.couldNotOpen'), err)
     // Recreating the open file closed it first, so tell the renderer nothing is open now.
     if (!current) announce()
     if (!existsSync(full)) {
@@ -171,9 +177,9 @@ export async function newReviewDialog(): Promise<FileInfo | null> {
   const win = liveWindow()
   const result = win
     ? await dialog.showSaveDialog(win, {
-        title: 'New review',
-        defaultPath: join(app.getPath('documents'), 'Untitled.review'),
-        filters: FILTERS
+        title: t('files.newTitle'),
+        defaultPath: join(app.getPath('documents'), `${t('files.untitled')}.review`),
+        filters: FILTERS()
       })
     : { canceled: true, filePath: undefined }
   if (result.canceled || !result.filePath) return null
@@ -184,10 +190,10 @@ export async function openReviewDialog(): Promise<FileInfo | null> {
   const win = liveWindow()
   const result = win
     ? await dialog.showOpenDialog(win, {
-        title: 'Open review',
+        title: t('files.openTitle'),
         defaultPath: app.getPath('documents'),
         // An old .json can be picked here too; it goes through the importer (spec §3).
-        filters: [{ name: 'Review files (and old .json)', extensions: ['review', 'json'] }],
+        filters: [{ name: t('files.filterReviewOrJson'), extensions: ['review', 'json'] }],
         properties: ['openFile']
       })
     : { canceled: true, filePaths: [] }
@@ -220,8 +226,8 @@ function askOnlyChecked(win: BrowserWindow, title: string, question: string): bo
     type: 'question',
     title,
     message: question,
-    detail: `${checked} of ${total} rows are checked.`,
-    buttons: ['Yes', 'No', 'Cancel'],
+    detail: t('files.checkedOfTotal', { count: checked, total }),
+    buttons: [t('common.yes'), t('common.no'), t('common.cancel')],
     defaultId: 0,
     cancelId: 2,
     noLink: true
@@ -231,21 +237,21 @@ function askOnlyChecked(win: BrowserWindow, title: string, question: string): bo
 
 // Save As (spec §3): writes a copy, optionally with only the checked rows, and switches to it.
 export function saveAsDialog(): Promise<FileInfo | null> {
-  return guarded('Could not save a copy', async () => {
+  return guarded(t('errors.couldNotSaveCopy'), async () => {
     const win = liveWindow()
     if (!win || !current) return null
     const source = current.path
-    const onlyChecked = askOnlyChecked(win, 'Save As', 'Save only checked rows?')
+    const onlyChecked = askOnlyChecked(win, t('files.saveAsTitle'), t('files.saveOnlyChecked'))
     if (onlyChecked === null) return null
     const result = await dialog.showSaveDialog(win, {
-      title: 'Save As',
-      defaultPath: join(dirname(source), `${stem(source)} copy.review`),
-      filters: FILTERS
+      title: t('files.saveAsTitle'),
+      defaultPath: join(dirname(source), `${t('files.copyName', { name: stem(source) })}.review`),
+      filters: FILTERS()
     })
     if (result.canceled || !result.filePath) return null
     const dest = resolve(result.filePath)
     if (samePath(dest, source)) {
-      throw new ReviewFileError('That is the file already open. Choose a different name.')
+      throw new ReviewFileError(t('errors.sameAsOpen'))
     }
     // The save dialog already asked "replace?".
     saveCopy(getDb(), dest, onlyChecked)
@@ -257,14 +263,14 @@ export function saveAsDialog(): Promise<FileInfo | null> {
 // Imports a file from the PySide6 app into a new .review (spec §9) and opens it. The JSON
 // itself is never changed. `from` skips the open dialog (a .json chosen in Open...).
 export function importJsonDialog(from?: string): Promise<FileInfo | null> {
-  return guarded('Could not import the file', async () => {
+  return guarded(t('errors.couldNotImport'), async () => {
     const win = liveWindow()
     if (!win) return null
     if (!from) {
       const pick = await dialog.showOpenDialog(win, {
-        title: 'Import old JSON',
+        title: t('files.importTitle'),
         defaultPath: app.getPath('documents'),
-        filters: JSON_FILTERS,
+        filters: JSON_FILTERS(),
         properties: ['openFile']
       })
       if (pick.canceled || pick.filePaths.length === 0) return null
@@ -273,17 +279,17 @@ export function importJsonDialog(from?: string): Promise<FileInfo | null> {
     const file = parsePysideJson(readFileSync(from, 'utf8'))
 
     const save = await dialog.showSaveDialog(win, {
-      title: 'Save the imported review as',
+      title: t('files.importSaveTitle'),
       defaultPath: join(dirname(from), `${stem(from)}.review`),
-      filters: FILTERS
+      filters: FILTERS()
     })
     if (save.canceled || !save.filePath) return null
     const dest = resolve(save.filePath)
     if (samePath(dest, resolve(from))) {
-      throw new ReviewFileError('That is the JSON file being imported. Choose a different name.')
+      throw new ReviewFileError(t('errors.sameAsImported'))
     }
     if (current && samePath(dest, current.path)) {
-      throw new ReviewFileError('That file is open. Choose a different name.')
+      throw new ReviewFileError(t('errors.fileIsOpen'))
     }
 
     const summary = createReviewWith(dest, (db) => importPyside(db, file))
@@ -293,13 +299,17 @@ export function importJsonDialog(from?: string): Promise<FileInfo | null> {
     const info = switchTo(dest, false)
     if (info) {
       const changes = summary.notes.length
-        ? `\n\nChanges made while importing:\n- ${summary.notes.join('\n- ')}`
+        ? `\n\n${t('import.changes')}\n- ${summary.notes.join('\n- ')}`
         : ''
       dialog.showMessageBoxSync(win, {
         type: 'info',
-        title: 'Import complete',
-        message: `Imported ${summary.rows} rows, ${summary.columns} columns and ${summary.tabs} tabs.`,
-        detail: `Saved as ${dest}${changes}`
+        title: t('import.completeTitle'),
+        message: t('import.completeMessage', {
+          rows: t('import.rows', { count: summary.rows }),
+          columns: t('import.columns', { count: summary.columns }),
+          tabs: t('import.tabs', { count: summary.tabs })
+        }),
+        detail: t('import.savedAs', { path: dest }) + changes
       })
     }
     return info
@@ -311,21 +321,22 @@ let lastExport: string | null = null
 
 // Export CSV / JSON (spec §9): the whole file, or only the checked rows.
 export function exportDialog(kind: ExportKind): Promise<ExportResult | null> {
-  return guarded('Could not export the file', async () => {
+  return guarded(t('errors.couldNotExport'), async () => {
     const win = liveWindow()
     if (!win || !current) return null
     const what = kind === 'csv' ? 'CSV' : 'JSON'
-    const onlyChecked = askOnlyChecked(win, `Export as ${what}`, 'Export only checked rows?')
+    const title = t('files.exportTitle', { what })
+    const onlyChecked = askOnlyChecked(win, title, t('files.exportOnlyChecked'))
     if (onlyChecked === null) return null
     const result = await dialog.showSaveDialog(win, {
-      title: `Export as ${what}`,
+      title,
       defaultPath: join(app.getPath('downloads'), `${stem(current.path)}.${kind}`),
-      filters: [{ name: `${what} files`, extensions: [kind] }]
+      filters: [{ name: t('files.filterKind', { what }), extensions: [kind] }]
     })
     if (result.canceled || !result.filePath) return null
     const path = resolve(result.filePath)
     if (samePath(path, current.path)) {
-      throw new ReviewFileError('That is the open review file. Choose a different name.')
+      throw new ReviewFileError(t('errors.sameAsOpenReview'))
     }
     const out = kind === 'csv' ? toCsv(getDb(), onlyChecked) : toPysideJson(getDb(), onlyChecked)
     writeFileSync(path, out.text, 'utf8')
@@ -341,7 +352,7 @@ export async function chooseMarkdownFolder(): Promise<string | null> {
   const win = liveWindow()
   if (!win || !current) return null
   const result = await dialog.showOpenDialog(win, {
-    title: 'Export notes to folder',
+    title: t('files.markdownFolderTitle'),
     defaultPath: getMarkdownFolder(getDb()) ?? app.getPath('documents'),
     properties: ['openDirectory', 'createDirectory']
   })
@@ -354,10 +365,10 @@ export async function chooseMarkdownFolder(): Promise<string | null> {
 export function markdownExportRun(
   input: MarkdownExportInput
 ): Promise<MarkdownExportResult | null> {
-  return guarded('Could not export the notes', async () => {
+  return guarded(t('errors.couldNotExportNotes'), async () => {
     if (!current) return null
     const folder = getMarkdownFolder(getDb())
-    if (!folder) throw new ReviewFileError('Choose a target folder first.')
+    if (!folder) throw new ReviewFileError(t('errors.chooseFolderFirst'))
     const result = await exportMarkdown(getDb(), input, folder, basename(current.path))
     lastExport = result.path
     log.info(
@@ -388,7 +399,7 @@ export function reopenLast(): void {
     config.update({ lastFile: null, recentFiles: withoutRecent(config.get().recentFiles, last) })
     return
   }
-  openBeforeWindow(last, 'Could not reopen the last review file')
+  openBeforeWindow(last, t('errors.couldNotReopen'))
 }
 
 // Opens a file before the window exists. On failure the welcome screen shows, with the
@@ -396,7 +407,7 @@ export function reopenLast(): void {
 function openBeforeWindow(path: string, errorTitle: string): void {
   const full = resolve(path)
   try {
-    if (!existsSync(full)) throw new ReviewFileError(`File not found:\n${full}`)
+    if (!existsSync(full)) throw new ReviewFileError(t('errors.fileNotFound', { path: full }))
     backupOnOpen(backupRoot(), full)
     const db = openReviewDb(full)
     closeReview() // nothing is open this early; keeps the one-connection rule regardless
@@ -422,8 +433,7 @@ let requested: string | null = null
 // At startup: a .review opens straight away, instead of the last file. Anything else
 // (e.g. an old .json) waits for the page, which asks for it once it has loaded.
 export function openAtLaunch(path: string): void {
-  if (extname(path).toLowerCase() === '.review')
-    openBeforeWindow(path, 'Could not open the review file')
+  if (extname(path).toLowerCase() === '.review') openBeforeWindow(path, t('errors.couldNotOpen'))
   else requested = resolve(path)
 }
 
@@ -454,11 +464,14 @@ export function openRequested(): Promise<FileInfo | null> {
   const ext = extname(path).toLowerCase()
   if (ext === '.json') {
     if (existsSync(path)) return importJsonDialog(path)
-    showError('Could not import the file', new ReviewFileError(`File not found:\n${path}`))
+    showError(t('errors.couldNotImport'), new ReviewFileError(t('errors.fileNotFound', { path })))
     return Promise.resolve(null)
   }
   if (ext !== '.review') {
-    showError('Could not open the file', new ReviewFileError(`Not a review file:\n${path}`))
+    showError(
+      t('errors.couldNotOpenFile'),
+      new ReviewFileError(t('errors.notAReviewFile', { path }))
+    )
     return Promise.resolve(null)
   }
   return Promise.resolve(switchTo(path, false))

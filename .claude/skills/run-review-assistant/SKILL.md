@@ -132,7 +132,7 @@ are the checks.
 - **Use `menu`, not `click-text`, inside context menus.** While a Radix menu is open the
   rest of the page ignores the pointer, and `click-text Tab 2` hits the tab strip's "Tab 2"
   first, so it times out. Row menu: `rclick :nth-match([title="Right-click for row options"], 1)`.
-- **Status reads "N rows · …" or "X of N rows shown · …"** when filters/search are on.
+- **Status reads "N rows · …" (or "1 row · …") or "X of N rows shown · …"** when filters/search are on.
   `status` and the launch readiness check accept both.
 - **Search/filter boxes apply 150 ms after typing stops** and save ~400 ms later; `sleep 500`
   before reading `status`. Focus the box (`click [aria-label="Search this tab"]`) before

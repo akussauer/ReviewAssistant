@@ -5,6 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
 import { IPC, type ClaudeDesktopStatus } from '../shared/ipc'
+import { t } from './i18n'
 import { log } from './log'
 import { buildBundle, buildManifest } from './mcp/bundle'
 import { pipePath, startPipeServer, type PipeServer } from './mcp/pipe'
@@ -23,9 +24,18 @@ let quitting = false
 
 const reasonOf = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
+// Writes a failure's reason in the UI language of the moment (see relabelClaudeDesktop).
+let reasonText: (() => string) | null = null
+
 function setStatus(patch: Partial<ClaudeDesktopStatus>): void {
-  status = { ...status, ...patch }
+  if (patch.state && patch.state !== 'failed') reasonText = null
+  status = { ...status, ...patch, ...(reasonText ? { reason: reasonText() } : {}) }
   liveWindow()?.webContents.send(IPC.claudeDesktopStatusChanged, status)
+}
+
+// The UI language changed: say the same thing in the new one.
+export function relabelClaudeDesktop(): void {
+  if (reasonText) setStatus({})
 }
 
 export const claudeDesktopStatus = (): ClaudeDesktopStatus => status
@@ -60,11 +70,13 @@ export function applyClaudeDesktop(): Promise<void> {
         setStatus({ state: 'listening', reason: undefined })
       } catch (err) {
         const inUse = (err as NodeJS.ErrnoException).code === 'EADDRINUSE'
-        const reason = inUse
-          ? 'In use by another copy of Review Assistant.'
-          : `Could not start: ${reasonOf(err)}`
-        log.warn(`Claude Desktop: ${reason}`)
-        setStatus({ state: 'failed', reason })
+        const detail = reasonOf(err)
+        reasonText = () =>
+          inUse
+            ? t('claudeDesktopMain.inUse')
+            : t('claudeDesktopMain.couldNotStart', { reason: detail })
+        log.warn(`Claude Desktop: ${inUse ? 'pipe in use' : detail}`)
+        setStatus({ state: 'failed' })
       }
     } else if (!on) {
       if (server) {
@@ -95,25 +107,25 @@ export async function saveExtension(): Promise<string | null> {
   if (!existsSync(script)) {
     await dialog.showMessageBox(win, {
       type: 'error',
-      title: 'Claude Desktop',
-      message: 'The Claude Desktop script is missing from this build.',
-      detail: 'Run "npm run build:mcp" and try again.'
+      title: t('claudeDesktopMain.title'),
+      message: t('claudeDesktopMain.scriptMissing'),
+      detail: t('claudeDesktopMain.scriptMissingHint')
     })
     return null
   }
   const pick = await dialog.showSaveDialog(win, {
-    title: 'Save extension for Claude Desktop',
-    defaultPath: join(app.getPath('downloads'), 'Review Assistant.mcpb'),
-    filters: [{ name: 'Claude Desktop extension', extensions: ['mcpb'] }]
+    title: t('claudeDesktopMain.saveTitle'),
+    defaultPath: join(app.getPath('downloads'), `${t('claudeDesktopMain.fileName')}.mcpb`),
+    filters: [{ name: t('claudeDesktopMain.filter'), extensions: ['mcpb'] }]
   })
   if (pick.canceled || !pick.filePath) return null
   try {
-    const t = token()
+    const secret = token()
     const manifest = buildManifest({
       version: app.getVersion(),
       author: 'Alex Kussauer',
-      pipe: pipePath(t),
-      token: t
+      pipe: pipePath(secret),
+      token: secret
     })
     writeFileSync(
       pick.filePath,
@@ -126,8 +138,8 @@ export async function saveExtension(): Promise<string | null> {
     log.error(`Claude Desktop: could not save the extension: ${reasonOf(err)}`)
     await dialog.showMessageBox(win, {
       type: 'error',
-      title: 'Claude Desktop',
-      message: 'The extension could not be saved.',
+      title: t('claudeDesktopMain.title'),
+      message: t('claudeDesktopMain.saveFailed'),
       detail: reasonOf(err)
     })
     return null

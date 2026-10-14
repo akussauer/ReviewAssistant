@@ -20,6 +20,7 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { Label } from '../ui/label'
+import { useT } from '../../lib/i18n'
 
 // Settings > Plugins (spec §12.1): the Obsidian theme, and the list of installed plugins
 // (a placeholder: no plugin code runs yet). Every change applies and is saved at once, so
@@ -38,6 +39,7 @@ export function PluginsDialog({ onClose }: { onClose: () => void }): React.JSX.E
   const [plugins, setPlugins] = useState<PluginInfo[] | null>(null)
   const [deleting, setDeleting] = useState<Deleting | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const t = useT()
 
   // Runs a request; a result replaces the list, null (cancelled) leaves it, and an error
   // is shown under the sections.
@@ -53,7 +55,7 @@ export function PluginsDialog({ onClose }: { onClose: () => void }): React.JSX.E
     window.api.plugins.list().then(setPlugins).catch(failed)
   }, [])
 
-  const active = themes?.themes.find((t) => t.id === themes.activeId)
+  const active = themes?.themes.find((x) => x.id === themes.activeId)
 
   const confirmDelete = (): void => {
     if (!deleting) return
@@ -65,19 +67,19 @@ export function PluginsDialog({ onClose }: { onClose: () => void }): React.JSX.E
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Plugins</DialogTitle>
-          <DialogDescription>Themes and plugins apply to every review.</DialogDescription>
+          <DialogTitle>{t('plugins.title')}</DialogTitle>
+          <DialogDescription>{t('plugins.description')}</DialogDescription>
         </DialogHeader>
 
         <section className="grid gap-3">
           <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Theme
+            {t('preferences.theme')}
           </h3>
           {themes && (
             <>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Label htmlFor="plugins-theme" className="w-16 shrink-0">
-                  Theme
+                  {t('preferences.theme')}
                 </Label>
                 <select
                   id="plugins-theme"
@@ -87,70 +89,64 @@ export function PluginsDialog({ onClose }: { onClose: () => void }): React.JSX.E
                     run(window.api.themes.setActive(e.target.value || null), setThemes)
                   }
                 >
-                  <option value={DEFAULT}>Default</option>
-                  {themes.themes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                      {t.source === 'vault' ? ' (vault)' : ''}
-                      {t.version ? ` · ${t.version}` : ''}
+                  <option value={DEFAULT}>{t('plugins.defaultTheme')}</option>
+                  {themes.themes.map((theme) => (
+                    <option key={theme.id} value={theme.id}>
+                      {theme.source === 'vault'
+                        ? t('plugins.fromVault', { name: theme.name })
+                        : theme.name}
+                      {theme.version ? ` · ${theme.version}` : ''}
                     </option>
                   ))}
                 </select>
                 <Button variant="outline" onClick={() => run(window.api.themes.add(), setThemes)}>
-                  Add theme…
+                  {t('plugins.addTheme')}
                 </Button>
                 <Button
                   variant="outline"
                   disabled={active?.source !== 'local'}
-                  title={
-                    active?.source === 'vault'
-                      ? 'Themes from your vault are not changed here'
-                      : undefined
-                  }
+                  title={active?.source === 'vault' ? t('plugins.vaultReadOnly') : undefined}
                   onClick={() =>
                     active && setDeleting({ kind: 'theme', id: active.id, name: active.name })
                   }
                 >
-                  Delete
+                  {t('common.delete')}
                 </Button>
               </div>
 
-              <div className="flex items-center gap-2 text-sm">
-                <span className="w-16 shrink-0 font-medium">Vault</span>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="w-16 shrink-0 font-medium">{t('plugins.vault')}</span>
                 <span
                   className={`min-w-0 flex-1 truncate ${themes.vault ? '' : 'text-muted-foreground'}`}
                   title={themes.vault ?? undefined}
                 >
-                  {themes.vault ?? 'None: choose an Obsidian vault to use its themes'}
+                  {themes.vault ?? t('plugins.noVault')}
                   {themes.vaultMissing && (
-                    <span className="text-destructive">
-                      {' '}
-                      (its .obsidian folder isn&apos;t there)
-                    </span>
+                    <span className="text-destructive"> {t('plugins.vaultMissing')}</span>
                   )}
                 </span>
                 <Button
                   variant="outline"
                   onClick={() => run(window.api.themes.chooseVault(), setThemes)}
                 >
-                  Choose…
+                  {t('markdownExport.choose')}
                 </Button>
                 <Button
                   variant="ghost"
                   disabled={!themes.vault}
                   onClick={() => run(window.api.themes.clearVault(), setThemes)}
                 >
-                  Clear
+                  {t('plugins.clear')}
                 </Button>
               </div>
 
               <p className="text-xs text-muted-foreground">
-                Only a theme&apos;s colours are used. Light or dark is chosen in Preferences.{' '}
+                {t('plugins.coloursOnly')}{' '}
                 <button
                   className="underline hover:text-foreground"
                   onClick={() => run(window.api.themes.openFolder(), () => {})}
                 >
-                  Open themes folder
+                  {t('plugins.openThemes')}
                 </button>
               </p>
             </>
@@ -158,20 +154,20 @@ export function PluginsDialog({ onClose }: { onClose: () => void }): React.JSX.E
         </section>
 
         <section className="grid gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Plugins
+              {t('plugins.title')}
             </h3>
-            <div className="ml-auto flex gap-2">
+            <div className="ml-auto flex flex-wrap gap-2">
               <Button size="sm" variant="ghost" onClick={refreshPlugins}>
-                Refresh
+                {t('assistantSettings.refresh')}
               </Button>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => run(window.api.plugins.openFolder(), () => {})}
               >
-                Open plugins folder
+                {t('plugins.openPlugins')}
               </Button>
             </div>
           </div>
@@ -193,7 +189,7 @@ export function PluginsDialog({ onClose }: { onClose: () => void }): React.JSX.E
         )}
 
         <DialogFooter>
-          <Button onClick={onClose}>Close</Button>
+          <Button onClick={onClose}>{t('common.close')}</Button>
         </DialogFooter>
       </DialogContent>
 
@@ -201,16 +197,18 @@ export function PluginsDialog({ onClose }: { onClose: () => void }): React.JSX.E
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete {deleting?.kind === 'theme' ? 'theme' : 'plugin'} &quot;{deleting?.name}&quot;?
+              {t(deleting?.kind === 'theme' ? 'plugins.deleteTheme' : 'plugins.deletePlugin', {
+                name: deleting?.name ?? ''
+              })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Its folder is moved to the Recycle Bin.
-              {deleting?.kind === 'theme' && ' The app switches back to the Default theme.'}
+              {t('plugins.recycleBin')}
+              {deleting?.kind === 'theme' && ` ${t('plugins.backToDefault')}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>{t('common.delete')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -223,11 +221,11 @@ function PluginTable(props: {
   onToggle(plugin: PluginInfo, enabled: boolean): void
   onDelete(plugin: PluginInfo): void
 }): React.JSX.Element {
+  const t = useT()
   if (props.plugins.length === 0) {
     return (
       <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
-        No plugins installed. Plugins aren&apos;t available yet; community plugins will be listed
-        here.
+        {t('plugins.none')}
       </p>
     )
   }
@@ -236,11 +234,11 @@ function PluginTable(props: {
       <table className="w-full text-sm">
         <thead className="sticky top-0 bg-muted text-left text-xs text-muted-foreground">
           <tr>
-            <th className="px-3 py-2 font-medium">Name</th>
-            <th className="px-3 py-2 font-medium">Version</th>
-            <th className="px-3 py-2 font-medium">Author</th>
-            <th className="px-3 py-2 font-medium">Description</th>
-            <th className="px-3 py-2 font-medium">Enabled</th>
+            <th className="px-3 py-2 font-medium">{t('tabs.name')}</th>
+            <th className="px-3 py-2 font-medium">{t('about.version')}</th>
+            <th className="px-3 py-2 font-medium">{t('plugins.author')}</th>
+            <th className="px-3 py-2 font-medium">{t('plugins.descriptionColumn')}</th>
+            <th className="px-3 py-2 font-medium">{t('plugins.enabled')}</th>
             <th className="px-3 py-2" />
           </tr>
         </thead>
@@ -260,7 +258,7 @@ function PluginTable(props: {
               <td className="px-3 py-2">
                 <input
                   type="checkbox"
-                  aria-label={`Enable ${p.name}`}
+                  aria-label={t('assistantSettings.enable', { name: p.name })}
                   checked={p.enabled}
                   disabled={p.error !== undefined}
                   onChange={(e) => props.onToggle(p, e.target.checked)}
@@ -268,7 +266,7 @@ function PluginTable(props: {
               </td>
               <td className="px-3 py-2 text-right">
                 <Button size="xs" variant="ghost" onClick={() => props.onDelete(p)}>
-                  Delete
+                  {t('common.delete')}
                 </Button>
               </td>
             </tr>

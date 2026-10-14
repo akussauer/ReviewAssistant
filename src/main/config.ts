@@ -3,9 +3,10 @@ import { join, resolve } from 'path'
 import { z } from 'zod'
 import {
   DEFAULT_SETTINGS,
-  FIXED_SHORTCUTS,
+  fixedShortcut,
   HOTKEY_NAMES,
   MARKDOWN_KINDS,
+  type FixedShortcut,
   type HotkeyName
 } from '../shared/ipc'
 import {
@@ -85,14 +86,14 @@ function mergeHotkeys(raw: unknown): Config['hotkeys'] {
 
 // A saved hotkey that a newer version made a fixed shortcut (e.g. Ctrl+F, now Search):
 // mergeHotkeys resets it, and the user is told once (see createConfigStore).
-export type HotkeyReset = { name: HotkeyName; accelerator: string; usedBy: string }
+export type HotkeyReset = { name: HotkeyName; accelerator: string; usedBy: FixedShortcut }
 
 export function fixedShortcutClashes(raw: unknown): HotkeyReset[] {
   const hotkeys = raw && typeof raw === 'object' ? (raw as { hotkeys?: unknown }).hotkeys : null
   if (!hotkeys || typeof hotkeys !== 'object') return []
   return HOTKEY_NAMES.flatMap((name) => {
     const accelerator = (hotkeys as Record<string, unknown>)[name]
-    const usedBy = typeof accelerator === 'string' ? FIXED_SHORTCUTS[accelerator] : undefined
+    const usedBy = typeof accelerator === 'string' ? fixedShortcut(accelerator) : undefined
     return usedBy ? [{ name, accelerator: accelerator as string, usedBy }] : []
   })
 }
@@ -121,6 +122,17 @@ function mergeMarkdownColours(raw: unknown): Config['markdownColours'] {
   return kept
 }
 
+// Electron's English dictionaries; the reference app also offered en_JM, en_NG, … which
+// Chromium doesn't have (they used to fall back silently to the system's language).
+const CHROMIUM_ENGLISH = ['en-AU', 'en-CA', 'en-GB', 'en-US']
+
+// An old config's single `spellcheckLanguage: "en_GB"` as the new list: ["en-GB"].
+export function fromLegacySpellcheck(old: unknown): string[] | undefined {
+  if (typeof old !== 'string' || !/^[a-z]{2}_[A-Z]{2}$/.test(old)) return undefined
+  const code = old.replace('_', '-')
+  return [code.startsWith('en-') && !CHROMIUM_ENGLISH.includes(code) ? 'en-GB' : code]
+}
+
 // Keeps each valid field of `raw` and uses the default for the rest. Hotkeys and
 // per-element colours are merged one by one, so a single bad one doesn't reset the others.
 export function mergeWithDefaults(raw: unknown): Config {
@@ -134,7 +146,9 @@ export function mergeWithDefaults(raw: unknown): Config {
           ? mergeMarkdownColours(obj.markdownColours)
           : key === 'assistant'
             ? mergeAssistant(obj.assistant)
-            : obj[key]
+            : key === 'spellcheckLanguages'
+              ? (obj.spellcheckLanguages ?? fromLegacySpellcheck(obj.spellcheckLanguage))
+              : obj[key]
     const parsed = (fieldSchema as z.ZodType).safeParse(value)
     merged[key] = parsed.success ? parsed.data : DEFAULT_CONFIG[key as keyof Config]
   }
@@ -160,10 +174,13 @@ export type ConfigStore = {
   update(patch: Partial<Config>): Config
   // Hotkeys reset on reading because they now clash with a fixed shortcut; empties the list.
   takeHotkeyResets(): HotkeyReset[]
+  // There was no config.json when the app started (a fresh install or settings folder).
+  firstRun: boolean
 }
 
 export function createConfigStore(dir: string): ConfigStore {
   const file = join(dir, 'config.json')
+  const firstRun = !existsSync(file)
   let cache: Config | null = null
   let hotkeyResets: HotkeyReset[] = []
 
@@ -200,6 +217,7 @@ export function createConfigStore(dir: string): ConfigStore {
   }
 
   return {
+    firstRun,
     get: () => (cache ??= read()),
     update(patch) {
       const next = mergeWithDefaults({ ...(cache ??= read()), ...patch })

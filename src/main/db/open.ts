@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3'
+import { t } from '../i18n'
 import { listColumns } from './columns'
 import { runMigrations, schemaVersion, SCHEMA_VERSION } from './migrations'
 import { ensureOneRow } from './rows'
@@ -24,13 +25,11 @@ export function openReviewDb(path: string, opts: { create?: boolean; empty?: boo
 
     const version = schemaVersion(db)
     if (version > SCHEMA_VERSION) {
-      throw new ReviewFileError(
-        'This file was saved by a newer version of Review Assistant. Please update the app.'
-      )
+      throw new ReviewFileError(t('errors.newerVersion'))
     }
     const isEmpty = db.prepare('SELECT COUNT(*) FROM sqlite_master').pluck().get() === 0
     if (version === 0 && !isEmpty) {
-      throw new ReviewFileError('This is an SQLite database, but not a review file.')
+      throw new ReviewFileError(t('errors.sqliteNotReview'))
     }
 
     runMigrations(db)
@@ -42,7 +41,7 @@ export function openReviewDb(path: string, opts: { create?: boolean; empty?: boo
   } catch (err) {
     db.close()
     if (err instanceof Error && 'code' in err && err.code === 'SQLITE_NOTADB') {
-      throw new ReviewFileError('This file is not a review file.')
+      throw new ReviewFileError(t('errors.notReview'))
     }
     throw err
   }

@@ -29,7 +29,7 @@ describe('mergeWithDefaults', () => {
       theme: 'dark',
       markdownColour: 42, // invalid -> default
       hotkeys: { newRow: 'CmdOrCtrl+R', saveAs: 'Q' }, // invalid/missing ones -> default
-      spellcheckLanguage: 'de_DE', // not offered -> default
+      spellcheckLanguages: 'en-GB', // not a list -> default
       somethingOld: true // unknown keys are dropped
     })
     expect(merged).toEqual({
@@ -116,7 +116,7 @@ describe('mergeWithDefaults', () => {
     const raw = { hotkeys: { newRow: 'CmdOrCtrl+F', saveAs: 'CmdOrCtrl+Shift+S' } }
     expect(mergeWithDefaults(raw).hotkeys).toEqual(DEFAULT_CONFIG.hotkeys)
     expect(fixedShortcutClashes(raw)).toEqual([
-      { name: 'newRow', accelerator: 'CmdOrCtrl+F', usedBy: 'Search' }
+      { name: 'newRow', accelerator: 'CmdOrCtrl+F', usedBy: 'search' }
     ])
     expect(fixedShortcutClashes({ hotkeys: 'nope' })).toEqual([])
   })
@@ -164,11 +164,42 @@ describe('createConfigStore', () => {
     )
     const store = createConfigStore(dir)
     expect(store.takeHotkeyResets()).toEqual([
-      { name: 'toggleAssistant', accelerator: 'CmdOrCtrl+F', usedBy: 'Search' }
+      { name: 'toggleAssistant', accelerator: 'CmdOrCtrl+F', usedBy: 'search' }
     ])
     expect(store.takeHotkeyResets()).toEqual([])
     const saved = JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8'))
     expect(saved.hotkeys.toggleAssistant).toBe('CmdOrCtrl+Shift+A')
     expect(createConfigStore(dir).takeHotkeyResets()).toEqual([])
+  })
+})
+
+describe('spellcheck languages (plan M10d)', () => {
+  it('converts an old single language to the new list', () => {
+    expect(mergeWithDefaults({ spellcheckLanguage: 'en_US' }).spellcheckLanguages).toEqual([
+      'en-US'
+    ])
+    // The reference app's English variants that Chromium doesn't have become en-GB.
+    expect(mergeWithDefaults({ spellcheckLanguage: 'en_JM' }).spellcheckLanguages).toEqual([
+      'en-GB'
+    ])
+    expect(mergeWithDefaults({ spellcheckLanguage: 'de_DE' }).spellcheckLanguages).toEqual([
+      'de-DE'
+    ])
+  })
+
+  it('prefers the new list, and checks it', () => {
+    const both = { spellcheckLanguage: 'en_US', spellcheckLanguages: ['de-DE', 'en-GB'] }
+    expect(mergeWithDefaults(both).spellcheckLanguages).toEqual(['de-DE', 'en-GB'])
+    expect(mergeWithDefaults({ spellcheckLanguages: [] }).spellcheckLanguages).toEqual([])
+    for (const bad of [['a', 'b', 'c', 'd'], ['de-DE', 'de-DE'], ['not a code']])
+      expect(mergeWithDefaults({ spellcheckLanguages: bad }).spellcheckLanguages).toEqual(['en-GB'])
+  })
+
+  it('knows whether there was a config file at start', () => {
+    const dir = tempDir()
+    const first = createConfigStore(dir)
+    expect(first.firstRun).toBe(true)
+    first.update({ theme: 'dark' })
+    expect(createConfigStore(dir).firstRun).toBe(false)
   })
 })

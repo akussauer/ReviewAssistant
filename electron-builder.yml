@@ -36,6 +36,11 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
   runAfterFinish: true
+  # The installer speaks Windows' language if it's one of these (plan M10d); there's no
+  # language-picker page. electron-builder brings the translations of its own pages.
+  multiLanguageInstaller: true
+  installerLanguages: [en_US, de_DE, fr_FR, es_ES]
+  displayLanguageSelector: false
 # mac/linux targets are kept but untested; Windows is the supported platform.
 mac:
   icon: resources/icon.png

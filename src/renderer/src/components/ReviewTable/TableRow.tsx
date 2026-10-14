@@ -2,6 +2,7 @@ import { memo, useState } from 'react'
 import { displayText } from '../../../../shared/conversion'
 import type { Column, Row } from '../../../../shared/ipc'
 import type { Highlighter } from '../../../../shared/search'
+import { useT } from '../../lib/i18n'
 import { reviewStore } from '../../store'
 import { Cell } from './Cell'
 import { ContextMenu, ContextMenuTrigger } from '../ui/context-menu'
@@ -72,6 +73,7 @@ export const TableRow = memo(function TableRow({
 // The narrow strip on the left: the row's checkbox, plus a handle along the bottom edge
 // to drag the row taller or shorter (like the row header in the reference app).
 function RowHeader({ row }: { row: Row }): React.JSX.Element {
+  const t = useT()
   // The menu (spec §5) is only built while open.
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -105,20 +107,20 @@ function RowHeader({ row }: { row: Row }): React.JSX.Element {
       <ContextMenuTrigger asChild>
         <div
           data-col={-1}
-          title="Right-click for row options"
+          title={t('table.rowTooltip')}
           className="sticky left-0 z-10 flex shrink-0 items-start justify-center border-r bg-muted pt-2"
           style={{ width: ROW_HEADER_WIDTH, scrollMarginTop: HEADER_HEIGHT }}
         >
           <input
             type="checkbox"
             checked={row.checked}
-            aria-label="Check row"
+            aria-label={t('table.checkRow')}
             // Space toggles it natively once Tab has reached it.
             onChange={(e) => void reviewStore.getState().setChecked([row.id], e.target.checked)}
           />
           <div
             className="absolute inset-x-0 bottom-0 h-1.5 cursor-row-resize"
-            title="Drag to resize the row"
+            title={t('table.resizeRow')}
             onPointerDown={startDrag}
           />
         </div>

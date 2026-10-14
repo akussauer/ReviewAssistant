@@ -10,6 +10,7 @@ import { FilterX } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Column, Row } from '../../../../shared/ipc'
 import { matchesHotkey } from '../../lib/hotkeys'
+import { useT } from '../../lib/i18n'
 import { moveColumn } from '../../lib/columns'
 import { columnHighlighters, isFiltered } from '../../lib/filter'
 import { nextSort } from '../../lib/sort'
@@ -44,6 +45,7 @@ export function ReviewTable({ tabId, rows }: { tabId: number; rows: TabRows }): 
   const rowsById = useReview((s) => s.rowsById)
   const view = useReview((s) => s.tabs.find((t) => t.id === tabId)?.view)
   const sort = view?.sort ?? null
+  const t = useT()
 
   // ---- Which rows, in which order: the tab's rows, filtered, then sorted
   const { shownIds: ids, sorted } = rows
@@ -253,8 +255,8 @@ export function ReviewTable({ tabId, rows }: { tabId: number; rows: TabRows }): 
               >
                 {filtered && (
                   <button
-                    aria-label="Clear filters and search"
-                    title="Clear all filters and the search"
+                    aria-label={t('table.clearFiltersLabel')}
+                    title={t('table.clearFiltersTooltip')}
                     className="rounded-sm p-0.5 text-primary hover:bg-accent"
                     onClick={() =>
                       reviewStore.getState().setView(tabId, { filters: {}, search: '' })
@@ -326,11 +328,12 @@ export function ReviewTable({ tabId, rows }: { tabId: number; rows: TabRows }): 
 function CheckAll({ rowIds }: { rowIds: number[] }): React.JSX.Element {
   const rowsById = useReview((s) => s.rowsById)
   const state = checkState(rowsById, rowIds)
+  const t = useT()
   return (
     <input
       type="checkbox"
-      aria-label="Check all rows shown in this tab"
-      title={state === 'all' ? 'Uncheck all' : 'Check all'}
+      aria-label={t('table.checkAllLabel')}
+      title={state === 'all' ? t('table.uncheckAll') : t('table.checkAll')}
       checked={state === 'all'}
       // `indeterminate` has no HTML attribute; it can only be set on the DOM element.
       ref={(el) => {

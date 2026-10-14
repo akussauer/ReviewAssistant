@@ -22,6 +22,7 @@ import { toggleAssistant } from './lib/assistant'
 import { useClaudeDesktopStatus } from './lib/claudeDesktop'
 import { ownsUndo, runEditCommand } from './lib/editCommands'
 import { matchesHotkey } from './lib/hotkeys'
+import { localeStore, tNow, useFormatNumber, useT } from './lib/i18n'
 import { flushTextEdits } from './lib/pendingEdits'
 import { toggleSearchBar } from './lib/searchBar'
 import { Welcome } from './components/Welcome/Welcome'
@@ -55,6 +56,7 @@ function runMenuCommand(command: MenuCommand, openDialog: (d: AppDialog) => void
   // After the flush, so the preview and the export include the latest edits.
   if (command === 'exportMarkdown') return openDialog('markdownExport')
   const store = reviewStore.getState()
+  const t = tNow()
   const done = (what: string) => (err: unknown) => store.reportError(what, err)
   switch (command) {
     case 'devSeed':
@@ -65,23 +67,19 @@ function runMenuCommand(command: MenuCommand, openDialog: (d: AppDialog) => void
         .catch(done('Seeding'))
       break
     case 'saveAs':
-      window.api.file.saveAs().catch(done('Save As'))
+      window.api.file.saveAs().catch(done(t('actions.saveAs')))
       break
     case 'importJson':
-      window.api.file.importJson().catch(done('Importing'))
+      window.api.file.importJson().catch(done(t('actions.importing')))
       break
     case 'exportCsv':
     case 'exportJson':
       window.api.file
         .export(command === 'exportCsv' ? 'csv' : 'json')
         .then((r) => {
-          if (r)
-            store.showInfo(
-              `Exported ${r.rows} ${r.rows === 1 ? 'row' : 'rows'} to ${r.name}`,
-              r.path
-            )
+          if (r) store.showInfo(t('notices.exported', { count: r.rows, name: r.name }), r.path)
         })
-        .catch(done('Exporting'))
+        .catch(done(t('actions.exporting')))
   }
 }
 
@@ -107,7 +105,7 @@ function useOpenRequests(): void {
       flushPending()
       window.api.file
         .openRequested()
-        .catch((err) => reviewStore.getState().reportError('Opening the file', err))
+        .catch((err) => reviewStore.getState().reportError(tNow()('actions.openingFile'), err))
     }
     run()
     const unsubscribe = window.api.file.onOpenRequest(run)
@@ -241,7 +239,8 @@ function useEditMenuState(): void {
     const describe = (edit: { columnId: number } | undefined): string | null => {
       if (!edit) return null
       const label = reviewStore.getState().columns.find((c) => c.id === edit.columnId)?.label
-      return label ? `edit to ${label}` : 'edit'
+      const t = tNow()
+      return label ? t('undo.editTo', { column: label }) : t('undo.edit')
     }
     const send = (state: EditState): void => {
       const key = JSON.stringify(state)
@@ -263,11 +262,14 @@ function useEditMenuState(): void {
     }
     update()
     const unsubscribe = reviewStore.subscribe(update)
+    // The menu's "Undo edit to Notes" is in the UI language too.
+    const unsubscribeLocale = localeStore.subscribe(update)
     document.addEventListener('focusin', update)
     document.addEventListener('focusout', update)
     return () => {
       clearTimeout(timer)
       unsubscribe()
+      unsubscribeLocale()
       document.removeEventListener('focusin', update)
       document.removeEventListener('focusout', update)
       send({ undo: null, redo: null }) // no file open: nothing to undo
@@ -279,12 +281,25 @@ function App(): React.JSX.Element | null {
   // undefined = still asking main; null = no file open.
   const [file, setFile] = useState<FileInfo | null | undefined>(undefined)
   const [dialog, setDialog] = useState<AppDialog | null>(null)
+  const t = useT()
   useDarkClass()
   useObsidianTheme()
   useMarkdownColours()
   useSearchHighlightColour()
   useOpenRequests()
   useEffect(() => window.api.menu.onCommand((command) => runMenuCommand(command, setDialog)), [])
+  // Messages main has for the status bar (e.g. a spellcheck dictionary didn't download):
+  // any made before the page was up, then each as it comes.
+  useEffect(() => {
+    const take = (): void => {
+      window.api.ui
+        .takeNotices()
+        .then((texts) => texts.forEach((text) => reviewStore.getState().showInfo(text)))
+        .catch((err) => console.error('Could not read the notices', err))
+    }
+    take()
+    return window.api.ui.onNotice(take)
+  }, [])
   // The assistant's status and streamed replies (main pushes both).
   useEffect(() => assistantStore.getState().init(), [])
   // Chats belong to the open file: start afresh when another one opens.
@@ -308,7 +323,7 @@ function App(): React.JSX.Element | null {
   if (file === undefined) return null
   return (
     <div className="flex h-screen flex-col">
-      <TitleBar title={file ? `${file.name} – Review Assistant` : 'Review Assistant'} />
+      <TitleBar title={file ? t('app.titleWithFile', { name: file.name }) : t('app.title')} />
       <div className="min-h-0 flex-1">
         {file === null ? (
           <Welcome />
@@ -341,6 +356,7 @@ function ReviewView(): React.JSX.Element | null {
   const rows = useTabRows(activeTabId)
   const newRowKey = useReview((s) => s.settings?.hotkeys.newRow ?? 'CmdOrCtrl+N')
   const assistantKey = useReview((s) => s.settings?.hotkeys.toggleAssistant ?? 'CmdOrCtrl+Shift+A')
+  const t = useT()
 
   useEffect(() => {
     void reviewStore.getState().load()
@@ -360,7 +376,7 @@ function ReviewView(): React.JSX.Element | null {
       reviewStore
         .getState()
         .createRow(activeTabId === MAIN_TAB_ID ? {} : { tabId: activeTabId })
-        .catch((err) => reviewStore.getState().reportError('Adding a row', err))
+        .catch((err) => reviewStore.getState().reportError(tNow()('actions.addingRow'), err))
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -379,7 +395,9 @@ function ReviewView(): React.JSX.Element | null {
   }, [assistantKey])
 
   if (status === 'error') {
-    return <p className="p-4 text-sm text-destructive">Could not load the file: {error}</p>
+    return (
+      <p className="p-4 text-sm text-destructive">{t('app.loadFailed', { error: error ?? '' })}</p>
+    )
   }
   if (status === 'loading' || !activeTab) return null
   return (
@@ -410,14 +428,12 @@ function ReviewView(): React.JSX.Element | null {
 
 // Synthesis tabs keep their rows; their own view (spec §11) arrives in M11.
 function SynthesisPlaceholder({ rows }: { rows: number }): React.JSX.Element {
+  const t = useT()
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
-      <p className="text-base font-medium text-foreground">Synthesis tab</p>
-      <p>
-        This tab has {rows} {rows === 1 ? 'row' : 'rows'}. The synthesis view is coming in a later
-        version.
-      </p>
-      <p>Right-click the tab and choose Edit Tab to make it a Review Table again.</p>
+      <p className="text-base font-medium text-foreground">{t('synthesis.title')}</p>
+      <p>{t('synthesis.body', { count: rows })}</p>
+      <p>{t('synthesis.hint')}</p>
     </div>
   )
 }
@@ -426,14 +442,16 @@ function StatusBar({ rows, tab }: { rows: TabRows; tab: Tab }): React.JSX.Elemen
   const { allIds, shownIds } = rows
   const notice = useReview((s) => s.notice)
   const checkedCount = useReview((s) => s.rowOrder.filter((id) => s.rowsById[id]?.checked).length)
+  const t = useT()
+  const n = useFormatNumber()
 
   return (
     <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-xs text-muted-foreground">
       <span>
         {shownIds.length < allIds.length
-          ? `${shownIds.length} of ${allIds.length} rows shown`
-          : `${allIds.length} rows`}{' '}
-        · {checkedCount} checked
+          ? t('status.rowsShown', { count: allIds.length, shown: n(shownIds.length) })
+          : t('status.rows', { count: allIds.length })}{' '}
+        · {t('status.checked', { count: checkedCount })}
       </span>
       {notice && (
         <span
@@ -447,14 +465,14 @@ function StatusBar({ rows, tab }: { rows: TabRows; tab: Tab }): React.JSX.Elemen
               onClick={() =>
                 window.api.file
                   .showInFolder(notice.path!)
-                  .catch((err) => reviewStore.getState().reportError('Showing the file', err))
+                  .catch((err) => reviewStore.getState().reportError(t('actions.showingFile'), err))
               }
             >
-              Show in folder
+              {t('status.showInFolder')}
             </button>
           )}
           <button
-            aria-label="Dismiss"
+            aria-label={t('status.dismiss')}
             className="rounded-sm px-1 hover:bg-accent"
             onClick={() => reviewStore.getState().dismissNotice()}
           >
@@ -475,6 +493,7 @@ function ClaudeReading(): React.JSX.Element | null {
   const lastCall = useClaudeDesktopStatus()?.lastCall ?? null
   // The call whose note has timed out; a newer call shows the note again.
   const [expired, setExpired] = useState<string | null>(null)
+  const t = useT()
   useEffect(() => {
     if (!lastCall) return
     const left = 4000 - (Date.now() - new Date(lastCall).getTime())
@@ -484,7 +503,7 @@ function ClaudeReading(): React.JSX.Element | null {
   if (!lastCall || expired === lastCall) return null
   return (
     <span role="status" className="text-xs text-muted-foreground">
-      Claude Desktop is reading…
+      {t('status.claudeReading')}
     </span>
   )
 }

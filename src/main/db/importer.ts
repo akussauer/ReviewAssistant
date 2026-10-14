@@ -8,6 +8,7 @@ import type {
   ColumnType
 } from '../../shared/ipc'
 import { MAIN_TAB_ID } from '../../shared/ipc'
+import { t } from '../i18n'
 import { createColumn, listColumns } from './columns'
 import { ReviewFileError } from './open'
 import { ensureOneRow } from './rows'
@@ -79,20 +80,16 @@ function asCell(v: unknown): CellValue | undefined {
   return JSON.stringify(v)
 }
 
-const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
-
 export function parsePysideJson(text: string): PyFile {
   let raw: unknown
   try {
     raw = JSON.parse(text)
   } catch {
-    throw new ReviewFileError('This file is not valid JSON.')
+    throw new ReviewFileError(t('errors.notJson'))
   }
   const parsed = PyFileSchema.safeParse(raw)
   if (!parsed.success) {
-    throw new ReviewFileError(
-      'This JSON file was not saved by the old Review Assistant (it needs "columns" and "rows").'
-    )
+    throw new ReviewFileError(t('errors.notOldJson'))
   }
   return parsed.data
 }
@@ -106,31 +103,31 @@ function planColumn(
 ): ColumnCreateInput {
   const width = Math.max(20, Math.min(5000, Math.round(py.width ?? 100)))
   if (py.width !== undefined && width !== py.width) {
-    notes.push(`"${label}": width ${py.width} px changed to ${width} px.`)
+    notes.push(t('import.width', { label, from: String(py.width), to: String(width) }))
   }
   let type = TYPE_MAP[py.type_key ?? 'textedit']
   if (!type) {
-    notes.push(`"${label}": unknown type "${py.type_key}", imported as Text.`)
+    notes.push(t('import.unknownType', { label, type: String(py.type_key) }))
     type = 'text'
   }
 
   if (type === 'dropdown') {
     const labels: string[] = []
     const add = (v: unknown): void => {
-      const t = String(v).trim()
-      if (t && !labels.includes(t)) labels.push(t)
+      const text = String(v).trim()
+      if (text && !labels.includes(text)) labels.push(text)
     }
     ;(py.options ?? []).forEach(add)
     const known = labels.length
     values.forEach((v) => v !== undefined && typeof v !== 'boolean' && add(v))
     if (labels.length === 0) {
-      notes.push(`"${label}": a dropdown with no options, imported as Text.`)
+      notes.push(t('import.emptyDropdown', { label }))
       return { label, type: 'text', options: {}, width }
     }
     if (labels.length > known) {
       const extra = labels.slice(known).map((l) => `"${l}"`)
       notes.push(
-        `"${label}": added ${plural(extra.length, 'option')} used in rows: ${extra.join(', ')}.`
+        t('import.addedOptions', { label, count: extra.length, options: extra.join(', ') })
       )
     }
     return { label, type, options: { choices: labels.map((l) => ({ label: l })) }, width }
@@ -140,7 +137,7 @@ function planColumn(
     let min = Math.round(py.min_val ?? 0)
     let max = Math.round(py.max_val ?? 9999)
     if (min > max) {
-      notes.push(`"${label}": minimum and maximum were the wrong way round, so swapped.`)
+      notes.push(t('import.swapped', { label }))
       ;[min, max] = [max, min]
     }
     const nums = values.flatMap((v) => {
@@ -150,7 +147,9 @@ function planColumn(
     const lo = Math.min(min, ...nums)
     const hi = Math.max(max, ...nums)
     if (lo !== min || hi !== max) {
-      notes.push(`"${label}": range widened from ${min}–${max} to ${lo}–${hi} to fit the values.`)
+      // As strings: no thousands separators in a range.
+      const [a, b, c, d] = [min, max, lo, hi].map(String)
+      notes.push(t('import.widened', { label, min: a, max: b, lo: c, hi: d }))
     }
     return { label, type, options: { min: lo, max: hi }, width }
   }
@@ -166,8 +165,9 @@ export function importPyside(db: DB, file: PyFile): ImportSummary {
     // ---- Columns, in the old order
     const takenColumns = new Set<string>()
     const plans = file.columns.map((py, i) => {
+      // Names are data: in English whatever the UI language, like the new-review template.
       const label = uniqueLabel(py.name, takenColumns, `Column ${i + 1}`)
-      if (label !== py.name) notes.push(`Column "${py.name}" renamed to "${label}".`)
+      if (label !== py.name) notes.push(t('import.columnRenamed', { from: py.name, to: label }))
       const values = file.rows.map((r) => asCell(r[py.name]))
       return { py, values, input: planColumn(py, label, values, notes) }
     })
@@ -177,7 +177,7 @@ export function importPyside(db: DB, file: PyFile): ImportSummary {
     const strays = [...new Set(file.rows.flatMap((r) => Object.keys(r)))].filter(
       (k) => !names.has(k)
     )
-    strays.forEach((k) => notes.push(`Values under "${k}" (not a column) were not imported.`))
+    strays.forEach((name) => notes.push(t('import.strayValues', { name })))
     const columns = listColumns(db)
 
     // ---- Rows. Values are converted as if from text, which is how the old app stored
@@ -194,9 +194,8 @@ export function importPyside(db: DB, file: PyFile): ImportSummary {
       })
     })
     for (const [col, count] of cleared) {
-      notes.push(
-        `"${col.label}": ${plural(count, 'value')} that didn't fit a ${col.type} column left empty.`
-      )
+      const type = t(`import.typeNames.${col.type}`)
+      notes.push(t('import.cleared', { label: col.label, count, type }))
     }
 
     const insert = db.prepare(
@@ -223,35 +222,32 @@ export function importPyside(db: DB, file: PyFile): ImportSummary {
     }
 
     if (tallRows) {
-      notes.push(
-        `${plural(tallRows, 'row')} taller than ${MAX_ROW_HEIGHT} px made ${MAX_ROW_HEIGHT} px.`
-      )
+      notes.push(t('import.tallRows', { count: tallRows, max: String(MAX_ROW_HEIGHT) }))
     }
 
     // ---- Tabs
     const takenTabs = new Set(['Main'])
     const tabIdByName = new Map<string, number>()
-    for (const t of file.tabs ?? []) {
-      const label = uniqueLabel(t.name, takenTabs, 'Tab')
-      if (label !== t.name) notes.push(`Tab "${t.name}" renamed to "${label}".`)
+    for (const tab of file.tabs ?? []) {
+      const label = uniqueLabel(tab.name, takenTabs, 'Tab')
+      if (label !== tab.name) notes.push(t('import.tabRenamed', { from: tab.name, to: label }))
       let missing = 0
-      const rowIds = t.row_ids
-        ? t.row_ids.flatMap((old) => {
+      const rowIds = tab.row_ids
+        ? tab.row_ids.flatMap((old) => {
             const id = idByOld.get(old)
             if (id === undefined) missing++
             return id === undefined ? [] : [id]
           })
-        : (t.row_idx ?? []).flatMap((i) => {
+        : (tab.row_idx ?? []).flatMap((i) => {
             const ok = Number.isInteger(i) && i >= 0 && i < n
             if (!ok) missing++
             return ok ? [newIds[i]] : []
           })
-      if (missing)
-        notes.push(`Tab "${label}": ${plural(missing, 'row')} no longer in the file skipped.`)
-      const type = t.type === 'synthesis' ? 'synthesis' : 'review'
-      const tab = createTab(db, { label, type, rowIds })
-      if (t.assistant_enabled) updateTab(db, { id: tab.id, assistantEnabled: true })
-      if (!tabIdByName.has(t.name)) tabIdByName.set(t.name, tab.id)
+      if (missing) notes.push(t('import.missingRows', { label, count: missing }))
+      const type = tab.type === 'synthesis' ? 'synthesis' : 'review'
+      const created = createTab(db, { label, type, rowIds })
+      if (tab.assistant_enabled) updateTab(db, { id: created.id, assistantEnabled: true })
+      if (!tabIdByName.has(tab.name)) tabIdByName.set(tab.name, created.id)
     }
     // The old app saves "main" for the main tab, otherwise the tab's name.
     const active =

@@ -11,6 +11,7 @@ import { basename, dirname, extname, join, resolve } from 'path'
 import { z } from 'zod'
 import type { ThemeInfo, ThemeSource } from '../shared/ipc'
 import { buildThemeCss, parseThemeVars } from './obsidianTheme'
+import { t } from './i18n'
 
 // Where Obsidian themes are found (spec §12.1), using Obsidian's own layout:
 // <folder>/<theme name>/theme.css, with an optional manifest.json beside it.
@@ -111,9 +112,7 @@ export type ThemeInstall = {
 export function planThemeInstall(localDir: string, cssPath: string): ThemeInstall {
   const vars = parseThemeVars(readFileSync(cssPath, 'utf8')) // throws on broken CSS
   if (![vars.base, vars.light, vars.dark].some((v) => Object.keys(v).length > 0)) {
-    throw new Error(
-      'This file has no theme colours (CSS variables on body, .theme-light or .theme-dark).'
-    )
+    throw new Error(t('addons.noThemeColours'))
   }
   const stem = basename(cssPath, extname(cssPath))
   const fallback = stem.toLowerCase() === 'theme' ? basename(dirname(cssPath)) : stem

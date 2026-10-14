@@ -15,6 +15,7 @@ import {
   vaultThemesDir,
   type ThemeDirs
 } from './themes'
+import { t } from './i18n'
 
 // Settings > Plugins (spec §12.1): Obsidian themes and the placeholder plugin list.
 // Every change is saved to config.json at once (the dialog has no Save button).
@@ -65,7 +66,7 @@ function themeChanged(): ThemesState {
 }
 
 export function setActiveTheme(id: string | null): ThemesState {
-  if (id !== null && !themeFolder(themeDirs(), id)) throw new Error('That theme is not installed')
+  if (id !== null && !themeFolder(themeDirs(), id)) throw new Error(t('addons.themeMissing'))
   config.update({ activeTheme: id })
   return themeChanged()
 }
@@ -82,8 +83,8 @@ export async function addThemeDialog(): Promise<ThemesState | null> {
   const win = liveWindow()
   if (!win) return null
   const pick = await dialog.showOpenDialog(win, {
-    title: 'Add an Obsidian theme',
-    filters: [{ name: 'Obsidian theme', extensions: ['css'] }],
+    title: t('addons.addTitle'),
+    filters: [{ name: t('addons.themeFilter'), extensions: ['css'] }],
     properties: ['openFile']
   })
   const path = pick.filePaths[0]
@@ -93,9 +94,9 @@ export async function addThemeDialog(): Promise<ThemesState | null> {
     if (plan.exists) {
       const answer = dialog.showMessageBoxSync(win, {
         type: 'question',
-        title: 'Replace theme?',
-        message: `A theme called "${plan.name}" is already installed. Replace it?`,
-        buttons: ['Replace', 'Cancel'],
+        title: t('addons.replaceTitle'),
+        message: t('addons.replaceMessage', { name: plan.name }),
+        buttons: [t('addons.replace'), t('common.cancel')],
         defaultId: 0,
         cancelId: 1
       })
@@ -105,16 +106,16 @@ export async function addThemeDialog(): Promise<ThemesState | null> {
     log.info(`Installed theme "${plan.name}" from ${path}`)
     return setActiveTheme(id)
   } catch (err) {
-    showError('Could not add the theme', err)
+    showError(t('addons.addFailed'), err)
     return null
   }
 }
 
 // Our own themes only; the vault's are never changed.
 export async function deleteTheme(id: string): Promise<ThemesState> {
-  if (!id.startsWith('local:')) throw new Error('Themes from a vault cannot be deleted here')
+  if (!id.startsWith('local:')) throw new Error(t('addons.vaultThemeDelete'))
   const folder = themeFolder(themeDirs(), id)
-  if (!folder) throw new Error('That theme is not installed')
+  if (!folder) throw new Error(t('addons.themeMissing'))
   await shell.trashItem(folder)
   log.info(`Moved theme ${id} to the Recycle Bin`)
   if (config.get().activeTheme === id) config.update({ activeTheme: null })
@@ -125,16 +126,13 @@ export async function chooseVaultDialog(): Promise<ThemesState | null> {
   const win = liveWindow()
   if (!win) return null
   const pick = await dialog.showOpenDialog(win, {
-    title: 'Choose your Obsidian vault',
+    title: t('addons.vaultTitle'),
     properties: ['openDirectory']
   })
   const path = pick.filePaths[0]
   if (pick.canceled || !path) return null
   if (!vaultThemesDir(path)) {
-    showError(
-      'Not an Obsidian vault',
-      'That folder has no .obsidian folder. Choose the vault folder itself.'
-    )
+    showError(t('addons.notVault'), t('addons.notVaultDetail'))
     return null
   }
   // A theme from the old vault doesn't carry over (a same-named folder in the new vault is
@@ -165,12 +163,12 @@ export const pluginsList = (): PluginInfo[] =>
 
 function listedPlugin(folder: string): PluginInfo {
   const plugin = pluginsList().find((p) => p.folder === folder)
-  if (!plugin) throw new Error('That plugin is not installed')
+  if (!plugin) throw new Error(t('addons.pluginMissing'))
   return plugin
 }
 
 export function setPluginEnabled(folder: string, enabled: boolean): PluginInfo[] {
-  if (enabled && listedPlugin(folder).error) throw new Error('This plugin has no valid manifest')
+  if (enabled && listedPlugin(folder).error) throw new Error(t('addons.pluginInvalid'))
   const others = config.get().enabledPlugins.filter((f) => f !== folder)
   config.update({ enabledPlugins: enabled ? [...others, folder] : others })
   return pluginsList()

@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'fs'
 import { join } from 'path'
 import { z } from 'zod'
 import type { PluginInfo } from '../shared/ipc'
+import { t } from './i18n'
 
 // Settings > Plugins (spec §12.1): a placeholder for future community plugins. Each
 // plugin is a folder in <userData>/Plugins with an Obsidian-style manifest.json. We only
@@ -25,11 +26,12 @@ function describe(dir: string, folder: string, enabled: Set<string>): PluginInfo
       folder,
       name: folder,
       enabled: false,
-      error: missing ? 'No manifest.json' : 'Invalid manifest'
+      error: missing ? t('addons.noManifest') : t('addons.invalidManifest')
     }
   }
   const parsed = ManifestSchema.safeParse(raw)
-  if (!parsed.success) return { folder, name: folder, enabled: false, error: 'Invalid manifest' }
+  if (!parsed.success)
+    return { folder, name: folder, enabled: false, error: t('addons.invalidManifest') }
   const { name, version, author, description } = parsed.data
   return { folder, name, version, author, description, enabled: enabled.has(folder) }
 }
