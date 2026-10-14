@@ -33,7 +33,13 @@ const api: Api = {
       const listener = (_e: IpcRendererEvent, file: FileInfo | null): void => cb(file)
       ipcRenderer.on(IPC.fileChanged, listener)
       return () => ipcRenderer.removeListener(IPC.fileChanged, listener)
-    }
+    },
+    onOpenRequest: (cb) => {
+      const listener = (): void => cb()
+      ipcRenderer.on(IPC.fileOpenRequest, listener)
+      return () => ipcRenderer.removeListener(IPC.fileOpenRequest, listener)
+    },
+    openRequested: () => invoke(IPC.fileOpenRequested)
   },
   menu: {
     onCommand: (cb) => {

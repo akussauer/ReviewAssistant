@@ -1,4 +1,5 @@
-import { app, dialog, shell } from 'electron'
+import { app, shell } from 'electron'
+import { dialog } from './dialogs'
 import { mkdirSync } from 'fs'
 import { join } from 'path'
 import { IPC, type ActiveTheme, type PluginInfo, type ThemesState } from '../shared/ipc'

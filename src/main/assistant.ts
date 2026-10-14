@@ -1,4 +1,5 @@
-import { app, dialog, safeStorage } from 'electron'
+import { app, safeStorage } from 'electron'
+import { dialog } from './dialogs'
 import {
   IPC,
   type AssistantStatus,

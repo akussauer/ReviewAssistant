@@ -1,4 +1,5 @@
-import { app, dialog, shell } from 'electron'
+import { app, shell } from 'electron'
+import { dialog } from './dialogs'
 import { randomBytes } from 'crypto'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
@@ -60,7 +61,7 @@ export function applyClaudeDesktop(): Promise<void> {
       } catch (err) {
         const inUse = (err as NodeJS.ErrnoException).code === 'EADDRINUSE'
         const reason = inUse
-          ? 'Another Review Assistant window is already connected to Claude Desktop.'
+          ? 'In use by another copy of Review Assistant.'
           : `Could not start: ${reasonOf(err)}`
         log.warn(`Claude Desktop: ${reason}`)
         setStatus({ state: 'failed', reason })

@@ -22,16 +22,24 @@ import { Welcome } from './components/Welcome/Welcome'
 import { assistantStore, reviewStore, useReview } from './store'
 import type { Tab } from '../../shared/ipc'
 
-// File-menu commands (main sends them; see MenuCommand). Text typed in the last moment
-// and pending search/filter changes are saved first, so a copy or export includes them;
-// IPC keeps the order, so those saves reach main before the command does.
+const dialogOpen = (): boolean =>
+  document.querySelector('[role=dialog], [role=alertdialog]') !== null
+
+// Saves text typed in the last moment and pending search/filter changes. IPC keeps the
+// order, so those saves reach main before whatever is sent next.
+function flushPending(): void {
+  flushTextEdits()
+  reviewStore.getState().flushViews()
+}
+
+// File-menu commands (main sends them; see MenuCommand). Pending edits are saved first,
+// so a copy or export includes them.
 function runMenuCommand(command: MenuCommand, openDialog: (d: SettingsPage) => void): void {
   // A dialog is open (e.g. Preferences, where the Save As hotkey is being set): ignore.
-  if (document.querySelector('[role=dialog], [role=alertdialog]')) return
+  if (dialogOpen()) return
   if (command === 'preferences' || command === 'plugins') return openDialog(command)
-  flushTextEdits()
+  flushPending()
   const store = reviewStore.getState()
-  store.flushViews()
   const done = (what: string) => (err: unknown) => store.reportError(what, err)
   switch (command) {
     case 'devSeed':
@@ -60,6 +68,39 @@ function runMenuCommand(command: MenuCommand, openDialog: (d: SettingsPage) => v
         })
         .catch(done('Exporting'))
   }
+}
+
+// A file double-clicked in Explorer (plan M9): main holds it until the page is ready.
+// Pending edits are saved first, as for File > Open; while a dialog is open, it waits
+// until the dialog closes. Asking once on load picks up a file given at startup.
+function useOpenRequests(): void {
+  useEffect(() => {
+    let waiting: MutationObserver | null = null
+    const run = (): void => {
+      if (dialogOpen()) {
+        if (waiting) return
+        // Dialogs are added to and removed from <body>; watch until none is left.
+        waiting = new MutationObserver(() => {
+          if (dialogOpen()) return
+          waiting?.disconnect()
+          waiting = null
+          run()
+        })
+        waiting.observe(document.body, { childList: true, subtree: true })
+        return
+      }
+      flushPending()
+      window.api.file
+        .openRequested()
+        .catch((err) => reviewStore.getState().reportError('Opening the file', err))
+    }
+    run()
+    const unsubscribe = window.api.file.onOpenRequest(run)
+    return () => {
+      unsubscribe()
+      waiting?.disconnect()
+    }
+  }, [])
 }
 
 // Main owns the theme (Electron's nativeTheme, from the Theme setting or the system) and
@@ -139,6 +180,7 @@ function App(): React.JSX.Element | null {
   useDarkClass()
   useObsidianTheme()
   useMarkdownColours()
+  useOpenRequests()
   useEffect(
     () => window.api.menu.onCommand((command) => runMenuCommand(command, setSettingsPage)),
     []
@@ -197,7 +239,7 @@ function ReviewView(): React.JSX.Element | null {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (!matchesHotkey(e, newRowKey, navigator.platform.startsWith('Mac'))) return
-      if (document.querySelector('[role=dialog], [role=alertdialog]')) return
+      if (dialogOpen()) return
       e.preventDefault()
       const { activeTabId, tabs } = reviewStore.getState()
       if (tabs.find((t) => t.id === activeTabId)?.type === 'synthesis') return
@@ -214,7 +256,7 @@ function ReviewView(): React.JSX.Element | null {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (!matchesHotkey(e, assistantKey, navigator.platform.startsWith('Mac'))) return
-      if (document.querySelector('[role=dialog], [role=alertdialog]')) return
+      if (dialogOpen()) return
       e.preventDefault()
       toggleAssistant()
     }

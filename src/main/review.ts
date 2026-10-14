@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog, shell } from 'electron'
+import { app, BrowserWindow, shell } from 'electron'
+import { afterNativeDialogs, dialog, nativeDialogOpen } from './dialogs'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { basename, dirname, extname, join, resolve } from 'path'
 import {
@@ -149,10 +150,17 @@ function switchTo(path: string, create: boolean): FileInfo | null {
   current = { db, path: full }
   generation++
   log.info(`${create ? 'Created' : 'Opened'} ${full}`)
-  config.update({ recentFiles: withRecent(config.get().recentFiles, full), lastFile: full })
+  remember(full)
   onMenuChanged()
   announce()
   return currentFile()
+}
+
+// Open Recent, reopen-last, and the taskbar jump list (Windows lists it there once the
+// installer has registered .review).
+function remember(path: string): void {
+  config.update({ recentFiles: withRecent(config.get().recentFiles, path), lastFile: path })
+  app.addRecentDocument(path)
 }
 
 export async function newReviewDialog(): Promise<FileInfo | null> {
@@ -344,17 +352,80 @@ export function reopenLast(): void {
     config.update({ lastFile: null, recentFiles: withoutRecent(config.get().recentFiles, last) })
     return
   }
+  openBeforeWindow(last, 'Could not reopen the last review file')
+}
+
+// Opens a file before the window exists. On failure the welcome screen shows, with the
+// error on top once the window is ready (see attachWindow).
+function openBeforeWindow(path: string, errorTitle: string): void {
+  const full = resolve(path)
   try {
-    backupOnOpen(backupRoot(), last)
-    current = { db: openReviewDb(last), path: resolve(last) }
+    if (!existsSync(full)) throw new ReviewFileError(`File not found:\n${full}`)
+    backupOnOpen(backupRoot(), full)
+    const db = openReviewDb(full)
+    closeReview() // nothing is open this early; keeps the one-connection rule regardless
+    current = { db, path: full }
     generation++
-    log.info(`Reopened ${last}`)
+    log.info(`Opened ${full} at startup`)
+    remember(full)
   } catch (err) {
-    // No window yet: attachWindow shows this once it is ready, over the welcome screen.
-    log.error(`Could not reopen ${last}: ${String(err)}`)
-    startupError = { title: 'Could not reopen the last review file', err }
-    config.update({ lastFile: null })
+    log.error(`Could not open ${full}: ${String(err)}`)
+    startupError = { title: errorTitle, err }
+    if (samePath(config.get().lastFile ?? '', full)) config.update({ lastFile: null })
   }
+}
+
+// ---- Files Windows asks us to open (plan M9) ------------------------------------------
+// Double-clicking a .review starts the app with its path, or, if the app is already
+// running, hands the path to it (index.ts, 'second-instance'). The renderer does the
+// switch, like a menu command, so it can save text still being typed and wait for an
+// open dialog to close. Only the latest request is kept, and only main knows the path.
+
+let requested: string | null = null
+
+// At startup: a .review opens straight away, instead of the last file. Anything else
+// (e.g. an old .json) waits for the page, which asks for it once it has loaded.
+export function openAtLaunch(path: string): void {
+  if (extname(path).toLowerCase() === '.review')
+    openBeforeWindow(path, 'Could not open the review file')
+  else requested = resolve(path)
+}
+
+// While running: bring the window forward and ask the page to switch when it can.
+export function requestOpen(path: string): void {
+  requested = resolve(path)
+  const win = liveWindow()
+  if (!win) return // the page asks for it once it has loaded
+  if (win.isMinimized()) win.restore()
+  win.focus()
+  win.webContents.send(IPC.fileOpenRequest)
+}
+
+// The page is ready to switch: opens the waiting file, if any.
+export function openRequested(): Promise<FileInfo | null> {
+  if (!requested) return Promise.resolve(null)
+  // One of main's own dialogs (Save As, Export, Open, …) is up and will read the open file
+  // when it closes: keep the request and ask the page again afterwards.
+  if (nativeDialogOpen()) {
+    afterNativeDialogs(() => {
+      if (requested) liveWindow()?.webContents.send(IPC.fileOpenRequest)
+    })
+    return Promise.resolve(null)
+  }
+  const path = requested
+  requested = null
+  if (current && samePath(current.path, path)) return Promise.resolve(currentFile())
+  const ext = extname(path).toLowerCase()
+  if (ext === '.json') {
+    if (existsSync(path)) return importJsonDialog(path)
+    showError('Could not import the file', new ReviewFileError(`File not found:\n${path}`))
+    return Promise.resolve(null)
+  }
+  if (ext !== '.review') {
+    showError('Could not open the file', new ReviewFileError(`Not a review file:\n${path}`))
+    return Promise.resolve(null)
+  }
+  return Promise.resolve(switchTo(path, false))
 }
 
 // Destructive operations (delete/retype column, delete rows) back the file up first and

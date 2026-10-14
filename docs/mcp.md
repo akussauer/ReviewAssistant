@@ -41,7 +41,7 @@ Untick **Let Claude Desktop read the open review** and press **Save**. The conne
 
 - **"Review Assistant is not running, or Connect to Claude Desktop is off":** open the app with a review and check that the switch is on (Preferences shows "On: waiting for Claude Desktop").
 - **"This extension belongs to another Review Assistant setup":** the extension came from another computer or user account. Save it again from Preferences and reinstall it.
-- **"Another Review Assistant window is already connected":** only one running copy of the app can be connected. Close the other one.
+- **"In use by another copy of Review Assistant":** only one running copy of the app can be connected (e.g. the installed app and a development copy started with `npm run dev`). Close the other one, then turn the switch off and on again.
 - Review Assistant's log (in the app's user-data `Logs` folder) lists each tool call by name, without its content.
 
 ## Security notes

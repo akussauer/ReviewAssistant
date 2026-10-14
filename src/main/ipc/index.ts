@@ -68,6 +68,7 @@ import {
   importJsonDialog,
   newReviewDialog,
   openRecent,
+  openRequested,
   openReviewDialog,
   recentFiles,
   saveAsDialog,
@@ -129,6 +130,8 @@ export function registerIpc({ dev }: { dev: boolean }): void {
   handle(IPC.fileImportJson, NoInput, () => importJsonDialog())
   handle(IPC.fileExport, ExportKindSchema, exportDialog)
   handle(IPC.fileShowInFolder, PathInput, showInFolder)
+  // No path from the page: main opens the file Windows gave it (review.ts, requestOpen).
+  handle(IPC.fileOpenRequested, NoInput, openRequested)
 
   // ---- Settings
   handle(IPC.settingsGet, NoInput, currentSettings)

@@ -16,7 +16,7 @@ const h = vi.hoisted(() => {
 })
 
 vi.mock('electron', () => ({
-  app: { getPath: () => h.userData },
+  app: { getPath: () => h.userData, addRecentDocument: vi.fn() },
   dialog: { showMessageBoxSync: vi.fn(), showSaveDialog: vi.fn(), showOpenDialog: vi.fn() },
   BrowserWindow: class {}
 }))
@@ -31,9 +31,12 @@ import {
   currentFile,
   destructive,
   getDb,
+  openAtLaunch,
   openRecent,
+  openRequested,
   recentFiles,
-  reopenLast
+  reopenLast,
+  requestOpen
 } from './review'
 
 const work = mkdtempSync(join(tmpdir(), 'ra-reviews-'))
@@ -121,5 +124,82 @@ describe('review session', () => {
     expect(files.some((f) => f.startsWith('open-'))).toBe(true)
     expect(files.some((f) => f.startsWith('pre-') && f.endsWith('delete-rows.review'))).toBe(true)
     expect(existsSync(`${path}-wal`)).toBe(false)
+  })
+})
+
+describe('files Windows asks us to open', () => {
+  it('opens a double-clicked .review at startup and remembers it', () => {
+    const path = makeReview('launched.review')
+    openAtLaunch(path)
+    expect(currentFile()?.name).toBe('launched.review')
+    expect(recentFiles()).toEqual([resolve(path)])
+    expect(config.get().lastFile).toBe(resolve(path))
+  })
+
+  it('shows the welcome screen when the launched file is missing', () => {
+    openAtLaunch(join(work, 'nowhere.review'))
+    expect(currentFile()).toBeNull()
+  })
+
+  it('switches to a requested file once the page asks, and only once', async () => {
+    config.update({ recentFiles: [] })
+    requestOpen(makeReview('first.review'))
+    requestOpen(makeReview('second.review')) // only the latest is kept
+    expect((await openRequested())?.name).toBe('second.review')
+    expect(recentFiles()).toEqual([resolve(join(work, 'second.review'))])
+    expect(await openRequested()).toBeNull()
+  })
+
+  it('keeps the open file when it is requested again', async () => {
+    const path = makeReview('same.review')
+    requestOpen(path)
+    const before = (await openRequested())!.generation
+    requestOpen(path)
+    expect((await openRequested())?.generation).toBe(before)
+  })
+
+  it('keeps the open file when a requested file is missing, and drops it from Recent', async () => {
+    const path = makeReview('stays.review')
+    requestOpen(path)
+    await openRequested()
+    const gone = join(work, 'gone.review')
+    config.update({ recentFiles: [resolve(gone), resolve(path)] })
+    requestOpen(gone)
+    expect(await openRequested()).toBeNull()
+    expect(currentFile()?.name).toBe('stays.review')
+    expect(recentFiles()).toEqual([resolve(path)])
+  })
+
+  it('reports a missing .json instead of starting the importer', async () => {
+    requestOpen(join(work, 'gone.json'))
+    expect(await openRequested()).toBeNull()
+    expect(currentFile()).toBeNull()
+  })
+
+  it('waits while one of main dialogs is open', async () => {
+    const { dialog } = await import('./dialogs')
+    const electron = await import('electron')
+    let close: (v: unknown) => void = () => {}
+    vi.mocked(electron.dialog.showSaveDialog).mockReturnValueOnce(
+      new Promise((r) => (close = r)) as never
+    )
+    const saving = dialog.showSaveDialog({})
+    requestOpen(makeReview('later.review'))
+    expect(await openRequested()).toBeNull() // kept while the dialog is up
+    expect(currentFile()).toBeNull()
+    close({ canceled: true })
+    await saving
+    expect((await openRequested())?.name).toBe('later.review')
+  })
+
+  it('refuses files that are not reviews', async () => {
+    const path = makeReview('kept.review')
+    requestOpen(path)
+    await openRequested()
+    const other = join(work, 'notes.txt')
+    writeFileSync(other, 'hello')
+    requestOpen(other)
+    expect(await openRequested()).toBeNull()
+    expect(currentFile()?.name).toBe('kept.review')
   })
 })

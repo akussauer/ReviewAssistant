@@ -1,32 +1,45 @@
 appId: com.mps.reviewassistant
-productName: ReviewAssistant
+productName: Review Assistant # what people see; the exe and settings folder stay "ReviewAssistant"
 directories:
   buildResources: build
+# Only what the app runs: the built code and its resources. (node_modules for the main
+# process's dependencies are added by electron-builder.) Everything else, e.g. docs/
+# with its sample data, stays out of the installer.
 files:
-  - '!**/.vscode/*'
-  - '!src/*'
-  - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
-  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - out/**
+  - resources/**
 asarUnpack:
   - resources/**
+# Switches baked into the exe (plan M9): it can't be run as plain Node.js, NODE_OPTIONS
+# and --inspect are ignored, and it only loads the app from its own app.asar.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  onlyLoadAppFromAsar: true
+# Windows opens .review files with the app (the app's own icon; type name below).
+fileAssociations:
+  - ext: review
+    name: ReviewAssistant.review
+    description: Review Assistant review
 win:
   executableName: ReviewAssistant
   icon: resources/icon.ico # the app logo, made square from resources/Logo.png
+# Assisted per-user install (plan M9): no admin prompt, the folder can be changed.
+# Uninstalling keeps the settings folder; .review files are never touched.
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  runAfterFinish: true
+# mac/linux targets are kept but untested; Windows is the supported platform.
 mac:
   icon: resources/icon.png
   entitlementsInherit: build/entitlements.mac.plist
-  extendInfo:
-    - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
 dmg:
   artifactName: ${name}-${version}.${ext}
@@ -41,6 +54,3 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
-publish:
-  provider: generic
-  url: https://example.com/auto-updates

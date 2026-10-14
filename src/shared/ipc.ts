@@ -14,6 +14,7 @@ export const IPC = {
   fileImportJson: 'file:import-json',
   fileExport: 'file:export',
   fileShowInFolder: 'file:show-in-folder',
+  fileOpenRequested: 'file:open-requested',
   columnsCreate: 'columns:create',
   columnsUpdate: 'columns:update',
   columnsDelete: 'columns:delete',
@@ -66,6 +67,7 @@ export const IPC = {
   devSeed: 'dev:seed', // only registered in development builds
   // Events (main -> renderer, pushed without a request)
   fileChanged: 'file:changed',
+  fileOpenRequest: 'file:open-request', // a double-clicked file is waiting (plan M9)
   menuCommand: 'menu:command',
   themeChanged: 'theme:changed',
   activeThemeChanged: 'themes:active-changed',
@@ -462,6 +464,11 @@ export type Api = {
     export(kind: ExportKind): Promise<ExportResult | null>
     showInFolder(path: string): Promise<void> // only the last exported file
     onChanged(cb: (file: FileInfo | null) => void): Unsubscribe
+    // A file double-clicked in Explorer is waiting. Main keeps its path; once pending
+    // edits are saved and no dialog is open, openRequested() opens it (null: none waiting
+    // or it failed, and main has shown why).
+    onOpenRequest(cb: () => void): Unsubscribe
+    openRequested(): Promise<FileInfo | null>
   }
   menu: {
     onCommand(cb: (command: MenuCommand) => void): Unsubscribe

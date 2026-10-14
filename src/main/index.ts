@@ -1,4 +1,7 @@
-import { app, shell, BrowserWindow, Menu, dialog, nativeTheme } from 'electron'
+import { app, shell, BrowserWindow, Menu, nativeTheme } from 'electron'
+// First: pins the settings folder before any module reads it.
+import { logsDir } from './userData'
+import { dialog } from './dialogs'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -13,14 +16,18 @@ import {
   config,
   closeReview,
   currentFile,
+  liveWindow,
   newReviewDialog,
+  openAtLaunch,
   openRecent,
   openReviewDialog,
   recentFiles,
   reopenLast,
+  requestOpen,
   safely,
   sendMenuCommand
 } from './review'
+import { fileFromArgv } from './launchFile'
 import { recheck } from './assistant'
 import { applyClaudeDesktop, stopClaudeDesktop } from './claudeDesktop'
 import { applyTheme } from './settings'
@@ -34,12 +41,32 @@ function refreshMenu(): void {
       openFile: () => safely('Could not open the review file', openReviewDialog),
       openRecent: (path) => safely('Could not open the review file', () => openRecent(path)),
       command: sendMenuCommand,
+      about: () => safely('Could not show About', showAbout),
       recent: recentFiles(),
       hasFile: currentFile() !== null,
       saveAsKey: config.get().hotkeys.saveAs,
       dev: import.meta.env.DEV
     })
   )
+}
+
+// Help > About: the version, and where settings and logs live.
+async function showAbout(): Promise<void> {
+  const win = liveWindow()
+  if (!win) return
+  const settings = app.getPath('userData')
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'info',
+    title: 'About Review Assistant',
+    message: `Review Assistant ${app.getVersion()}`,
+    detail: `Settings folder:\n${settings}\n\nLog files:\n${logsDir()}`,
+    buttons: ['Close', 'Open settings folder', 'Open logs'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  })
+  if (response === 1) await shell.openPath(settings)
+  if (response === 2) await shell.openPath(logsDir())
 }
 
 // The page's own address: the dev server under `npm run dev`, else the built index.html.
@@ -62,7 +89,9 @@ function createWindow(): void {
       // Node.js access, and the preload runs in its own isolated JavaScript world.
       sandbox: true,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // DevTools only while developing; the installed app has none (plan M9).
+      devTools: is.dev
     }
   })
 
@@ -100,8 +129,24 @@ function createWindow(): void {
   }
 }
 
-initLog(join(app.getPath('userData'), 'Logs'))
+// One copy at a time (plan M9): double-clicking a .review while the app runs starts a
+// second copy, which hands its command line to this one ('second-instance' below) and
+// quits at once. `npm run dev` skips this so it can run beside the installed app.
+if (!import.meta.env.DEV && !app.requestSingleInstanceLock()) process.exit(0)
+
+// Our own command-line arguments start after the exe (and the app folder under `electron .`).
+const argvSkip = process.defaultApp ? 2 : 1
+
+initLog(logsDir())
 log.info('Application started.')
+
+app.on('second-instance', (_e, argv, cwd) => {
+  const path = fileFromArgv(argv, argvSkip, cwd)
+  if (path) return requestOpen(path) // also brings the window forward
+  const win = liveWindow()
+  if (win?.isMinimized()) win.restore()
+  win?.focus()
+})
 
 // A crash in main leaves the app in an unknown state, and every edit autosaves, so
 // log the error, tell the user, and quit rather than carry on.
@@ -123,7 +168,10 @@ app.whenReady().then(() => {
 
   applyTheme(config.get().theme)
   applySpellcheckLanguage(config.get().spellcheckLanguage)
-  reopenLast()
+  // A double-clicked file wins over reopening the last one.
+  const launched = fileFromArgv(process.argv, argvSkip, process.cwd())
+  if (launched) openAtLaunch(launched)
+  else reopenLast()
   refreshMenu()
   // import.meta.env.DEV is true only under `npm run dev`; a built app, even unpackaged,
   // never gets the dev-only channels.

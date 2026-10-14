@@ -2,7 +2,7 @@ import { Menu, type MenuItemConstructorOptions } from 'electron'
 import { basename } from 'path'
 import type { MenuCommand } from '../shared/ipc'
 
-// The native application menu (File / Settings, spec §2).
+// The native application menu (File / Settings / Help, spec §2).
 
 export type MenuActions = {
   newFile(): void
@@ -10,6 +10,7 @@ export type MenuActions = {
   openRecent(path: string): void
   // Save As, import, export and Preferences are done by the renderer (see MenuCommand).
   command(command: MenuCommand): void
+  about(): void
   recent: string[]
   hasFile: boolean // Save As and Export need an open review
   saveAsKey: string // the Save As hotkey from the settings
@@ -67,7 +68,8 @@ export function buildMenu(actions: MenuActions): Menu {
             submenu: [run('Seed 2,000 rows', 'devSeed', { enabled: actions.hasFile })]
           }
         ]
-      : [])
+      : []),
+    { label: 'Help', submenu: [{ label: 'About Review Assistant', click: actions.about }] }
   ]
   return Menu.buildFromTemplate(template)
 }

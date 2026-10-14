@@ -325,9 +325,26 @@ Lets people who pay for a Claude subscription (Pro/Max) use it with their review
 
 ### M9 – Packaging and polish
 - electron-builder NSIS installer (replaces `setup.iss`), app icon from `Resources/Logo.ico`, `.review` file association
-- Optional: undo for cell edits, keyboard navigation polish
+- Polish (undo for cell edits, keyboard navigation) moved to M9a
 
-**Accept:** the installer works on a clean Windows account, and double-clicking a `.review` file opens it.
+**Accept:** in Windows Sandbox (fallback: a new local account) the installer runs without an admin prompt and the app starts; double-clicking a `.review` opens it with the app closed and with it open; the taskbar jump list shows recent files; *Save extension for Claude Desktop…* works from the installed app; uninstalling removes the association and keeps the settings folder.
+
+**Decisions (agreed 14 Oct 2026):**
+- *Installer:* NSIS assisted wizard, **per-user** (`%LOCALAPPDATA%\Programs`, no admin prompt), folder can be changed, desktop shortcut on by default, "Launch Review Assistant" on the last page. English only for now (more installer/UI languages would be good later). **Unsigned**; `docs/install.md` explains SmartScreen's "More info → Run anyway". Output `dist/ReviewAssistant-2.0.0-setup.exe` (`dist/` git-ignored), shared by hand.
+- *No auto-update:* remove the `example.com` publish block and `dev-app-update.yml`. A new version is a new installer run over the old one; settings are kept.
+- *Names and version:* the visible name is "Review Assistant" (Start menu, uninstall list, window title); the exe and settings folder stay `ReviewAssistant`. The settings folder is pinned to `%APPDATA%\ReviewAssistant`, shared by `npm run dev` and the installed app. Version **2.0.0** (the PySide app was 1.0).
+- *Uninstall:* keeps the settings folder (config, key, themes, plugins, backups) and never touches `.review` files. The old PySide install has a different id and is left alone; only `.review` is associated (not `.json`).
+- *`.review` association:* app icon, type name "Review Assistant review".
+- *Opening files:* single instance. A second launch passes its file to the open window, which comes to the front. A file given at launch wins over reopen-last. The already-open file just gets focus. While a dialog is open, the file waits until it closes (only the latest is kept). Switching otherwise behaves exactly like File → Open (pending text edits are flushed first). A `.json` runs the importer; anything else shows "Not a review file". Opened files join Open Recent and the Windows jump list (`app.addRecentDocument`). A missing or unreadable file shows the usual error and falls back to the Welcome screen.
+- *Dev beside the installed app:* `npm run dev` doesn't take the single-instance lock. If the Claude Desktop pipe is already taken, the Preferences status line says "In use by another copy of Review Assistant" instead of failing.
+- *Hardening:* electron-builder fuses: `RunAsNode` off, `NODE_OPTIONS` and `--inspect` off, only load the app from asar. No DevTools or reload in packaged builds.
+- *Help → About:* name and version, **Open settings folder**, **Open logs**.
+- *Cleanup:* the template's mac permission text (camera, microphone, Documents, Downloads) is removed; mac/linux targets stay but are untested.
+- *Docs:* `docs/install.md` (install, SmartScreen, where settings live, uninstall, old app can stay) and an "Installing" section in the spec.
+- *Added during implementation (14 Oct 2026):* electron-builder's `files` is now an allow-list (`out/**`, `resources/**`), so `docs/` (with the owner's sample data), `scripts/` and config files stay out of the installer. Renderer-only packages (CodeMirror, Tailwind, TanStack, Radix, lucide, zustand, …) moved to `devDependencies`: Vite bundles them into `out/renderer`, so shipping them again was waste (app.asar 62 → 22 MB; nothing added or removed). An explicit `--user-data-dir` (the test driver's throwaway folder) still overrides the pinned settings folder. Command-line flags are dropped before looking for the file argument, as launchers may put them before the app path.
+
+### M9a – Polish (to be grilled)
+- Undo for cell edits (spec §4: Ctrl+Z, optional), keyboard navigation polish
 
 ### M10 – Markdown / Obsidian export (long-term)
 - Column dialog: "Markdown export" mode (Property / Section / Skip) and property name, stored in `columns.options.export`
@@ -359,5 +376,6 @@ Lets people who pay for a Claude subscription (Pro/Max) use it with their review
 - [X] M7 Assistant
 - [X] M8a Claude Desktop connection (MCP)
 - [ ] M9 Packaging
+- [ ] M9a Polish (undo, keyboard navigation)
 - [ ] M10 Markdown / Obsidian export (long-term)
 - [ ] M11 Synthesis (was M8)

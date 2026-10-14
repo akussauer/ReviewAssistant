@@ -244,3 +244,11 @@ Based on the disabled `SynthesisWidget` in the PySide app **[Py]**:
 - **Theme:** *Default* or an installed Obsidian theme. Only the theme's CSS variables are used (colours, accent, radius); its other rules are ignored. Light/Dark/System in Preferences picks which half of the theme applies. Themes come from `<userData>/Themes` (*Add theme…* copies a `.css` file in) or, read-only, from one chosen Obsidian vault's `.obsidian/themes`.
 - **Plugins:** a placeholder for future community plugins. A table of the folders in `<userData>/Plugins` (name, version, author, description from `manifest.json`) with Enable/Disable and Delete. No plugin code runs yet.
 - **Delete** (themes and plugins in our folders) asks first and moves the folder to the Recycle Bin.
+
+---
+## 13. Installing (Windows) [New]
+- **Installer:** `ReviewAssistant-<version>-setup.exe` (electron-builder NSIS; replaces the PySide `setup.iss`). A wizard installs for the current user only (`%LOCALAPPDATA%\Programs`, no admin prompt); the folder can be changed. It adds Start-menu and desktop shortcuts and offers to launch the app at the end. English only for now (more languages would be welcome later). Not code-signed yet, so Windows SmartScreen asks once ("More info → Run anyway").
+- **`.review` files** open with the app on double-click (the app's icon, type "Review Assistant review"). Only one copy of the app runs: double-clicking another file while it's open switches the window to that file (after saving text still being typed, and once any open dialog is closed). The file that's already open is just brought forward. A double-clicked file wins over reopening the last one. Opened files also appear in the taskbar's jump list.
+- **Settings** live in `%APPDATA%\ReviewAssistant` (config, API key, themes, plugins, backups, logs), shared with development copies. *Help → About* shows the version and opens the settings and log folders.
+- **Updating:** run the newer installer over the old one; settings are kept. There's no auto-update.
+- **Uninstalling** removes the program and the file association, keeps the settings folder, and never touches `.review` files. The old PySide app is separate and can stay installed.
