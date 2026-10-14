@@ -1,6 +1,7 @@
 import { nativeTheme } from 'electron'
 import type { Settings, Theme } from '../shared/ipc'
 import { recheck } from './assistant'
+import { applyClaudeDesktop } from './claudeDesktop'
 import { config, settingsChanged } from './review'
 import { applySpellcheckLanguage } from './spellcheck'
 
@@ -15,7 +16,8 @@ export function currentSettings(): Settings {
     markdownColourOverride: c.markdownColourOverride,
     markdownColours: c.markdownColours,
     hotkeys: c.hotkeys,
-    assistant: c.assistant
+    assistant: c.assistant,
+    claudeDesktop: c.claudeDesktop
   }
 }
 
@@ -34,6 +36,7 @@ export function saveSettings(settings: Settings): Settings {
     before.baseUrl !== settings.assistant.baseUrl
   )
     void recheck()
+  void applyClaudeDesktop() // starts or stops the pipe if the switch changed
   applyTheme(settings.theme)
   applySpellcheckLanguage(settings.spellcheckLanguage)
   settingsChanged() // the Save As hotkey lives in the menu

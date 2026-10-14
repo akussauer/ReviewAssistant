@@ -160,7 +160,8 @@ export const SettingsSchema = z.object({
       (h) => new Set(Object.values(h)).size === HOTKEY_NAMES.length,
       'Each hotkey must be different'
     ),
-  assistant: AssistantSettingsSchema
+  assistant: AssistantSettingsSchema,
+  claudeDesktop: z.boolean()
 }) satisfies z.ZodType<Settings>
 
 // The key being typed in Preferences. Trimmed, since pasting often adds a space.

@@ -1,6 +1,6 @@
 import { displayText } from '../../../shared/conversion'
 import type { CellValue, Column, Row, TabView } from '../../../shared/ipc'
-import { compileQuery, joinCells } from './search'
+import { compileQuery, joinCells } from '../../../shared/search'
 
 // Which rows a tab shows, given its column filters and global search (spec §7). Like
 // Proxy.filterAcceptsRow in the reference app: case-insensitive, every column filter must

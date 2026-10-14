@@ -75,6 +75,13 @@ describe('mergeWithDefaults', () => {
     expect(old.assistant).toEqual(DEFAULT_CONFIG.assistant)
     expect(old.hotkeys).toEqual({ ...DEFAULT_CONFIG.hotkeys, newRow: 'CmdOrCtrl+R' })
     expect(old.modelCache).toBeNull()
+    // M8a: Claude Desktop stays off, and the token is made only when first needed.
+    expect(old.claudeDesktop).toBe(false)
+    expect(old.mcpToken).toBeNull()
+    expect(mergeWithDefaults({ claudeDesktop: 'yes', mcpToken: 42 })).toMatchObject({
+      claudeDesktop: false,
+      mcpToken: null
+    })
     const merged = mergeWithDefaults({
       assistant: {
         provider: 'ollama',

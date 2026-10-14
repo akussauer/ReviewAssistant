@@ -22,6 +22,7 @@ import {
   sendMenuCommand
 } from './review'
 import { recheck } from './assistant'
+import { applyClaudeDesktop, stopClaudeDesktop } from './claudeDesktop'
 import { applyTheme } from './settings'
 
 // Rebuilt whenever the Recent list, the open file or the settings change, so Open Recent,
@@ -136,6 +137,8 @@ app.whenReady().then(() => {
   createWindow()
   // The assistant's key check (spec §10): a free call, and none at all without a key.
   void recheck()
+  // Connect to Claude Desktop (spec §10.1): only listens if the setting is on.
+  void applyClaudeDesktop()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
@@ -148,7 +151,10 @@ app.whenReady().then(() => {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 // Close the review cleanly so SQLite finishes any write and removes its journal file.
-app.on('will-quit', closeReview)
+app.on('will-quit', () => {
+  stopClaudeDesktop()
+  closeReview()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

@@ -176,7 +176,7 @@ CREATE TABLE messages (                 -- one conversation per tab
   context TEXT NOT NULL DEFAULT '[]',   -- labels of attached chips
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
-CREATE TABLE synthesis (                -- used in M8
+CREATE TABLE synthesis (                -- used in M11 (was M8)
   tab_id INTEGER NOT NULL REFERENCES tabs(id) ON DELETE CASCADE,
   column_id INTEGER NOT NULL REFERENCES columns(id) ON DELETE CASCADE,
   included INTEGER NOT NULL DEFAULT 0,
@@ -291,11 +291,8 @@ The main tab shows all rows, so it has no `tab_rows` entries.
 - *Anthropic provider (added 14 Oct 2026):* Claude through Anthropic's own API via the official `@anthropic-ai/sdk` (new dependency, main only; owner approved). Key check = listing models (free). Anthropic's model list has no prices, so main keeps a price table (Oct 2026) and costs are worked out from the reported tokens (shown with "~"). Suggested: Claude Opus 5.5 (default), Sonnet 5.5, Haiku 5.5. Opus/Sonnet requests opt into Anthropic's server-side refusal fallback (`fallbacks: "default"`); Haiku 5.5 has none. A refusal shows as an error in the chat. Address field hidden (fixed endpoint, like OpenRouter).
 - *Dev seed button:* moved out of the status bar into a **Developer** menu (Seed 2,000 rows) that main builds only when `import.meta.env.DEV` is true. It is routed through the existing `menu:command` path, and the renderer reloads afterwards. Packaged builds have neither the menu nor the IPC channel.
 
-### M8 – Synthesis tabs
-- Start by reviewing spec §11 with the owner (it may have changed)
-- Read-only table, per-column include and text panels, instructions line, Synthesise (one LLM call per included column), loading states, saved results
-
-**Accept:** results persist and stay editable; changing a tab's type between Review and Synthesis keeps its rows.
+### M8 – Synthesis tabs → moved to M11
+Postponed on 14 Oct 2026: the owner hasn't settled what synthesis tabs should look like yet. Synthesis tabs keep their placeholder view until M11.
 
 ### M8a – Claude Desktop connection (MCP, read-only)
 Lets people who pay for a Claude subscription (Pro/Max) use it with their review, with no API key and no API cost. Agreed 14 Oct 2026.
@@ -316,6 +313,14 @@ Lets people who pay for a Claude subscription (Pro/Max) use it with their review
 4. *Packaging:* how the script ships with the installer (M9) and where Claude Desktop is told to find it; Windows first.
 5. *New dependency:* `@modelcontextprotocol/sdk` (ask before adding, per CLAUDE.md).
 
+**Decisions (agreed 14 Oct 2026):**
+- *Terms checked:* since Feb 2026 Pro/Max sign-ins are only for Claude's own apps; a local MCP server inside Claude Desktop is the supported route.
+- *Data route (a):* the MCP server is a small Node script that Claude Desktop runs from a **`.mcpb` bundle** (Claude Desktop ships its own Node, so nothing else to install). Each tool call goes over a **named pipe** (Windows; a socket file elsewhere) to the running app, which answers from its open connection. With the app closed or the switch off, tools return "Review Assistant isn't running / the connection is off".
+- *Pipe protocol:* one JSON request per line with a per-install token (in config.json, baked into the bundle); main checks it with Zod, runs a read-only tool, and answers with text. Main sets `PRAGMA query_only` around each call, so even a bug can't write.
+- *Exposed:* only the file open in the app. `get_rows` returns all of a tab's rows (the app's filters and search are ignored); `search_rows` narrows them with the M5 syntax (`search.ts` moves to `shared/`). Results are capped and paged.
+- *Setup:* Preferences → Assistant gets "Connect to Claude Desktop" (switch, saved with Save; off by default), a status line, and **Save extension for Claude Desktop…** which writes the `.mcpb`. The app never edits Claude Desktop's files. The status bar shows "Claude is reading…" briefly after each call.
+- *Dependencies:* `@modelcontextprotocol/sdk` as a **devDependency** (it is compiled into the script, so it isn't shipped inside the app). The `.mcpb` zip is written by our own small zip writer (the mcpb CLI was not approved).
+
 **Accept:** with the switch off, nothing listens and nothing changes; with it on and Claude Desktop set up, Claude can list tabs and read rows of the open review and answer questions about them; no tool can change data (the reviewer confirms); closing the app or turning the switch off cuts the connection cleanly; works with no API key.
 
 ### M9 – Packaging and polish
@@ -331,6 +336,13 @@ Lets people who pay for a Claude subscription (Pro/Max) use it with their review
 
 **Accept:** exported notes open in Obsidian with the properties shown correctly typed; re-exporting with "skip" or "overwrite" behaves as chosen.
 
+### M11 – Synthesis tabs (was M8)
+- Start by reviewing spec §11 with the owner (it may have changed)
+- Read-only table, per-column include and text panels, instructions line, Synthesise (one LLM call per included column), loading states, saved results
+- Consider adding a read-only MCP tool for synthesis results (M8a)
+
+**Accept:** results persist and stay editable; changing a tab's type between Review and Synthesis keeps its rows.
+
 > **Prompt for M2–M9:** *Read CLAUDE.md and docs/plan.md. M1–M{n-1} are done; we're on M{n}. Read the relevant reference files listed in the plan's reference map. Plan M{n} only, list any spec ambiguities as questions before coding, then implement. Finish with checks, the reviewer agent, and my manual-check list.*
 
 ---
@@ -345,7 +357,7 @@ Lets people who pay for a Claude subscription (Pro/Max) use it with their review
 - [X] M6 File menu, import/export, settings
 - [X] M6a Themes, Plugin support
 - [X] M7 Assistant
-- [ ] M8 Synthesis
-- [ ] M8a Claude Desktop connection (MCP)
+- [X] M8a Claude Desktop connection (MCP)
 - [ ] M9 Packaging
 - [ ] M10 Markdown / Obsidian export (long-term)
+- [ ] M11 Synthesis (was M8)

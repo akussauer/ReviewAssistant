@@ -67,6 +67,28 @@ describe('compileQuery', () => {
     expect(matches('jun*r', text)).toBe(true) // * inside a word: any letters
   })
 
+  it('matches wildcards like the old regex did', () => {
+    expect(matches('*', 'anything')).toBe(true)
+    expect(matches('*ming', 'swimming')).toBe(true) // * at the start also starts at a word
+    expect(matches('s*m*g', 'swimming')).toBe(true)
+    expect(matches('s*m*x', 'swimming')).toBe(false)
+    expect(matches('covid*19', 'post-covid-19 cohort')).toBe(true) // "-" counts as a letter
+    expect(matches('pre*post', 'pre post')).toBe(false) // * never crosses a space
+    expect(matches('u.s.*', 'the u.s.a. data')).toBe(true) // other characters match literally
+    expect(matches('ab*', 'xab ab')).toBe(true) // the second "ab" starts a word
+    expect(matches('ab*', 'xab_ab')).toBe(false)
+    expect(matches('a*b*a', 'aaab')).toBe(false)
+    expect(matches('a*b*a', 'aaaba')).toBe(true)
+  })
+
+  it('stays fast on queries that make a regex backtrack (they can come from Claude)', () => {
+    const long = 'a'.repeat(5_000)
+    const started = performance.now()
+    expect(matches('a*a*a*a*a*a*a*a*c', long)).toBe(false)
+    expect(matches('a*a*a*a*a*a*a*a*c', `${long} ${long}`)).toBe(false)
+    expect(performance.now() - started).toBeLessThan(1_000)
+  })
+
   it('never throws on malformed queries', () => {
     for (const q of [
       '(',

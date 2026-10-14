@@ -15,6 +15,7 @@ import { useTabRows, type TabRows } from './components/ReviewTable/useTabRows'
 import { SearchBar } from './components/Tabs/SearchBar'
 import { TabStrip } from './components/Tabs/TabStrip'
 import { toggleAssistant } from './lib/assistant'
+import { useClaudeDesktopStatus } from './lib/claudeDesktop'
 import { matchesHotkey } from './lib/hotkeys'
 import { flushTextEdits } from './lib/pendingEdits'
 import { Welcome } from './components/Welcome/Welcome'
@@ -251,7 +252,7 @@ function ReviewView(): React.JSX.Element | null {
   )
 }
 
-// Synthesis tabs keep their rows; their own view (spec §11) arrives in M8.
+// Synthesis tabs keep their rows; their own view (spec §11) arrives in M11.
 function SynthesisPlaceholder({ rows }: { rows: number }): React.JSX.Element {
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -305,8 +306,30 @@ function StatusBar({ rows, tab }: { rows: TabRows; tab: Tab }): React.JSX.Elemen
           </button>
         </span>
       )}
-      <BotButton tab={tab} />
+      <span className="ml-auto flex items-center gap-3">
+        <ClaudeReading />
+        <BotButton tab={tab} />
+      </span>
     </div>
+  )
+}
+
+// A short note while Claude Desktop is reading the review (spec §10.1).
+function ClaudeReading(): React.JSX.Element | null {
+  const lastCall = useClaudeDesktopStatus()?.lastCall ?? null
+  // The call whose note has timed out; a newer call shows the note again.
+  const [expired, setExpired] = useState<string | null>(null)
+  useEffect(() => {
+    if (!lastCall) return
+    const left = 4000 - (Date.now() - new Date(lastCall).getTime())
+    const timer = setTimeout(() => setExpired(lastCall), Math.max(0, left))
+    return () => clearTimeout(timer)
+  }, [lastCall])
+  if (!lastCall || expired === lastCall) return null
+  return (
+    <span role="status" className="text-xs text-muted-foreground">
+      Claude Desktop is reading…
+    </span>
   )
 }
 

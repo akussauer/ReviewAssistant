@@ -34,6 +34,7 @@ import {
 } from '../ui/dialog'
 import { Label } from '../ui/label'
 import { AssistantSection, type KeyDraft } from './AssistantSettings'
+import { ClaudeDesktopSection } from './ClaudeDesktopSettings'
 
 // Settings > Preferences (spec §12, like SettingsDialog in the reference app). Theme and
 // markdown colour preview straight away; Save keeps the changes, Cancel puts back the
@@ -209,6 +210,12 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.JSX.
               onChange={(patch) =>
                 preview({ ...draft, assistant: { ...draft.assistant, ...patch } })
               }
+            />
+
+            <ClaudeDesktopSection
+              enabled={draft.claudeDesktop}
+              savedEnabled={saved?.claudeDesktop ?? draft.claudeDesktop}
+              onChange={(claudeDesktop) => preview({ ...draft, claudeDesktop })}
             />
           </div>
         )}

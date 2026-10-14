@@ -40,7 +40,9 @@ const ConfigSchema = z.object({
         })
       )
     })
-    .nullable()
+    .nullable(),
+  // The Claude Desktop connection's secret (spec §10.1); made when first needed.
+  mcpToken: z.string().nullable()
 })
 
 export type Config = z.infer<typeof ConfigSchema>
@@ -52,7 +54,8 @@ export const DEFAULT_CONFIG: Config = {
   activeTheme: null,
   obsidianVault: null,
   enabledPlugins: [],
-  modelCache: null
+  modelCache: null,
+  mcpToken: null
 }
 
 export const MAX_RECENT = 10

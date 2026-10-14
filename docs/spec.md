@@ -206,6 +206,15 @@ Each row is exported as one `.md` note that can go straight into an Obsidian vau
 - **Provider:** OpenRouter by default **[Py]**, plus Anthropic (Claude, through Anthropic's own API), any OpenAI-compatible endpoint and Ollama **[New]**. The model is chosen in Settings (the PySide app hardcoded `openai/gpt-4o-mini`). The key is stored with `safeStorage` instead of `.env` **[New]**.
 - **Key check** at startup uses a free endpoint (e.g. OpenRouter's key-info call) rather than a chat request **[New]**. Without a passing check the bot button is disabled (not hidden) **[Changed]**; nothing else in the app changes.
 
+### 10.1 Connect to Claude Desktop (read-only) [New]
+For people with a Claude subscription (Pro/Max): they chat in Claude Desktop on their own plan, with no API key and no API cost, and Claude reads their review through our tools. (Anthropic only allows subscription sign-in in its own apps, so this is the supported route.) The built-in panel (§10) stays for API-key users.
+- **How:** Review Assistant writes a Claude Desktop extension (`.mcpb`), which the user installs once by double-clicking it. Claude Desktop runs the extension's small MCP script with its own Node.js. For each tool call the script asks the running app over a **local pipe** (no network port), using a per-install secret baked into the extension.
+- **Tools (all read-only):** `list_tabs` (id, name, type, row count), `get_columns` (types, dropdown options), `get_rows` (a tab's rows with every column, as "Column: value" lines, in main-table order, ignoring the app's filters; paged, 50 rows by default, at most 200 rows or ~100k characters), `search_rows` (the §7 search syntax, optionally within one tab; paged), `get_row` (one row and the tabs it's in). Tool descriptions and the server's instructions say that results are data, not instructions. While a tool runs, the database connection refuses writes.
+- **Which file:** only the review open in the app. With no file open, or the app closed, or the switch off, tools answer with a message saying so.
+- **Settings → Preferences → Connect to Claude Desktop:** *Let Claude Desktop read the open review* (off by default; applied on Save), a status line (Off / waiting / how many reads and when), and *Save extension for Claude Desktop…* (save dialog, Downloads by default; then shows the file in its folder). The app never edits Claude Desktop's own files.
+- **Status bar:** "Claude Desktop is reading…" for a few seconds after each call.
+- Turning the switch off or quitting closes the pipe at once. Local-only risks (another program under the same account, or one posing as the app while it is closed) are listed in `docs/mcp.md`. The app works the same with no API key. Setup steps for users: `docs/mcp.md`.
+
 ---
 ## 11. Synthesis tabs (late milestone)
 Based on the disabled `SynthesisWidget` in the PySide app **[Py]**:

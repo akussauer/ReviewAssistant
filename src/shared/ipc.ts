@@ -61,6 +61,8 @@ export const IPC = {
   assistantDetach: 'assistant:detach',
   assistantSend: 'assistant:send',
   assistantStop: 'assistant:stop',
+  claudeDesktopStatus: 'claude-desktop:status',
+  claudeDesktopSaveExtension: 'claude-desktop:save-extension',
   devSeed: 'dev:seed', // only registered in development builds
   // Events (main -> renderer, pushed without a request)
   fileChanged: 'file:changed',
@@ -68,7 +70,8 @@ export const IPC = {
   themeChanged: 'theme:changed',
   activeThemeChanged: 'themes:active-changed',
   assistantStatusChanged: 'assistant:status-changed',
-  assistantChunk: 'assistant:chunk'
+  assistantChunk: 'assistant:chunk',
+  claudeDesktopStatusChanged: 'claude-desktop:status-changed'
 } as const
 
 // ---- Columns ----------------------------------------------------------------
@@ -313,6 +316,15 @@ export type SendResult = {
 
 export type AssistantChunk = { tabId: number; generation: number; text: string }
 
+// The Claude Desktop connection (spec §10.1). off: the switch is off, nothing listens ·
+// listening: Claude Desktop's extension can read the open review · failed: see reason.
+export type ClaudeDesktopStatus = {
+  state: 'off' | 'listening' | 'failed'
+  reason?: string
+  calls: number // tool calls answered since the app started
+  lastCall: string | null // ISO time of the latest one, for the status bar's activity note
+}
+
 // App-wide settings, edited in the Preferences dialog. Hotkeys are Electron accelerators,
 // e.g. "CmdOrCtrl+Shift+N".
 export type Settings = {
@@ -325,6 +337,9 @@ export type Settings = {
   markdownColours: Partial<Record<MarkdownKind, string>>
   hotkeys: Record<HotkeyName, string>
   assistant: AssistantSettings
+  // Settings > Preferences > Connect to Claude Desktop (spec §10.1): the local pipe that the
+  // Claude Desktop extension reads the open review through. Off by default.
+  claudeDesktop: boolean
 }
 
 // Reset to defaults in the Preferences dialog returns to these (main's config uses them too).
@@ -348,7 +363,8 @@ export const DEFAULT_SETTINGS: Settings = {
     fallbackContext: 32_000,
     showMeter: true,
     showCosts: true
-  }
+  },
+  claudeDesktop: false
 }
 
 // Shortcuts the app or every text field already uses, which a hotkey must not take.
@@ -524,6 +540,13 @@ export type Api = {
     send(input: SendInput): Promise<SendResult>
     stop(tabId: number): Promise<void>
     onChunk(cb: (chunk: AssistantChunk) => void): Unsubscribe
+  }
+  // Claude Desktop connection: turned on with the claudeDesktop setting.
+  claudeDesktop: {
+    status(): Promise<ClaudeDesktopStatus>
+    onStatusChange(cb: (status: ClaudeDesktopStatus) => void): Unsubscribe
+    // Shows main's save dialog and writes the .mcpb; null if cancelled or failed.
+    saveExtension(): Promise<string | null>
   }
   // Only under `npm run dev`: undefined in a built app, and main doesn't register it.
   dev?: {

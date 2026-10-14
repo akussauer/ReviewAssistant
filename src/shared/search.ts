@@ -38,13 +38,44 @@ export function tokenize(query: string): Token[] {
 
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+// What * can stand for, and what can't come just before a word start.
+const WILD_CHAR = /[\p{L}\p{N}_-]/u
+const WORD_CHAR = /[\p{L}\p{N}_]/u
+
 function wordMatcher(word: string): (text: string) => boolean {
   const lower = word.toLowerCase()
   if (!lower.includes('*')) return (text) => text.includes(lower)
   // Truncation/wildcard: * stands for any letters; the match starts at a word start.
-  const body = lower.split('*').map(escapeRe).join('[\\p{L}\\p{N}_-]*')
-  const re = new RegExp(`(?<![\\p{L}\\p{N}_])${body}`, 'u')
-  return (text) => re.test(text)
+  // Not a regex: one like /a[\p{L}]*a[\p{L}]*a…/ can backtrack for minutes on a long
+  // word, and queries also come from Claude Desktop (spec §10.1), running in main.
+  const parts = lower.split('*')
+  return (text) => {
+    // dead[i][p] = 1: parts i.. can't match from position p. That doesn't depend on where
+    // the match started, and a scan from p covers every later start in the same run of
+    // letters, so it stops at a dead position. Each (part, position) is scanned once.
+    const dead: (Uint8Array | undefined)[] = []
+    const rest = (i: number, pos: number): boolean => {
+      if (i === parts.length) return true
+      const d = (dead[i] ??= new Uint8Array(text.length + 1))
+      // The * before part i covers text[pos..p), which must be all wildcard characters.
+      let p = pos
+      for (; p <= text.length; p++) {
+        if (d[p]) break
+        if (text.startsWith(parts[i], p) && rest(i + 1, p + parts[i].length)) return true
+        if (p === text.length || !WILD_CHAR.test(text[p])) {
+          p++
+          break
+        }
+      }
+      d.fill(1, pos, p)
+      return false
+    }
+    for (let s = text.indexOf(parts[0]); s >= 0; s = text.indexOf(parts[0], s + 1)) {
+      if (s > 0 && WORD_CHAR.test(text[s - 1])) continue // not a word start
+      if (rest(1, s + parts[0].length)) return true
+    }
+    return false
+  }
 }
 
 function phraseMatcher(phrase: string): (text: string) => boolean {

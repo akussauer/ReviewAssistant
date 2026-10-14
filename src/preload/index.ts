@@ -5,6 +5,7 @@ import {
   type Api,
   type AssistantChunk,
   type AssistantStatus,
+  type ClaudeDesktopStatus,
   type FileInfo,
   type MenuCommand
 } from '../shared/ipc'
@@ -124,6 +125,15 @@ const api: Api = {
       ipcRenderer.on(IPC.assistantChunk, listener)
       return () => ipcRenderer.removeListener(IPC.assistantChunk, listener)
     }
+  },
+  claudeDesktop: {
+    status: () => invoke(IPC.claudeDesktopStatus),
+    onStatusChange: (cb) => {
+      const listener = (_e: IpcRendererEvent, status: ClaudeDesktopStatus): void => cb(status)
+      ipcRenderer.on(IPC.claudeDesktopStatusChanged, listener)
+      return () => ipcRenderer.removeListener(IPC.claudeDesktopStatusChanged, listener)
+    },
+    saveExtension: () => invoke(IPC.claudeDesktopSaveExtension)
   },
   // Only present under `npm run dev` (see Api.dev).
   ...(import.meta.env.DEV ? { dev: { seed: (count: number) => invoke(IPC.devSeed, count) } } : {})

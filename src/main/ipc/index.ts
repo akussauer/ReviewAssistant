@@ -74,6 +74,7 @@ import {
   showInFolder
 } from '../review'
 import { applyTheme, currentSettings, saveSettings } from '../settings'
+import { claudeDesktopStatus, saveExtension } from '../claudeDesktop'
 import {
   activeTheme,
   addThemeDialog,
@@ -210,6 +211,8 @@ export function registerIpc({ dev }: { dev: boolean }): void {
   handle(IPC.assistantDetach, FileIdSchema, detach)
   handle(IPC.assistantSend, SendInputSchema, send)
   handle(IPC.assistantStop, Id, stop)
+  handle(IPC.claudeDesktopStatus, NoInput, claudeDesktopStatus)
+  handle(IPC.claudeDesktopSaveExtension, NoInput, saveExtension)
 
   // ---- Development only
   if (dev) handle(IPC.devSeed, SeedCountSchema, (count) => seedRows(getDb(), count))
