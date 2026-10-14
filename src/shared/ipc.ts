@@ -10,6 +10,10 @@ export const IPC = {
   fileOpenRecent: 'file:open-recent',
   fileRecent: 'file:recent',
   fileLoad: 'file:load',
+  fileSaveAs: 'file:save-as',
+  fileImportJson: 'file:import-json',
+  fileExport: 'file:export',
+  fileShowInFolder: 'file:show-in-folder',
   columnsCreate: 'columns:create',
   columnsUpdate: 'columns:update',
   columnsDelete: 'columns:delete',
@@ -29,9 +33,14 @@ export const IPC = {
   tabsRemoveRows: 'tabs:remove-rows',
   tabsSetActive: 'tabs:set-active',
   settingsGet: 'settings:get',
+  settingsUpdate: 'settings:update',
+  settingsPreviewTheme: 'settings:preview-theme',
+  themeIsDark: 'theme:is-dark',
   devSeed: 'dev:seed', // only registered in development builds
   // Events (main -> renderer, pushed without a request)
-  fileChanged: 'file:changed'
+  fileChanged: 'file:changed',
+  menuCommand: 'menu:command',
+  themeChanged: 'theme:changed'
 } as const
 
 // ---- Columns ----------------------------------------------------------------
@@ -163,13 +172,74 @@ export type ReviewSnapshot = {
   activeTabId: number
 }
 
-// App-wide settings the renderer may read (spec §12). Editing them arrives in M6.
+export type ExportKind = 'csv' | 'json'
+export type ExportResult = { path: string; name: string; rows: number }
+
+// File-menu items that main hands to the renderer, which saves pending edits first.
+export type MenuCommand = 'saveAs' | 'importJson' | 'exportCsv' | 'exportJson' | 'preferences'
+
+// ---- Settings (spec §12) ----------------------------------------------------------
+
+export type Theme = 'light' | 'dark' | 'system'
+export type HotkeyName = 'newRow' | 'newColumn' | 'saveAs'
+
+// App-wide settings, edited in the Preferences dialog. Hotkeys are Electron accelerators,
+// e.g. "CmdOrCtrl+Shift+N".
 export type Settings = {
-  theme: 'light' | 'dark' | 'system'
-  spellcheckLanguage: string // e.g. en_GB
+  theme: Theme
+  spellcheckLanguage: SpellcheckLanguage // e.g. en_GB
   markdownColour: string // e.g. #0E80A3
-  hotkeys: { newRow: string; newColumn: string; saveAs: string }
+  hotkeys: Record<HotkeyName, string>
 }
+
+// Reset to defaults in the Preferences dialog returns to these (main's config uses them too).
+export const DEFAULT_SETTINGS: Settings = {
+  theme: 'system',
+  spellcheckLanguage: 'en_GB',
+  markdownColour: '#0E80A3',
+  hotkeys: { newRow: 'CmdOrCtrl+N', newColumn: 'CmdOrCtrl+Shift+N', saveAs: 'CmdOrCtrl+Shift+S' }
+}
+
+// Shortcuts the app or every text field already uses, which a hotkey must not take.
+export const FIXED_SHORTCUTS: Record<string, string> = {
+  'CmdOrCtrl+O': 'Open',
+  'CmdOrCtrl+,': 'Preferences',
+  'CmdOrCtrl+A': 'Select all',
+  'CmdOrCtrl+C': 'Copy',
+  'CmdOrCtrl+X': 'Cut',
+  'CmdOrCtrl+V': 'Paste',
+  'CmdOrCtrl+Z': 'Undo',
+  'CmdOrCtrl+Y': 'Redo',
+  'CmdOrCtrl+Shift+Z': 'Redo',
+  'Alt+F4': 'Close window'
+}
+
+// The reference app's list (SettingsWindow._LANG_OPTIONS).
+export const SPELLCHECK_LANGUAGES = [
+  'en_AU',
+  'en_AG',
+  'en_BS',
+  'en_BW',
+  'en_BZ',
+  'en_CA',
+  'en_DK',
+  'en_GB',
+  'en_GH',
+  'en_HK',
+  'en_IE',
+  'en_IN',
+  'en_JM',
+  'en_NA',
+  'en_NG',
+  'en_NZ',
+  'en_PH',
+  'en_SG',
+  'en_TT',
+  'en_US',
+  'en_ZA',
+  'en_ZW'
+] as const
+export type SpellcheckLanguage = (typeof SPELLCHECK_LANGUAGES)[number]
 
 export type Unsubscribe = () => void
 
@@ -183,10 +253,26 @@ export type Api = {
     openRecent(path: string): Promise<FileInfo | null>
     recent(): Promise<string[]>
     load(): Promise<ReviewSnapshot>
+    // These also show dialogs and resolve to null when cancelled or failed (main shows why).
+    saveAs(): Promise<FileInfo | null>
+    importJson(): Promise<FileInfo | null>
+    export(kind: ExportKind): Promise<ExportResult | null>
+    showInFolder(path: string): Promise<void> // only the last exported file
     onChanged(cb: (file: FileInfo | null) => void): Unsubscribe
+  }
+  menu: {
+    onCommand(cb: (command: MenuCommand) => void): Unsubscribe
   }
   settings: {
     get(): Promise<Settings>
+    update(settings: Settings): Promise<Settings>
+    // Switches the theme without saving, for the Preferences dialog's live preview.
+    previewTheme(theme: Theme): Promise<void>
+  }
+  // Whether the app is dark right now (the Theme setting, or the system's when "System").
+  theme: {
+    isDark(): Promise<boolean>
+    onChange(cb: (dark: boolean) => void): Unsubscribe
   }
   columns: {
     create(input: ColumnCreateInput): Promise<Column[]>

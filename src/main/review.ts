@@ -1,9 +1,18 @@
-import { app, BrowserWindow, dialog } from 'electron'
-import { existsSync, rmSync } from 'fs'
-import { basename, join, resolve } from 'path'
-import { IPC, type FileInfo } from '../shared/ipc'
+import { app, BrowserWindow, dialog, shell } from 'electron'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
+import { basename, dirname, extname, join, resolve } from 'path'
+import {
+  IPC,
+  type ExportKind,
+  type ExportResult,
+  type FileInfo,
+  type MenuCommand
+} from '../shared/ipc'
 import { createConfigStore, samePath, withoutRecent, withRecent } from './config'
 import { backupBeforeOp, backupOnOpen } from './db/backup'
+import { toCsv, toPysideJson } from './db/export'
+import { createReviewWith, removeReviewFile, saveCopy } from './db/files'
+import { importPyside, parsePysideJson } from './db/importer'
 import { openReviewDb, ReviewFileError } from './db/open'
 import type { DB } from './db/types'
 import { log } from './log'
@@ -13,7 +22,8 @@ import { log } from './log'
 
 let current: { db: DB; path: string } | null = null
 let window: BrowserWindow | null = null
-let onRecentChanged: () => void = () => {}
+// Rebuilds the menu (Recent list, items that need an open file, the Save As hotkey).
+let onMenuChanged: () => void = () => {}
 // Counts every open/create, so the renderer reloads even when the same path is recreated.
 let generation = 0
 // An error from reopening the last file at startup, shown once the window is up.
@@ -23,10 +33,11 @@ export const config = createConfigStore(app.getPath('userData'))
 const backupRoot = (): string => join(app.getPath('userData'), 'Backups')
 
 const FILTERS = [{ name: 'Review files', extensions: ['review'] }]
+const JSON_FILTERS = [{ name: 'Old Review Assistant files', extensions: ['json'] }]
 
-export function attachWindow(win: BrowserWindow, recentChanged: () => void): void {
+export function attachWindow(win: BrowserWindow, menuChanged: () => void): void {
   window = win
-  onRecentChanged = recentChanged
+  onMenuChanged = menuChanged
   // Keep our title instead of the page's <title>.
   win.on('page-title-updated', (e) => e.preventDefault())
   win.once('ready-to-show', () => {
@@ -62,6 +73,16 @@ function announce(): void {
   liveWindow()?.webContents.send(IPC.fileChanged, currentFile())
 }
 
+export function settingsChanged(): void {
+  onMenuChanged()
+}
+
+// Menu items that work on the open file go through the renderer, which saves any text
+// still being typed before asking main to do them (see MenuCommand).
+export function sendMenuCommand(command: MenuCommand): void {
+  liveWindow()?.webContents.send(IPC.menuCommand, command)
+}
+
 export function closeReview(): void {
   current?.db.close()
   current = null
@@ -95,8 +116,7 @@ function switchTo(path: string, create: boolean): FileInfo | null {
     if (create) {
       // The save dialog already asked "replace?" if the file existed.
       if (current && samePath(current.path, full)) closeReview()
-      rmSync(full, { force: true })
-      rmSync(`${full}-journal`, { force: true })
+      removeReviewFile(full)
     } else {
       try {
         backupOnOpen(backupRoot(), full)
@@ -112,7 +132,7 @@ function switchTo(path: string, create: boolean): FileInfo | null {
     if (!current) announce()
     if (!existsSync(full)) {
       config.update({ recentFiles: withoutRecent(config.get().recentFiles, full) })
-      onRecentChanged()
+      onMenuChanged()
     }
     return null
   }
@@ -122,7 +142,7 @@ function switchTo(path: string, create: boolean): FileInfo | null {
   generation++
   log.info(`${create ? 'Created' : 'Opened'} ${full}`)
   config.update({ recentFiles: withRecent(config.get().recentFiles, full), lastFile: full })
-  onRecentChanged()
+  onMenuChanged()
   announce()
   return currentFile()
 }
@@ -146,12 +166,158 @@ export async function openReviewDialog(): Promise<FileInfo | null> {
     ? await dialog.showOpenDialog(win, {
         title: 'Open review',
         defaultPath: app.getPath('documents'),
-        filters: FILTERS,
+        // An old .json can be picked here too; it goes through the importer (spec §3).
+        filters: [{ name: 'Review files (and old .json)', extensions: ['review', 'json'] }],
         properties: ['openFile']
       })
     : { canceled: true, filePaths: [] }
   if (result.canceled || result.filePaths.length === 0) return null
-  return switchTo(result.filePaths[0], false)
+  const [path] = result.filePaths
+  if (extname(path).toLowerCase() === '.json') return importJsonDialog(path)
+  return switchTo(path, false)
+}
+
+// Runs a dialog-driven file action; on failure shows the reason and resolves to null.
+async function guarded<T>(title: string, fn: () => Promise<T | null>): Promise<T | null> {
+  try {
+    return await fn()
+  } catch (err) {
+    showError(title, err)
+    return null
+  }
+}
+
+const stem = (path: string): string => basename(path, extname(path))
+
+// If any rows are checked, asks e.g. "Save only checked rows?" (Yes is the default, as in
+// the reference app). Resolves to null if cancelled.
+function askOnlyChecked(win: BrowserWindow, title: string, question: string): boolean | null {
+  const { checked, total } = getDb()
+    .prepare('SELECT SUM(checked) AS checked, COUNT(*) AS total FROM rows')
+    .get() as { checked: number | null; total: number }
+  if (!checked) return false
+  const answer = dialog.showMessageBoxSync(win, {
+    type: 'question',
+    title,
+    message: question,
+    detail: `${checked} of ${total} rows are checked.`,
+    buttons: ['Yes', 'No', 'Cancel'],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true
+  })
+  return answer === 2 ? null : answer === 0
+}
+
+// Save As (spec §3): writes a copy, optionally with only the checked rows, and switches to it.
+export function saveAsDialog(): Promise<FileInfo | null> {
+  return guarded('Could not save a copy', async () => {
+    const win = liveWindow()
+    if (!win || !current) return null
+    const source = current.path
+    const onlyChecked = askOnlyChecked(win, 'Save As', 'Save only checked rows?')
+    if (onlyChecked === null) return null
+    const result = await dialog.showSaveDialog(win, {
+      title: 'Save As',
+      defaultPath: join(dirname(source), `${stem(source)} copy.review`),
+      filters: FILTERS
+    })
+    if (result.canceled || !result.filePath) return null
+    const dest = resolve(result.filePath)
+    if (samePath(dest, source)) {
+      throw new ReviewFileError('That is the file already open. Choose a different name.')
+    }
+    // The save dialog already asked "replace?".
+    saveCopy(getDb(), dest, onlyChecked)
+    log.info(`Saved a copy of ${source} as ${dest}${onlyChecked ? ' (checked rows only)' : ''}`)
+    return switchTo(dest, false)
+  })
+}
+
+// Imports a file from the PySide6 app into a new .review (spec §9) and opens it. The JSON
+// itself is never changed. `from` skips the open dialog (a .json chosen in Open...).
+export function importJsonDialog(from?: string): Promise<FileInfo | null> {
+  return guarded('Could not import the file', async () => {
+    const win = liveWindow()
+    if (!win) return null
+    if (!from) {
+      const pick = await dialog.showOpenDialog(win, {
+        title: 'Import old JSON',
+        defaultPath: app.getPath('documents'),
+        filters: JSON_FILTERS,
+        properties: ['openFile']
+      })
+      if (pick.canceled || pick.filePaths.length === 0) return null
+      from = pick.filePaths[0]
+    }
+    const file = parsePysideJson(readFileSync(from, 'utf8'))
+
+    const save = await dialog.showSaveDialog(win, {
+      title: 'Save the imported review as',
+      defaultPath: join(dirname(from), `${stem(from)}.review`),
+      filters: FILTERS
+    })
+    if (save.canceled || !save.filePath) return null
+    const dest = resolve(save.filePath)
+    if (samePath(dest, resolve(from))) {
+      throw new ReviewFileError('That is the JSON file being imported. Choose a different name.')
+    }
+    if (current && samePath(dest, current.path)) {
+      throw new ReviewFileError('That file is open. Choose a different name.')
+    }
+
+    const summary = createReviewWith(dest, (db) => importPyside(db, file))
+    log.info(`Imported ${from} into ${dest}`)
+    summary.notes.forEach((note) => log.info(`Import: ${note}`))
+
+    const info = switchTo(dest, false)
+    if (info) {
+      const changes = summary.notes.length
+        ? `\n\nChanges made while importing:\n- ${summary.notes.join('\n- ')}`
+        : ''
+      dialog.showMessageBoxSync(win, {
+        type: 'info',
+        title: 'Import complete',
+        message: `Imported ${summary.rows} rows, ${summary.columns} columns and ${summary.tabs} tabs.`,
+        detail: `Saved as ${dest}${changes}`
+      })
+    }
+    return info
+  })
+}
+
+// Only the file main just exported may be revealed, so the renderer can't probe paths.
+let lastExport: string | null = null
+
+// Export CSV / JSON (spec §9): the whole file, or only the checked rows.
+export function exportDialog(kind: ExportKind): Promise<ExportResult | null> {
+  return guarded('Could not export the file', async () => {
+    const win = liveWindow()
+    if (!win || !current) return null
+    const what = kind === 'csv' ? 'CSV' : 'JSON'
+    const onlyChecked = askOnlyChecked(win, `Export as ${what}`, 'Export only checked rows?')
+    if (onlyChecked === null) return null
+    const result = await dialog.showSaveDialog(win, {
+      title: `Export as ${what}`,
+      defaultPath: join(app.getPath('downloads'), `${stem(current.path)}.${kind}`),
+      filters: [{ name: `${what} files`, extensions: [kind] }]
+    })
+    if (result.canceled || !result.filePath) return null
+    const path = resolve(result.filePath)
+    if (samePath(path, current.path)) {
+      throw new ReviewFileError('That is the open review file. Choose a different name.')
+    }
+    const out = kind === 'csv' ? toCsv(getDb(), onlyChecked) : toPysideJson(getDb(), onlyChecked)
+    writeFileSync(path, out.text, 'utf8')
+    lastExport = path
+    log.info(`Exported ${out.rows} rows to ${path}`)
+    return { path, name: basename(path), rows: out.rows }
+  })
+}
+
+export function showInFolder(path: string): void {
+  if (!lastExport || !samePath(resolve(path), lastExport)) throw new Error('Not an exported file')
+  shell.showItemInFolder(lastExport)
 }
 
 export function openRecent(path: string): FileInfo | null {

@@ -11,7 +11,8 @@ export class ReviewFileError extends Error {}
 
 // Opens (or, with create, makes) a .review file and gets it ready to use:
 // pragmas, migrations, template for a brand-new file, views, and at least one row.
-export function openReviewDb(path: string, opts: { create?: boolean } = {}): DB {
+// `empty` (with create) skips the template and the first row, for the importer to fill.
+export function openReviewDb(path: string, opts: { create?: boolean; empty?: boolean } = {}): DB {
   const db = new Database(path, { fileMustExist: !opts.create })
   try {
     // DELETE = SQLite's classic rollback journal. Unlike WAL it leaves no -wal/-shm files
@@ -33,6 +34,7 @@ export function openReviewDb(path: string, opts: { create?: boolean } = {}): DB 
     }
 
     runMigrations(db)
+    if (opts.empty) return db
     if (version === 0) seedTemplate(db)
     regenerateViews(db, listColumns(db))
     ensureOneRow(db)

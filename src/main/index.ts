@@ -1,7 +1,8 @@
-import { app, shell, BrowserWindow, Menu, dialog } from 'electron'
+import { app, shell, BrowserWindow, Menu, dialog, nativeTheme } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { IPC } from '../shared/ipc'
 import { registerIpc } from './ipc'
 import { initLog, log } from './log'
 import { buildMenu } from './menu'
@@ -10,22 +11,29 @@ import {
   attachWindow,
   config,
   closeReview,
+  currentFile,
   newReviewDialog,
   openRecent,
   openReviewDialog,
   recentFiles,
   reopenLast,
-  safely
+  safely,
+  sendMenuCommand
 } from './review'
+import { applyTheme } from './settings'
 
-// Rebuilt whenever the Recent list changes, so File > Open Recent stays current.
+// Rebuilt whenever the Recent list, the open file or the settings change, so Open Recent,
+// the items that need a file, and the Save As hotkey stay current.
 function refreshMenu(): void {
   Menu.setApplicationMenu(
     buildMenu({
       newFile: () => safely('Could not create the review file', newReviewDialog),
       openFile: () => safely('Could not open the review file', openReviewDialog),
       openRecent: (path) => safely('Could not open the review file', () => openRecent(path)),
-      recent: recentFiles()
+      command: sendMenuCommand,
+      recent: recentFiles(),
+      hasFile: currentFile() !== null,
+      saveAsKey: config.get().hotkeys.saveAs
     })
   )
 }
@@ -49,6 +57,11 @@ function createWindow(): void {
   })
 
   attachWindow(mainWindow, refreshMenu)
+  // The theme changed (Preferences, or the system's while on "System"): tell the page.
+  const themeChanged = (): void =>
+    mainWindow.webContents.send(IPC.themeChanged, nativeTheme.shouldUseDarkColors)
+  nativeTheme.on('updated', themeChanged)
+  mainWindow.on('closed', () => nativeTheme.off('updated', themeChanged))
   attachEditMenu(mainWindow)
 
   mainWindow.on('ready-to-show', () => {
@@ -90,6 +103,7 @@ app.whenReady().then(() => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.mps.reviewassistant')
 
+  applyTheme(config.get().theme)
   applySpellcheckLanguage(config.get().spellcheckLanguage)
   reopenLast()
   refreshMenu()

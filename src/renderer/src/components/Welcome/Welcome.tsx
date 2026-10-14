@@ -1,4 +1,4 @@
-import { FilePlus, FolderOpen } from 'lucide-react'
+import { FileInput, FilePlus, FolderOpen } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button } from '../ui/button'
 
@@ -39,6 +39,9 @@ export function Welcome(): React.JSX.Element {
           <FolderOpen /> Open…
         </Button>
       </div>
+      <Button variant="link" className="-mt-6" onClick={() => run(window.api.file.importJson)}>
+        <FileInput /> Import a file from the old app (.json)…
+      </Button>
 
       {recent.length > 0 && (
         <div className="w-full max-w-md">

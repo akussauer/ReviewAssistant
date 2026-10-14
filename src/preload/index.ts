@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import { IPC, type Api, type FileInfo } from '../shared/ipc'
+import { IPC, type Api, type FileInfo, type MenuCommand } from '../shared/ipc'
 
 // The preload script is the only bridge between the web page (renderer) and Node/Electron.
 // contextBridge copies `api` into the page as `window.api`; the page gets these few
@@ -14,6 +14,10 @@ const api: Api = {
     openRecent: (path) => invoke(IPC.fileOpenRecent, path),
     recent: () => invoke(IPC.fileRecent),
     load: () => invoke(IPC.fileLoad),
+    saveAs: () => invoke(IPC.fileSaveAs),
+    importJson: () => invoke(IPC.fileImportJson),
+    export: (kind) => invoke(IPC.fileExport, kind),
+    showInFolder: (path) => invoke(IPC.fileShowInFolder, path),
     // Subscribes to one specific event and returns a function that unsubscribes.
     // The page never sees ipcRenderer itself, so it can't listen to other channels.
     onChanged: (cb) => {
@@ -22,8 +26,25 @@ const api: Api = {
       return () => ipcRenderer.removeListener(IPC.fileChanged, listener)
     }
   },
+  menu: {
+    onCommand: (cb) => {
+      const listener = (_e: IpcRendererEvent, command: MenuCommand): void => cb(command)
+      ipcRenderer.on(IPC.menuCommand, listener)
+      return () => ipcRenderer.removeListener(IPC.menuCommand, listener)
+    }
+  },
   settings: {
-    get: () => invoke(IPC.settingsGet)
+    get: () => invoke(IPC.settingsGet),
+    update: (settings) => invoke(IPC.settingsUpdate, settings),
+    previewTheme: (theme) => invoke(IPC.settingsPreviewTheme, theme)
+  },
+  theme: {
+    isDark: () => invoke(IPC.themeIsDark),
+    onChange: (cb) => {
+      const listener = (_e: IpcRendererEvent, dark: boolean): void => cb(dark)
+      ipcRenderer.on(IPC.themeChanged, listener)
+      return () => ipcRenderer.removeListener(IPC.themeChanged, listener)
+    }
   },
   columns: {
     create: (input) => invoke(IPC.columnsCreate, input),

@@ -2,7 +2,7 @@
 @import 'tw-animate-css';
 
 /* shadcn/ui theme tokens (neutral). Components use these via classes like bg-primary.
-   `.dark` on <html> switches to the dark palette (wired to the Theme setting in M6). */
+   `.dark` on <html> switches to the dark palette (set from the Theme setting, see App.tsx). */
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -28,6 +28,8 @@
 }
 
 .dark {
+  /* Native parts (scrollbars, date pickers, dropdown lists) follow this. */
+  color-scheme: dark;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);

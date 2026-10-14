@@ -54,7 +54,7 @@ How the Electron version should behave. The **PySide6 app** (`D:\Projects\Review
 | **Open** | Opens a `.review` file. Choosing an old `.json` file runs the importer (§9). |
 | **Open Recent** | The last 10 files **[New]**. On startup, the last file reopens. |
 | **Autosave** | Every change is written straight away; text typing is debounced by about 300 ms **[New]**. There is no Save command and no "unsaved changes" state. |
-| **Save As…** | Writes a copy to a new path and switches to it. If any rows are checked, it asks "Save only checked rows?" (default Yes) **[Py]**, and in that case tabs keep only the rows that still exist. |
+| **Save As…** | Writes a copy to a new path (default `<name> copy.review` in the same folder) and switches to it. If any rows are checked, it asks "Save only checked rows?" (default Yes) **[Py]**, with Cancel **[New]**; in that case tabs keep only the rows that still exist. Text still being typed is saved first. The open file can't be the target. |
 | **Backups** | When a file is opened, a copy is saved to `<file>.backups/` (keeping the last 5) **(A)**, plus one before any destructive column operation **[New]**. |
 
 The window title shows the file name. One file is open per window **(A)**.
@@ -143,8 +143,18 @@ Title (text), Study Type (dropdown: RCT, Cohort, Case Study, Systematic Review, 
 ---
 ## 9. Import and export
 - **Import an old PySide6 JSON file** (schema v1 and v2) into a new `.review` file. It brings in columns (`name`, `type_key`, `options`, `min_val`, `max_val`, `width`), rows, row heights, checks, row ids and tabs (`row_ids`, or legacy `row_idx`), along with each tab's `assistant_enabled` setting and the active tab. Type keys map as `textedit`→Text, `combobox`→Dropdown, `checkbox`→Checkbox, `date`→Date, `spinbox`→Number.
-- **Export CSV [Py]:** if any rows are checked, it asks "Export only checked rows?" (default Yes). Booleans are written as `TRUE`/`FALSE`, and the files default to the Downloads folder.
-- **Export JSON [New]:** the whole file in a documented format.
+  - From File → Import old JSON…, the welcome screen, or a `.json` chosen in Open…. A save dialog asks where the new `.review` goes (default: beside the JSON, same name). The JSON is never changed.
+  - **[New]** Nothing is dropped silently, and a summary lists every change:
+    - Unknown types (e.g. `plain_text`) become Text.
+    - Dropdown values missing from the options are added as options.
+    - Numbers outside the range widen it.
+    - Values that can't fit their column are left empty.
+    - Clashing names get " (2)".
+- **Export CSV [Py]:** if any rows are checked, it asks "Export only checked rows?" (default Yes). Booleans are written as `TRUE`/`FALSE`, and the files default to the Downloads folder. Covers the whole file: every column in display order, rows in manual order, regardless of the current tab, sort or filters.
+  - **[New]** UTF-8 with a byte order mark, so Excel reads accents correctly.
+  - **[New]** Text cells starting with `= + - @` get a leading tab, so Excel shows them as text instead of a formula (`#NAME?`) or a number.
+- **Export JSON [New]:** the PySide v2 format (documented in `docs/json-format.md`), so it round-trips through the importer and opens in the old app. Same checked-only prompt; tabs keep only the exported rows.
+- **[New]** After an export, the status bar shows "Exported N rows to <file>" with *Show in folder*.
 
 ### 9.1 Markdown / Obsidian export (planned, long-term) [New]
 Each row is exported as one `.md` note that can go straight into an Obsidian vault.
@@ -205,9 +215,10 @@ Based on the disabled `SynthesisWidget` in the PySide app **[Py]**:
 | Theme | Light / Dark / System |
 | Spellcheck language | en_AU … en_ZW (same list as the PySide app); default en_GB |
 | Markdown colour | colour picker; default `#0E80A3` |
-| Hotkeys | New row (Ctrl+N) and New column (Ctrl+Shift+N), set by pressing the key combination; **[New]** Save As (Ctrl+Shift+S) |
+| Hotkeys | New row (Ctrl+N) and New column (Ctrl+Shift+N), set by pressing the key combination; **[New]** Save As (Ctrl+Shift+S). A hotkey needs Ctrl/Cmd or Alt plus a letter, digit or F-key; combinations used by another hotkey or a fixed shortcut (Open, Preferences, cut/copy/paste, undo/redo, select all) are refused. |
 | Assistant **[New]** | provider, API key, model, test button |
 | Reset to defaults | ✓ |
 
+- **Dialog [New]:** Settings → Preferences… (Ctrl+,). Theme and markdown colour preview immediately; **Save** keeps the changes, **Cancel** puts back the saved ones. *Reset to defaults* asks first, then fills in the defaults (still needs Save). Saved hotkeys apply at once.
 - **Logs:** a rotating log in the user-data `Logs/` folder (5 MB × 3) **[Py]**.
 - **Dropped:** the PySide "Style" setting (Default/Fusion) and the loading overlay; with autosave there's no long save to wait for.

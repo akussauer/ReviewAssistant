@@ -307,7 +307,10 @@ describe('rows and tabs', () => {
     await expect(store.getState().reorderTabs([3, 2])).rejects.toThrow()
     expect(store.getState().tabs.map((t) => t.id)).toEqual([1, 2, 3])
     store.getState().reportError('Reordering tabs', new Error('disk full'))
-    expect(store.getState().notice).toBe('Reordering tabs failed: disk full')
+    expect(store.getState().notice).toEqual({
+      kind: 'error',
+      text: 'Reordering tabs failed: disk full'
+    })
   })
 
   it('passes errors on, for dialogs to show', async () => {

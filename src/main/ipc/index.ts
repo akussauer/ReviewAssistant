@@ -1,8 +1,10 @@
-import { IPC, type ReviewSnapshot, type Settings } from '../../shared/ipc'
+import { nativeTheme } from 'electron'
+import { IPC, type ReviewSnapshot } from '../../shared/ipc'
 import {
   CheckAllSchema,
   ColumnCreateSchema,
   ColumnUpdateSchema,
+  ExportKindSchema,
   Id,
   IdList,
   NoInput,
@@ -11,9 +13,11 @@ import {
   SeedCountSchema,
   SetCheckedSchema,
   SetHeightSchema,
+  SettingsSchema,
   TabCreateSchema,
   TabRowsSchema,
   TabUpdateSchema,
+  ThemeSchema,
   UpdateCellSchema
 } from '../../shared/schemas'
 import {
@@ -48,15 +52,19 @@ import {
 } from '../db/tabs'
 import { seedRows } from '../db/dev-seed'
 import {
-  config,
   currentFile,
   destructive,
+  exportDialog,
   getDb,
+  importJsonDialog,
   newReviewDialog,
   openRecent,
   openReviewDialog,
-  recentFiles
+  recentFiles,
+  saveAsDialog,
+  showInFolder
 } from '../review'
+import { applyTheme, currentSettings, saveSettings } from '../settings'
 import { handle } from './handle'
 
 export function registerIpc({ dev }: { dev: boolean }): void {
@@ -77,11 +85,17 @@ export function registerIpc({ dev }: { dev: boolean }): void {
     }
   })
 
-  // ---- Settings (read-only for now; the Preferences dialog arrives in M6)
-  handle(IPC.settingsGet, NoInput, (): Settings => {
-    const { theme, spellcheckLanguage, markdownColour, hotkeys } = config.get()
-    return { theme, spellcheckLanguage, markdownColour, hotkeys }
-  })
+  handle(IPC.fileSaveAs, NoInput, saveAsDialog)
+  // The renderer can't pass a path: main asks with its own dialog.
+  handle(IPC.fileImportJson, NoInput, () => importJsonDialog())
+  handle(IPC.fileExport, ExportKindSchema, exportDialog)
+  handle(IPC.fileShowInFolder, PathInput, showInFolder)
+
+  // ---- Settings
+  handle(IPC.settingsGet, NoInput, currentSettings)
+  handle(IPC.settingsUpdate, SettingsSchema, saveSettings)
+  handle(IPC.settingsPreviewTheme, ThemeSchema, applyTheme)
+  handle(IPC.themeIsDark, NoInput, () => nativeTheme.shouldUseDarkColors)
 
   // ---- Columns
   handle(IPC.columnsCreate, ColumnCreateSchema, (input) => createColumn(getDb(), input))

@@ -24,6 +24,8 @@ import {
 // Every action updates this state straight away (so the UI feels instant), then asks main
 // to save. If main refuses, the action puts back exactly what it changed and logs why.
 
+export type Notice = { kind: 'error' | 'info'; text: string; path?: string }
+
 export type ReviewState = {
   status: 'loading' | 'ready' | 'error'
   error: string | null
@@ -39,10 +41,14 @@ export type ReviewState = {
   keptRowIds: number[]
   // The newest row, so the table can scroll to it.
   lastCreatedRowId: number | null
-  // A short message for the user when something failed (shown in the status bar).
-  notice: string | null
+  // A short message in the status bar: something failed, or e.g. an export finished
+  // (`path`: the exported file, for "Show in folder").
+  notice: Notice | null
   dismissNotice(): void
   reportError(what: string, err: unknown): void // log it and show it in the status bar
+  showInfo(text: string, path?: string): void
+  // After saving Preferences, or while previewing them (not saved).
+  setSettings(settings: Settings): void
   // Saves any view changes still waiting (e.g. before switching tabs or closing).
   flushViews(): void
 
@@ -84,12 +90,15 @@ export function createReviewStore(api: Api): ReviewStore {
     // Logs a failure and shows it to the user. Electron prefixes IPC errors with
     // "Error invoking remote method …: Error: "; keep just the reason.
     let noticeTimer: ReturnType<typeof setTimeout> | undefined
+    const notify = (notice: Notice): void => {
+      set({ notice })
+      clearTimeout(noticeTimer)
+      noticeTimer = setTimeout(() => set({ notice: null }), 10_000)
+    }
     const fail = (what: string, err: unknown): void => {
       console.error(`${what} failed`, err)
       const reason = String(err instanceof Error ? err.message : err).replace(/^.*Error: /, '')
-      set({ notice: `${what} failed: ${reason}` })
-      clearTimeout(noticeTimer)
-      noticeTimer = setTimeout(() => set({ notice: null }), 10_000)
+      notify({ kind: 'error', text: `${what} failed: ${reason}` })
     }
 
     // Ids repeat between files, so an undo must not run if another file was opened while
@@ -188,6 +197,14 @@ export function createReviewStore(api: Api): ReviewStore {
 
       reportError(what, err) {
         fail(what, err)
+      },
+
+      showInfo(text, path) {
+        notify({ kind: 'info', text, path })
+      },
+
+      setSettings(settings) {
+        set({ settings })
       },
 
       flushViews() {

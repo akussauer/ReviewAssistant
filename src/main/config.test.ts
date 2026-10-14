@@ -27,13 +27,14 @@ describe('mergeWithDefaults', () => {
     const merged = mergeWithDefaults({
       theme: 'dark',
       markdownColour: 42, // invalid -> default
-      hotkeys: { newRow: 'Ctrl+R' }, // other hotkeys keep their defaults
+      hotkeys: { newRow: 'CmdOrCtrl+R', saveAs: 'Q' }, // invalid/missing ones -> default
+      spellcheckLanguage: 'de_DE', // not offered -> default
       somethingOld: true // unknown keys are dropped
     })
     expect(merged).toEqual({
       ...DEFAULT_CONFIG,
       theme: 'dark',
-      hotkeys: { ...DEFAULT_CONFIG.hotkeys, newRow: 'Ctrl+R' }
+      hotkeys: { ...DEFAULT_CONFIG.hotkeys, newRow: 'CmdOrCtrl+R' }
     })
   })
 

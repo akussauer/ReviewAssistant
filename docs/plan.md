@@ -230,6 +230,27 @@ The main tab shows all rows, so it has no `tab_rows` entries.
 
 **Accept:** importing your real JSON reproduces every row, column, height, check and tab; CSV opens correctly in Excel.
 
+**Decisions (agreed 14 Oct 2026):**
+- *Menu commands go through the renderer.* Save As / Export / Import / Preferences: main sends a `menu:command` event; the renderer flushes pending text edits (the 300 ms debounce), ignores the command while a dialog is open, then calls `window.api…`. IPC is ordered, so the last keystroke is saved before the copy or export.
+- *Save As:* if any rows are checked, ask "Save only checked rows?" (Yes default / No / Cancel). Save dialog defaults to the current folder. `VACUUM INTO` the new path; checked-only then deletes the unchecked rows in the copy (tab membership follows by cascade). Switch to the copy. Saving onto the open file is refused.
+- *Import old JSON* (File menu, Welcome screen, and choosing a `.json` in Open…): save dialog pre-filled with `<same folder>/<same name>.review`; the JSON is never modified. One transaction into a file with no template; on failure the partial file is removed. Afterwards a summary dialog lists rows/columns/tabs and anything converted.
+  - Unknown `type_key` (e.g. `plain_text`) → Text. Options on non-dropdown columns are ignored.
+  - Dropdown values not in the options are added as new options. A dropdown with no options and no values becomes Text.
+  - Number values outside min/max widen the range; non-numbers become empty. Invalid dates become empty. Missing values become empty.
+  - Duplicate column/tab names get " (2)"; a tab called "Main" becomes "Main (2)". v1 tabs use `row_idx`. Old row ids (hex) map to new integer ids. Heights ≥ 16, default 80.
+  - `docs/demo_import.json` (the owner's real file) is committed and used as a test fixture.
+- *Export CSV:* whole file, all columns in display order, rows in manual order, regardless of tab/sort/filter. Checked-only prompt. UTF-8 **with BOM**, CRLF, RFC 4180 quoting. Dropdown → label, checkbox → TRUE/FALSE, date → YYYY-MM-DD, empty → blank. Text cells starting with `= + - @` get a leading tab (tested in Excel: otherwise `- bullet` notes show `#NAME?`; a leading space was the first choice, but Excel still turns `- 2014` into the number −2014). Default folder: Downloads.
+- *Export JSON:* the PySide **v2** format (so it round-trips through the importer and the old app can open it), documented in `docs/json-format.md`. Same checked-only prompt; tabs keep only exported rows.
+- *Export feedback:* a status-bar notice "Exported 37 rows to review.csv · Show in folder" (no popup). Main only reveals the path it just wrote.
+- *Settings dialog:* theme, spellcheck language (the 22 reference languages), markdown colour, hotkeys (New row, New column, Save As), Reset to defaults. Theme and colour preview live; **Save** persists, **Cancel** reverts; Reset asks, then fills the form (still needs Save). Theme is applied through `nativeTheme.themeSource`, so the title bar and menus match.
+- *Hotkey capture:* needs Ctrl/Cmd or Alt plus a letter, digit or F-key. A combination already used by another hotkey or a fixed shortcut (Open, cut/copy/paste/undo/redo/select all) is refused with "Already used by …".
+
+### M6a - Themes, Plugin support
+- Include a theme selecting option within the Settings/Plugins (this should be located below Settings/Preferences)
+- The theme should be compatible with Obsidian's theme css file (if possible), an example file is included in /docs/obsidian_theme.css
+- A "table" of currently installed plugins should be included on this page as well. The user should be able to enable/disable or delete the plugins that are found on this device
+- Plugins do not exist at this point, this will only serve as a placeholder for future plugins (if the community creates them)
+
 ### M7 – Assistant (per tab)
 - Settings: provider, `safeStorage` key, model, test button; key check at startup (free endpoint); assistant options hidden without a key
 - Tab context menu toggle (main tab included); right-hand splitter panel; conversation saved per tab
@@ -268,7 +289,8 @@ The main tab shows all rows, so it has no `tab_rows` entries.
 - [X] M4 Cells and columns
 - [X] M5 Rows, tabs, filters
 - [X] M5a Rows, checked
-- [ ] M6 File menu, import/export, settings
+- [X] M6 File menu, import/export, settings
+- [ ] M6a Themes, Plugin support
 - [ ] M7 Assistant
 - [ ] M8 Synthesis
 - [ ] M9 Packaging

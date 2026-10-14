@@ -1,23 +1,17 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
 import { z } from 'zod'
+import { DEFAULT_SETTINGS } from '../shared/ipc'
+import { AcceleratorSchema, SettingsSchema } from '../shared/schemas'
 import { log } from './log'
 
 // App-wide settings in <userData>/config.json, like FileFunctions.get_configs in the
 // reference app: whatever is missing or invalid in the file falls back to its default,
 // so an older or hand-edited config never crashes the app.
 
-const Hotkeys = z.object({
-  newRow: z.string(),
-  newColumn: z.string(),
-  saveAs: z.string()
-})
-
+// The settings are checked with the same rules as the Preferences dialog's Save.
 const ConfigSchema = z.object({
-  theme: z.enum(['light', 'dark', 'system']),
-  spellcheckLanguage: z.string(),
-  markdownColour: z.string(),
-  hotkeys: Hotkeys,
+  ...SettingsSchema.shape,
   recentFiles: z.array(z.string()),
   lastFile: z.string().nullable()
 })
@@ -25,15 +19,23 @@ const ConfigSchema = z.object({
 export type Config = z.infer<typeof ConfigSchema>
 
 export const DEFAULT_CONFIG: Config = {
-  theme: 'system',
-  spellcheckLanguage: 'en_GB',
-  markdownColour: '#0E80A3',
-  hotkeys: { newRow: 'CmdOrCtrl+N', newColumn: 'CmdOrCtrl+Shift+N', saveAs: 'CmdOrCtrl+Shift+S' },
+  ...DEFAULT_SETTINGS,
   recentFiles: [],
   lastFile: null
 }
 
 export const MAX_RECENT = 10
+
+// Each valid hotkey is kept; an invalid or missing one falls back to its default.
+function mergeHotkeys(raw: unknown): Config['hotkeys'] {
+  const given = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const defaults = DEFAULT_CONFIG.hotkeys
+  const pick = (name: keyof typeof defaults): string => {
+    const parsed = AcceleratorSchema.safeParse(given[name])
+    return parsed.success ? parsed.data : defaults[name]
+  }
+  return { newRow: pick('newRow'), newColumn: pick('newColumn'), saveAs: pick('saveAs') }
+}
 
 // Keeps each valid field of `raw` and uses the default for the rest. Hotkeys are merged
 // one by one, so a single missing hotkey doesn't reset the others.
@@ -41,10 +43,7 @@ export function mergeWithDefaults(raw: unknown): Config {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const merged: Record<string, unknown> = {}
   for (const [key, fieldSchema] of Object.entries(ConfigSchema.shape)) {
-    const value =
-      key === 'hotkeys'
-        ? { ...DEFAULT_CONFIG.hotkeys, ...(obj.hotkeys as object | undefined) }
-        : obj[key]
+    const value = key === 'hotkeys' ? mergeHotkeys(obj.hotkeys) : obj[key]
     const parsed = (fieldSchema as z.ZodType).safeParse(value)
     merged[key] = parsed.success ? parsed.data : DEFAULT_CONFIG[key as keyof Config]
   }

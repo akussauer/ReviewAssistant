@@ -4,6 +4,7 @@ import { EditorView, keymap } from '@codemirror/view'
 import { useEffect, useRef, useState } from 'react'
 import type { CellValue } from '../../../../../shared/ipc'
 import { highlightLine } from '../../../lib/markdown'
+import { registerFlush } from '../../../lib/pendingEdits'
 import { reviewStore } from '../../../store'
 import { cellTheme, markdownHighlight } from './codemirror'
 
@@ -15,11 +16,6 @@ const SAVE_DELAY_MS = 300
 const FromStore = Annotation.define<boolean>()
 
 type Activation = { x: number; y: number } | 'focus' | null
-
-// Every mounted editor's flush, so text typed in the last 300 ms is still saved when the
-// window closes or reloads (React's cleanup doesn't run then).
-const flushers = new Set<() => void>()
-window.addEventListener('beforeunload', () => flushers.forEach((flush) => flush()))
 
 type Props = {
   rowId: number
@@ -135,7 +131,7 @@ function Editor({
       })
     })
     viewRef.current = view
-    flushers.add(flush)
+    const unregister = registerFlush(flush)
 
     // Opened from the placeholder: take the focus, with the cursor where the click was.
     if (activation) {
@@ -147,7 +143,7 @@ function Editor({
     }
 
     return () => {
-      flushers.delete(flush)
+      unregister()
       flush()
       view.destroy()
       viewRef.current = null

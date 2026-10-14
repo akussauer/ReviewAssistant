@@ -4,6 +4,10 @@
 import { z } from 'zod'
 import {
   COLUMN_TYPES,
+  FIXED_SHORTCUTS,
+  SPELLCHECK_LANGUAGES,
+  type ExportKind,
+  type Settings,
   type CellValue,
   type ColumnCreateInput,
   type ColumnOptionsInput,
@@ -93,3 +97,26 @@ export const TabUpdateSchema = z.object({
 export const SeedCountSchema = z.number().int().min(1).max(100_000)
 
 export const TabRowsSchema = z.object({ tabId: Id, rowIds: IdList })
+
+export const ExportKindSchema = z.enum(['csv', 'json']) satisfies z.ZodType<ExportKind>
+
+// A hotkey: Ctrl/Cmd or Alt (optionally Shift), then a letter, digit or F1–F12.
+export const AcceleratorSchema = z
+  .string()
+  .regex(
+    /^(CmdOrCtrl\+)?(Alt\+)?(Shift\+)?([A-Z0-9]|F[1-9]|F1[0-2])$/,
+    'Use Ctrl or Alt with a letter, digit or F-key'
+  )
+  .refine((a) => /CmdOrCtrl|Alt/.test(a), 'Add Ctrl or Alt')
+  .refine((a) => !FIXED_SHORTCUTS[a], 'Already used by a fixed shortcut')
+
+export const ThemeSchema = z.enum(['light', 'dark', 'system'])
+
+export const SettingsSchema = z.object({
+  theme: ThemeSchema,
+  spellcheckLanguage: z.enum(SPELLCHECK_LANGUAGES),
+  markdownColour: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Expected a colour like #0E80A3'),
+  hotkeys: z
+    .object({ newRow: AcceleratorSchema, newColumn: AcceleratorSchema, saveAs: AcceleratorSchema })
+    .refine((h) => new Set(Object.values(h)).size === 3, 'Each hotkey must be different')
+}) satisfies z.ZodType<Settings>

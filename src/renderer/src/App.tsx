@@ -1,17 +1,74 @@
 import { useEffect, useState } from 'react'
-import { MAIN_TAB_ID, type FileInfo } from '../../shared/ipc'
+import { MAIN_TAB_ID, type FileInfo, type MenuCommand } from '../../shared/ipc'
 import { ReviewTable } from './components/ReviewTable/ReviewTable'
+import { SettingsDialog } from './components/Settings/SettingsDialog'
 import { useTabRows, type TabRows } from './components/ReviewTable/useTabRows'
 import { SearchBar } from './components/Tabs/SearchBar'
 import { TabStrip } from './components/Tabs/TabStrip'
 import { matchesHotkey } from './lib/hotkeys'
+import { flushTextEdits } from './lib/pendingEdits'
 import { Button } from './components/ui/button'
 import { Welcome } from './components/Welcome/Welcome'
 import { reviewStore, useReview } from './store'
 
+// File-menu commands (main sends them; see MenuCommand). Text typed in the last moment
+// and pending search/filter changes are saved first, so a copy or export includes them;
+// IPC keeps the order, so those saves reach main before the command does.
+function runMenuCommand(command: MenuCommand, openPreferences: () => void): void {
+  // A dialog is open (e.g. Preferences, where the Save As hotkey is being set): ignore.
+  if (document.querySelector('[role=dialog], [role=alertdialog]')) return
+  if (command === 'preferences') return openPreferences()
+  flushTextEdits()
+  const store = reviewStore.getState()
+  store.flushViews()
+  const done = (what: string) => (err: unknown) => store.reportError(what, err)
+  switch (command) {
+    case 'saveAs':
+      window.api.file.saveAs().catch(done('Save As'))
+      break
+    case 'importJson':
+      window.api.file.importJson().catch(done('Importing'))
+      break
+    case 'exportCsv':
+    case 'exportJson':
+      window.api.file
+        .export(command === 'exportCsv' ? 'csv' : 'json')
+        .then((r) => {
+          if (r)
+            store.showInfo(
+              `Exported ${r.rows} ${r.rows === 1 ? 'row' : 'rows'} to ${r.name}`,
+              r.path
+            )
+        })
+        .catch(done('Exporting'))
+  }
+}
+
+// Main owns the theme (Electron's nativeTheme, from the Theme setting or the system) and
+// says when it changes; the styles switch palette with the `.dark` class.
+function useDarkClass(): void {
+  useEffect(() => {
+    const apply = (dark: boolean): void => {
+      document.documentElement.classList.toggle('dark', dark)
+    }
+    window.api.theme
+      .isDark()
+      .then(apply)
+      .catch((err) => console.error('Could not read the theme', err))
+    return window.api.theme.onChange(apply)
+  }, [])
+}
+
 function App(): React.JSX.Element | null {
   // undefined = still asking main; null = no file open.
   const [file, setFile] = useState<FileInfo | null | undefined>(undefined)
+  const [preferences, setPreferences] = useState(false)
+  useDarkClass()
+  useEffect(
+    () =>
+      window.api.menu.onCommand((command) => runMenuCommand(command, () => setPreferences(true))),
+    []
+  )
 
   useEffect(() => {
     window.api.file
@@ -27,10 +84,18 @@ function App(): React.JSX.Element | null {
   }, [])
 
   if (file === undefined) return null
-  if (file === null) return <Welcome />
-  // `key` makes React build a fresh ReviewView (and reload) whenever a file is opened,
-  // including when the same path is recreated with New.
-  return <ReviewView key={`${file.path}#${file.generation}`} />
+  return (
+    <>
+      {file === null ? (
+        <Welcome />
+      ) : (
+        // `key` makes React build a fresh ReviewView (and reload) whenever a file is
+        // opened, including when the same path is recreated with New.
+        <ReviewView key={`${file.path}#${file.generation}`} />
+      )}
+      {preferences && <SettingsDialog onClose={() => setPreferences(false)} />}
+    </>
+  )
 }
 
 // The open review: tab strip, the active tab's content, and the status bar at the bottom.
@@ -127,8 +192,23 @@ function StatusBar({ rows }: { rows: TabRows }): React.JSX.Element {
         · {checkedCount} checked
       </span>
       {notice && (
-        <span role="alert" className="flex items-center gap-1 text-destructive">
-          {notice}
+        <span
+          role={notice.kind === 'error' ? 'alert' : 'status'}
+          className={`flex items-center gap-1 ${notice.kind === 'error' ? 'text-destructive' : 'text-foreground'}`}
+        >
+          {notice.text}
+          {notice.path && (
+            <button
+              className="rounded-sm px-1 underline hover:bg-accent"
+              onClick={() =>
+                window.api.file
+                  .showInFolder(notice.path!)
+                  .catch((err) => reviewStore.getState().reportError('Showing the file', err))
+              }
+            >
+              Show in folder
+            </button>
+          )}
           <button
             aria-label="Dismiss"
             className="rounded-sm px-1 hover:bg-accent"
