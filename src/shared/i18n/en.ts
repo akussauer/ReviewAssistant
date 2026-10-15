@@ -32,7 +32,6 @@ export const en = {
       exit: 'Exit'
     },
     edit: {
-      title: 'Edit',
       undo: 'Undo',
       undoWhat: 'Undo {what}',
       redo: 'Redo',
@@ -91,10 +90,9 @@ export const en = {
     savingSort: 'Saving the sort',
     savingActiveTab: 'Saving the active tab'
   },
-  // Edit > Undo / Redo: what will be undone.
+  // Undo / Redo (the tab strip's buttons): what will be undone.
   undo: {
     editTo: 'edit to {column}',
-    edit: 'edit',
     rowN: 'row {n}'
   },
   welcome: {

@@ -3,7 +3,6 @@ import {
   MAIN_TAB_ID,
   MARKDOWN_KINDS,
   type ActiveTheme,
-  type EditState,
   type FileInfo,
   type MenuCommand
 } from '../../shared/ipc'
@@ -20,9 +19,9 @@ import { SearchBar } from './components/Tabs/SearchBar'
 import { TabStrip } from './components/Tabs/TabStrip'
 import { toggleAssistant } from './lib/assistant'
 import { useClaudeDesktopStatus } from './lib/claudeDesktop'
-import { ownsUndo, runEditCommand } from './lib/editCommands'
+import { ownsUndo } from './lib/editCommands'
 import { matchesHotkey } from './lib/hotkeys'
-import { localeStore, tNow, useFormatNumber, useT } from './lib/i18n'
+import { tNow, useFormatNumber, useT } from './lib/i18n'
 import { flushTextEdits } from './lib/pendingEdits'
 import { toggleSearchBar } from './lib/searchBar'
 import { Welcome } from './components/Welcome/Welcome'
@@ -42,12 +41,6 @@ function flushPending(): void {
 // File-menu commands (main sends them; see MenuCommand). Pending edits are saved first,
 // so a copy or export includes them.
 function runMenuCommand(command: MenuCommand, openDialog: (d: AppDialog) => void): void {
-  // Undo / Redo act where the focus is, a dialog's text box included (never on a cell
-  // behind an open dialog).
-  if (command === 'undo' || command === 'redo') {
-    if (dialogOpen() && !ownsUndo(document.activeElement)) return
-    return runEditCommand(command)
-  }
   // A dialog is open (e.g. Preferences, where the Save As hotkey is being set): ignore.
   if (dialogOpen()) return
   if (command === 'preferences' || command === 'plugins' || command === 'about')
@@ -207,7 +200,7 @@ const isMac = navigator.platform.startsWith('Mac')
 
 // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z undo and redo cell edits (spec §6), unless the focus is
 // in something with its own undo (a text cell's editor, a text box); Ctrl+F shows or hides
-// the search bar (spec §7). The Edit menu shows the undo keys but leaves them to us.
+// the search bar (spec §7).
 function useEditKeys(): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -227,53 +220,6 @@ function useEditKeys(): void {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
-}
-
-// Tells main what Edit > Undo / Redo should say: what the next undo/redo will change, or a
-// plain "Undo" while the focus is in something with its own undo. Sent only on change.
-function useEditMenuState(): void {
-  useEffect(() => {
-    let sent = ''
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const describe = (edit: { columnId: number } | undefined): string | null => {
-      if (!edit) return null
-      const label = reviewStore.getState().columns.find((c) => c.id === edit.columnId)?.label
-      const t = tNow()
-      return label ? t('undo.editTo', { column: label }) : t('undo.edit')
-    }
-    const send = (state: EditState): void => {
-      const key = JSON.stringify(state)
-      if (key === sent) return
-      sent = key
-      window.api.menu.setEditState(state).catch((err) => console.error('Edit menu', err))
-    }
-    const update = (): void => {
-      clearTimeout(timer)
-      // Focus moves through several elements at once (e.g. Tab); settle first.
-      timer = setTimeout(() => {
-        const { undoStack, redoStack } = reviewStore.getState()
-        send(
-          ownsUndo(document.activeElement)
-            ? { undo: '', redo: '' }
-            : { undo: describe(undoStack.at(-1)), redo: describe(redoStack.at(-1)) }
-        )
-      }, 100)
-    }
-    update()
-    const unsubscribe = reviewStore.subscribe(update)
-    // The menu's "Undo edit to Notes" is in the UI language too.
-    const unsubscribeLocale = localeStore.subscribe(update)
-    document.addEventListener('focusin', update)
-    document.addEventListener('focusout', update)
-    return () => {
-      clearTimeout(timer)
-      unsubscribe()
-      unsubscribeLocale()
-      document.removeEventListener('focusin', update)
-      document.removeEventListener('focusout', update)
-      send({ undo: null, redo: null }) // no file open: nothing to undo
-    }
   }, [])
 }
 
@@ -362,7 +308,6 @@ function ReviewView(): React.JSX.Element | null {
     void reviewStore.getState().load()
   }, [])
   useEditKeys()
-  useEditMenuState()
   const searchBar = useReview((s) => s.searchBar)
 
   // Ctrl+N adds a row at the bottom (spec §5); in a user tab, the row joins that tab too.

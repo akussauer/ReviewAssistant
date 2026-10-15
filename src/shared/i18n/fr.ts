@@ -33,7 +33,6 @@ export const fr: Messages<En> = {
       exit: 'Quitter'
     },
     edit: {
-      title: 'Édition',
       undo: 'Annuler',
       undoWhat: 'Annuler : {what}',
       redo: 'Rétablir',
@@ -98,7 +97,6 @@ export const fr: Messages<En> = {
   },
   undo: {
     editTo: 'modification de {column}',
-    edit: 'modification',
     rowN: 'ligne {n}'
   },
   welcome: {

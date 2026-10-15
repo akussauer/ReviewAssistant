@@ -15,7 +15,6 @@ import {
   MAX_SPELLCHECK_LANGUAGES,
   type AssistantSettings,
   type ConnectionInput,
-  type EditState,
   type ExportKind,
   type ColumnExport,
   type MarkdownExportInput,
@@ -90,12 +89,6 @@ export const CheckAllSchema = z.boolean()
 
 export const SearchBarSchema = z.boolean()
 export const AppFolderSchema = z.enum(APP_FOLDERS)
-
-const MenuLabel = z.string().max(200).nullable()
-export const EditStateSchema = z.object({
-  undo: MenuLabel,
-  redo: MenuLabel
-}) satisfies z.ZodType<EditState>
 
 const TabType = z.enum(['review', 'synthesis'])
 const View = z.looseObject({

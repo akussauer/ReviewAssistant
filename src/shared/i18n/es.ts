@@ -33,7 +33,6 @@ export const es: Messages<En> = {
       exit: 'Salir'
     },
     edit: {
-      title: 'Edición',
       undo: 'Deshacer',
       undoWhat: 'Deshacer {what}',
       redo: 'Rehacer',
@@ -98,7 +97,6 @@ export const es: Messages<En> = {
   },
   undo: {
     editTo: 'cambio en {column}',
-    edit: 'cambio',
     rowN: 'fila {n}'
   },
   welcome: {

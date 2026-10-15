@@ -39,7 +39,6 @@ import { fileFromArgv } from './launchFile'
 import { recheck } from './assistant'
 import { applyClaudeDesktop, stopClaudeDesktop } from './claudeDesktop'
 import { applyTheme } from './settings'
-import { currentEditState } from './ui'
 import { applyMenu, initialTitleBarOverlay } from './titleBar'
 
 // Rebuilt whenever the Recent list, the open file or the settings change, so Open Recent,
@@ -54,7 +53,6 @@ function refreshMenu(): void {
       recent: recentFiles(),
       hasFile: currentFile() !== null,
       saveAsKey: config.get().hotkeys.saveAs,
-      edit: currentEditState(),
       dev: import.meta.env.DEV,
       pseudo: currentLocale() === 'pseudo',
       togglePseudo

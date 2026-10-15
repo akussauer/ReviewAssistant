@@ -32,7 +32,6 @@ export const de: Messages<En> = {
       exit: 'Beenden'
     },
     edit: {
-      title: 'Bearbeiten',
       undo: 'Rückgängig',
       undoWhat: 'Rückgängig: {what}',
       redo: 'Wiederholen',
@@ -98,7 +97,6 @@ export const de: Messages<En> = {
   },
   undo: {
     editTo: 'Änderung an {column}',
-    edit: 'Änderung',
     rowN: 'Zeile {n}'
   },
   welcome: {

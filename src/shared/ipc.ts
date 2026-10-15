@@ -68,7 +68,6 @@ export const IPC = {
   assistantStop: 'assistant:stop',
   claudeDesktopStatus: 'claude-desktop:status',
   claudeDesktopSaveExtension: 'claude-desktop:save-extension',
-  menuSetEditState: 'menu:set-edit-state',
   menuGet: 'menu:get',
   menuClick: 'menu:click',
   windowTitleBarColours: 'window:title-bar-colours',
@@ -288,8 +287,6 @@ export type MenuCommand =
   | 'exportMarkdown'
   | 'preferences'
   | 'plugins'
-  | 'undo'
-  | 'redo'
   | 'about'
   | 'devSeed'
 
@@ -322,11 +319,6 @@ export type AppInfo = {
 }
 export const APP_FOLDERS = ['settings', 'logs'] as const
 export type AppFolder = (typeof APP_FOLDERS)[number]
-
-// What the Edit menu's Undo and Redo say (spec §6). null = greyed out; '' = plain "Undo"
-// (e.g. while typing in a text box, which has its own undo); otherwise what will be
-// undone, e.g. "edit to Notes" -> "Undo edit to Notes".
-export type EditState = { undo: string | null; redo: string | null }
 
 // ---- Settings (spec §12) ----------------------------------------------------------
 
@@ -590,7 +582,6 @@ export type Api = {
   }
   menu: {
     onCommand(cb: (command: MenuCommand) => void): Unsubscribe
-    setEditState(state: EditState): Promise<void>
     // The title bar's menu (plan M10c).
     get(): Promise<MenuNode[]>
     onChanged(cb: (menu: MenuNode[]) => void): Unsubscribe

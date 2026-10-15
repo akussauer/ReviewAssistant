@@ -7,7 +7,6 @@ import {
   ColumnCreateSchema,
   ColumnUpdateSchema,
   ConnectionInputSchema,
-  EditStateSchema,
   ExportKindSchema,
   MarkdownExportSchema,
   FileIdSchema,
@@ -119,7 +118,7 @@ import {
 } from '../assistant'
 import { listMessages } from '../db/messages'
 import { getMarkdownState } from '../db/markdownExport'
-import { appInfo, openAppFolder, searchBarShown, setEditState, setSearchBarShown } from '../ui'
+import { appInfo, openAppFolder, searchBarShown, setSearchBarShown } from '../ui'
 import { handle } from './handle'
 
 export function registerIpc({ dev }: { dev: boolean }): void {
@@ -164,7 +163,6 @@ export function registerIpc({ dev }: { dev: boolean }): void {
   handle(IPC.themeIsDark, NoInput, () => nativeTheme.shouldUseDarkColors)
 
   // ---- Menu and window state (plan M9a)
-  handle(IPC.menuSetEditState, EditStateSchema, setEditState)
   handle(IPC.menuGet, NoInput, currentMenu)
   handle(IPC.menuClick, MenuClickSchema, clickMenu)
   handle(IPC.windowTitleBarColours, TitleBarColoursSchema, setTitleBarColours)

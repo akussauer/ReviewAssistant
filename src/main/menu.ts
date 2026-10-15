@@ -1,10 +1,11 @@
 import { Menu, type BrowserWindow, type MenuItem, type MenuItemConstructorOptions } from 'electron'
 import { basename } from 'path'
-import type { EditState, MenuCommand, MenuNode } from '../shared/ipc'
+import type { MenuCommand, MenuNode } from '../shared/ipc'
 import { t } from './i18n'
 
-// The native application menu (File / Edit / Settings, spec §2). Search has no menu item:
-// Ctrl+F and the 🔍 button by the tabs show it.
+// The native application menu (File / Settings, spec §2). There is no Edit menu: undo/redo
+// are the ↶ ↷ buttons by the tabs and Ctrl+Z / Ctrl+Y, and cut/copy/paste are the usual
+// keys and the right-click menu. Search has no menu item: Ctrl+F and the 🔍 button show it.
 
 export type MenuActions = {
   newFile(): void
@@ -15,7 +16,6 @@ export type MenuActions = {
   recent: string[]
   hasFile: boolean // Save As and Export need an open review
   saveAsKey: string // the Save As hotkey from the settings
-  edit: EditState // what Undo / Redo will do (reported by the page)
   dev: boolean // `npm run dev`: adds the Developer menu
   pseudo: boolean // the Developer menu's test language is on
   togglePseudo(): void
@@ -76,43 +76,6 @@ export function buildMenu(actions: MenuActions): Menu {
         { role: 'quit', label: t('menu.file.exit') }
       ]
     },
-    // Undo and Redo go to the page, which decides what they act on (a cell, or the text box
-    // being typed in). Their shortcuts are shown but not registered here: the
-    // page handles the keys itself, so a text box keeps its own Ctrl+Z.
-    {
-      label: t('menu.edit.title'),
-      submenu: [
-        run(
-          actions.edit.undo
-            ? t('menu.edit.undoWhat', { what: actions.edit.undo })
-            : t('menu.edit.undo'),
-          'undo',
-          {
-            accelerator: 'CmdOrCtrl+Z',
-            registerAccelerator: false,
-            enabled: actions.edit.undo !== null
-          }
-        ),
-        run(
-          actions.edit.redo
-            ? t('menu.edit.redoWhat', { what: actions.edit.redo })
-            : t('menu.edit.redo'),
-          'redo',
-          {
-            accelerator: 'CmdOrCtrl+Y',
-            registerAccelerator: false,
-            enabled: actions.edit.redo !== null
-          }
-        ),
-        { type: 'separator' },
-        // Electron's own labels for these are always English, so they get ours.
-        { role: 'cut', label: t('menu.edit.cut') },
-        { role: 'copy', label: t('menu.edit.copy') },
-        { role: 'paste', label: t('menu.edit.paste') },
-        { type: 'separator' },
-        { role: 'selectAll', label: t('menu.edit.selectAll') }
-      ]
-    },
     {
       label: t('menu.settings.title'),
       submenu: [
@@ -148,12 +111,8 @@ export function buildMenu(actions: MenuActions): Menu {
 // the menu in its own title bar from this copy, and asks main to run an item by its id.
 // The application menu itself stays set (but hidden), so its shortcuts keep working.
 
-// Items with a role (Cut, Exit, …) have no accelerator of their own; these are Windows'.
+// Items with a role (Exit) have no accelerator of their own; these are Windows'.
 const ROLE_KEYS: Record<string, string> = {
-  cut: 'Ctrl+X',
-  copy: 'Ctrl+C',
-  paste: 'Ctrl+V',
-  selectAll: 'Ctrl+A',
   quit: 'Alt+F4'
 }
 

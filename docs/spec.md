@@ -40,8 +40,8 @@ How the Electron version should behave. The **PySide6 app** (`D:\Projects\Review
 │ ☑    │ …            │ [RCT ▾]     │ 2018 │ …              │ [+] [input] [Send]│
 └──────┴──────────────┴─────────────┴──────┴────────────────┴───────────────────┘
 ```
-- **Menu:** File (New, Open, Open Recent, Save As…, Import old JSON…, Export → CSV / JSON / **[New]** Markdown, About Review Assistant, Exit), **[New]** Edit (Undo, Redo, Cut, Copy, Paste, Select All; §6) and Settings (Preferences, Plugins). Search has no menu item (Ctrl+F or the 🔍 button, §7).
-- **Title bar [New]:** Windows can't theme its own menu bar, so the app draws one row itself in the current theme (Light/Dark or an Obsidian theme): app icon, the menu, and the open review's name; Windows' minimise/maximise/close buttons are recoloured to match. It behaves like a native menu: Alt focuses it, Alt+F/E/S open a menu, arrows/Enter/Esc work, and Ctrl+O, Ctrl+, and the Save As hotkey still work.
+- **Menu:** File (New, Open, Open Recent, Save As…, Import old JSON…, Export → CSV / JSON / **[New]** Markdown, About Review Assistant, Exit) and Settings (Preferences, Plugins). No Edit menu: undo/redo are Ctrl+Z / Ctrl+Y and the buttons by the tabs (§6); cut/copy/paste are the usual keys and the right-click menu. Search has no menu item (Ctrl+F or the 🔍 button, §7).
+- **Title bar [New]:** Windows can't theme its own menu bar, so the app draws one row itself in the current theme (Light/Dark or an Obsidian theme): app icon, the menu, and the open review's name; Windows' minimise/maximise/close buttons are recoloured to match. It behaves like a native menu: Alt focuses it, Alt+F/S open a menu, arrows/Enter/Esc work, and Ctrl+O, Ctrl+, and the Save As hotkey still work.
 - **About [New]:** an in-app dialog (like Preferences) whose text can be selected and copied: version, Electron and Windows versions, settings and log folders; buttons *Open settings folder*, *Open logs*, *Copy details* (all of it as plain text, for a bug report) and *Close*.
 - **Tab strip:** the main tab is first; it can't be closed and has no × **[Py]**. User tabs have a × that asks for confirmation.
 - **Search bar** above the table filters across all columns **[Py]**. **[New]** Hidden by default; Ctrl+F shows or hides it (§7).
@@ -135,7 +135,6 @@ Title (text), Study Type (dropdown: RCT, Cohort, Case Study, Systematic Review, 
   - Not undoable: row checks, row heights, adding/deleting rows, column changes. Edits to a deleted row, or to a deleted or retyped column, are dropped from the list. Undoing to a dropdown option that has since been removed is skipped, with a notice.
   - If the undone cell's row is in the current tab, the table scrolls to it and briefly highlights it. The status bar always says e.g. "Undid edit to Notes (“Pacing in elite swimmers”)", naming the row by its first non-empty text column (else "row 12", its place in the main table). The app never switches tabs.
   - In the search box, filters, dialogs and the assistant input, Ctrl+Z / Ctrl+Y are that box's own undo.
-  - **Edit menu:** Undo names what it will undo ("Undo edit to Notes") and is greyed out when there's nothing to undo; Redo shows Ctrl+Y.
   - **Undo / Redo buttons:** to the left of 🔍 by the tabs, the same as Ctrl+Z / Ctrl+Y outside a text box (an edit just made in a text cell counts as one step). Their tooltips name the edit; greyed out when there is nothing to undo or redo.
 
 ---

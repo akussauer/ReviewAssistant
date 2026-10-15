@@ -54,7 +54,6 @@ const api: Api = {
       ipcRenderer.on(IPC.menuCommand, listener)
       return () => ipcRenderer.removeListener(IPC.menuCommand, listener)
     },
-    setEditState: (state) => invoke(IPC.menuSetEditState, state),
     get: () => invoke(IPC.menuGet),
     onChanged: (cb) => {
       const listener = (_e: IpcRendererEvent, menu: MenuNode[]): void => cb(menu)
