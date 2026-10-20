@@ -35,7 +35,7 @@ describe('migrations', () => {
 
   it('upgrade an M6 (version 1) file, keeping its tabs and messages', () => {
     const db = new Database(':memory:')
-    db.exec(migrations[0])
+    db.exec(migrations[0] as string)
     db.pragma('user_version = 1')
     db.exec(`INSERT INTO tabs (id, label, type, position, assistant_enabled)
              VALUES (2, 'Pacing', 'review', 1, 1);
@@ -52,6 +52,46 @@ describe('migrations', () => {
       cost: null,
       cost_estimated: 0
     })
+  })
+
+  it('upgrade a version 2 file to allow list and checklist columns, keeping what points at columns', () => {
+    const db = new Database(':memory:')
+    db.pragma('foreign_keys = ON')
+    db.exec(migrations[0] as string)
+    db.exec(migrations[1] as string)
+    db.pragma('user_version = 2')
+    db.exec(`INSERT INTO columns (id, label, type, options, position)
+               VALUES (7, 'Notes', 'text', '{}', 0);
+             INSERT INTO tabs (id, label, type, position) VALUES (2, 'S', 'synthesis', 1);
+             INSERT INTO synthesis (tab_id, column_id, included, text) VALUES (2, 7, 1, 'kept');`)
+    expect(() =>
+      db.exec(`INSERT INTO columns (label, type, position) VALUES ('L', 'list', 1)`)
+    ).toThrow(/CHECK/)
+
+    runMigrations(db)
+    expect(schemaVersion(db)).toBe(SCHEMA_VERSION)
+    expect(db.pragma('foreign_keys', { simple: true })).toBe(1)
+    expect(listColumns(db).map((c) => [c.id, c.label, c.type])).toEqual([[7, 'Notes', 'text']])
+    expect(db.prepare('SELECT text FROM synthesis').pluck().get()).toBe('kept')
+    db.exec(
+      `INSERT INTO columns (label, type, position) VALUES ('L', 'list', 1), ('C', 'checklist', 2)`
+    )
+    // The cascade still works on the rebuilt table.
+    db.exec('DELETE FROM columns WHERE id = 7')
+    expect(db.prepare('SELECT COUNT(*) FROM synthesis').pluck().get()).toBe(0)
+  })
+
+  it('upgrade a file that already has broken references (e.g. edited in another tool)', () => {
+    const db = new Database(':memory:')
+    db.exec(migrations[0] as string)
+    db.exec(migrations[1] as string)
+    db.pragma('user_version = 2')
+    // With foreign keys off (the sqlite3 tool's default), a broken reference sticks.
+    db.pragma('foreign_keys = OFF')
+    db.exec('INSERT INTO tab_rows (tab_id, row_id) VALUES (1, 999)')
+    db.pragma('foreign_keys = ON')
+    runMigrations(db)
+    expect(schemaVersion(db)).toBe(SCHEMA_VERSION)
   })
 })
 

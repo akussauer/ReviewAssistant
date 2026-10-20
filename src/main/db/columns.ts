@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto'
 import type {
+  CellValue,
   Column,
   ColumnCreateInput,
   ColumnOptions,
@@ -8,6 +9,7 @@ import type {
   ColumnUpdateInput
 } from '../../shared/ipc'
 import { convertValue } from '../../shared/conversion'
+import { normaliseList, tickedIds } from '../../shared/lists'
 import { cellPath, defaultValue } from './cells'
 import type { DB } from './types'
 import { regenerateViews } from './views'
@@ -46,17 +48,20 @@ export function newChoiceId(taken: Set<string>): string {
 
 // Validates the options for a column type and fills in defaults and missing choice ids.
 // Rules follow the reference column dialog: dropdowns need at least one option, min ≤ max.
-// A choice may only carry an id the column already has (`existingIds`), so a deleted
-// option's id can't be brought back.
+// Checklist items follow the dropdown's rules. A choice may only carry an id the column
+// already has (`existingIds`), so a deleted option's id can't be brought back.
 export function normaliseOptions(
   type: ColumnType,
   input: ColumnOptionsInput,
   existingIds: string[] = []
 ): ColumnOptions {
   switch (type) {
-    case 'dropdown': {
+    case 'list':
+      return { style: input.style ?? 'bullets' }
+    case 'dropdown':
+    case 'checklist': {
       const choices = input.choices ?? []
-      if (choices.length === 0) throw new Error('A dropdown needs at least one option')
+      if (choices.length === 0) throw new Error(`A ${type} needs at least one option`)
       const labels = new Set<string>()
       const ids = new Set(choices.flatMap((c) => (c.id ? [c.id] : [])))
       if (ids.size !== choices.filter((c) => c.id).length) throw new Error('Duplicate option ids')
@@ -115,10 +120,12 @@ export function createColumn(db: DB, input: ColumnCreateInput): Column[] {
   return listColumns(db)
 }
 
-// Dropdown option ids that `input` would remove from the column (their values get cleared).
+// Dropdown option or checklist item ids that `input` would remove from the column (their
+// values get cleared, or unticked).
 export function removedChoiceIds(column: Column, input: ColumnUpdateInput): string[] {
   if (isRetype(column, input)) return []
-  if (column.type !== 'dropdown' || !input.options?.choices) return []
+  if ((column.type !== 'dropdown' && column.type !== 'checklist') || !input.options?.choices)
+    return []
   const kept = new Set(input.options.choices.flatMap((c) => (c.id ? [c.id] : [])))
   return (column.options.choices ?? []).map((c) => c.id).filter((id) => !kept.has(id))
 }
@@ -132,11 +139,27 @@ export const isRetype = (column: Column, input: ColumnUpdateInput): boolean =>
   input.type !== undefined && input.type !== column.type
 
 // Whether an edit destroys data and so needs a backup first, and under which name:
-// changing the type converts every value; removing dropdown options clears cells.
+// changing the type converts every value; removing dropdown options clears cells, and
+// removing checklist items unticks them. (Switching a list's style loses nothing.)
 export function backupReason(column: Column, input: ColumnUpdateInput): string | null {
   if (isRetype(column, input)) return 'retype-column'
   if (removedChoiceIds(column, input).length > 0) return 'edit-column'
   return null
+}
+
+// Sets every row's value in one column to `change(value)`; undefined = leave that row be.
+function rewriteCells(
+  db: DB,
+  columnId: number,
+  change: (value: CellValue | undefined) => CellValue | undefined
+): void {
+  const rows = db.prepare('SELECT id, data FROM rows').all() as { id: number; data: string }[]
+  const write = db.prepare('UPDATE rows SET data = json_set(data, ?, json(?)) WHERE id = ?')
+  const path = cellPath(columnId)
+  for (const r of rows) {
+    const next = change(JSON.parse(r.data)[String(columnId)])
+    if (next !== undefined) write.run(path, JSON.stringify(next), r.id)
+  }
 }
 
 // Changes a column's type and converts every row's value (spec §4.2). Destructive: the
@@ -144,13 +167,7 @@ export function backupReason(column: Column, input: ColumnUpdateInput): string |
 function retype(db: DB, column: Column, input: ColumnUpdateInput & { type: ColumnType }): void {
   const options = keepExport(column, normaliseOptions(input.type, input.options ?? {}))
   const to = { type: input.type, options }
-  const rows = db.prepare('SELECT id, data FROM rows').all() as { id: number; data: string }[]
-  const write = db.prepare('UPDATE rows SET data = json_set(data, ?, json(?)) WHERE id = ?')
-  const path = cellPath(column.id)
-  for (const r of rows) {
-    const { value } = convertValue(column, to, JSON.parse(r.data)[String(column.id)])
-    write.run(path, JSON.stringify(value), r.id)
-  }
+  rewriteCells(db, column.id, (v) => convertValue(column, to, v).value)
   db.prepare('UPDATE columns SET type = ?, options = ? WHERE id = ?').run(
     input.type,
     JSON.stringify(options),
@@ -178,13 +195,26 @@ export function updateColumn(db: DB, input: ColumnUpdateInput): Column {
         )
       )
       const removed = removedChoiceIds(column, input)
-      if (removed.length) {
+      if (removed.length && column.type === 'dropdown') {
         // Rows that used a removed option become empty.
         const path = cellPath(column.id)
         const stmt = db.prepare(
           `UPDATE rows SET data = json_set(data, ?, json('null')) WHERE json_extract(data, ?) = ?`
         )
         for (const id of removed) stmt.run(path, path, id)
+      } else if (removed.length) {
+        // Rows that ticked a removed item lose that tick.
+        const gone = new Set(removed)
+        rewriteCells(db, column.id, (v) => {
+          const ids = tickedIds(v)
+          return ids.some((id) => gone.has(id)) ? ids.filter((id) => !gone.has(id)) : undefined
+        })
+      }
+      if (column.type === 'list' && options.style !== column.options.style) {
+        // A new style rewrites every item's marker (- ↔ 1.).
+        rewriteCells(db, column.id, (v) =>
+          typeof v === 'string' && v !== '' ? normaliseList(v, options.style) : undefined
+        )
       }
       db.prepare('UPDATE columns SET options = ? WHERE id = ?').run(
         JSON.stringify(options),

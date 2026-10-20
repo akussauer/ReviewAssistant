@@ -1,8 +1,13 @@
 import type { DB } from './types'
 
+// A step that rebuilds a table (SQLite can't change a CHECK in place) runs with foreign
+// keys off: otherwise dropping the old table would cascade-delete the rows that point
+// at it (e.g. synthesis → columns). The foreign keys are checked again before it commits.
+type Migration = string | { sql: string; foreignKeysOff: true }
+
 // Each entry upgrades the file by one version; `PRAGMA user_version` records how many
 // have run. Never edit an entry once it has shipped: add a new one instead.
-export const migrations: string[] = [
+export const migrations: Migration[] = [
   // 1: initial schema (docs/plan.md, M2)
   `
   CREATE TABLE columns (
@@ -65,7 +70,25 @@ export const migrations: string[] = [
   ALTER TABLE messages ADD COLUMN cost REAL;               -- USD
   ALTER TABLE messages ADD COLUMN cost_estimated INTEGER NOT NULL DEFAULT 0;
   CREATE INDEX messages_tab ON messages(tab_id, id);
+  `,
+  // 3: List and Checklist column types (M10e)
+  {
+    foreignKeysOff: true,
+    sql: `
+  CREATE TABLE columns_new (
+    id       INTEGER PRIMARY KEY,
+    label    TEXT NOT NULL UNIQUE,
+    type     TEXT NOT NULL CHECK (type IN ('text','list','dropdown','checklist','checkbox','date','number')),
+    options  TEXT NOT NULL DEFAULT '{}',  -- dropdown, checklist: {"choices":[{"id","label"}]}; number: {"min","max"}; list: {"style"}
+    width    INTEGER NOT NULL DEFAULT 150,
+    position INTEGER NOT NULL
+  );
+  INSERT INTO columns_new (id, label, type, options, width, position)
+    SELECT id, label, type, options, width, position FROM columns;
+  DROP TABLE columns;
+  ALTER TABLE columns_new RENAME TO columns;
   `
+  }
 ]
 
 export const SCHEMA_VERSION = migrations.length
@@ -74,12 +97,29 @@ export function schemaVersion(db: DB): number {
   return db.pragma('user_version', { simple: true }) as number
 }
 
+// How many rows point at a row that doesn't exist (SQLite's own check).
+const brokenReferences = (db: DB): number => (db.pragma('foreign_key_check') as unknown[]).length
+
 export function runMigrations(db: DB): void {
   for (let v = schemaVersion(db); v < migrations.length; v++) {
-    // One transaction per step: a failed migration leaves the file at the previous version.
-    db.transaction(() => {
-      db.exec(migrations[v])
-      db.pragma(`user_version = ${v + 1}`)
-    })()
+    const step = migrations[v]
+    const sql = typeof step === 'string' ? step : step.sql
+    // The pragma is ignored inside a transaction, so it's switched around it.
+    const fkOff = typeof step !== 'string' && db.pragma('foreign_keys', { simple: true }) === 1
+    if (fkOff) db.pragma('foreign_keys = OFF')
+    const brokenBefore = fkOff ? brokenReferences(db) : 0
+    try {
+      // One transaction per step: a failed migration leaves the file at the previous version.
+      db.transaction(() => {
+        db.exec(sql)
+        // Only references this step broke count: a file may already have some (e.g. edited
+        // in another tool with foreign keys off), and that mustn't stop it opening.
+        if (fkOff && brokenReferences(db) > brokenBefore)
+          throw new Error(`Migration ${v + 1} broke a foreign key`)
+        db.pragma(`user_version = ${v + 1}`)
+      })()
+    } finally {
+      if (fkOff) db.pragma('foreign_keys = ON')
+    }
   }
 }

@@ -67,8 +67,8 @@ export const en = {
     exported: { one: 'Exported {count} row to {name}', other: 'Exported {count} rows to {name}' },
     undid: 'Undid edit to {column} ({row})',
     redid: 'Redid edit to {column} ({row})',
-    undoMissing: "Couldn't undo the edit to {column}: that option has been removed",
-    redoMissing: "Couldn't redo the edit to {column}: that option has been removed",
+    undoMissing: "Couldn't undo the edit to {column}: that option or item has been removed",
+    redoMissing: "Couldn't redo the edit to {column}: that option or item has been removed",
     dictionaryFailed:
       "Couldn't download the {language} dictionary (offline?), so {language} isn't checked for now. It's tried again when the app next starts."
   },
@@ -153,9 +153,11 @@ export const en = {
   // New column / Column settings (spec §4.2).
   columns: {
     types: {
-      text: 'Text (multiline)',
+      text: 'Text',
       dropdown: 'Dropdown',
       checkbox: 'Checkbox',
+      list: 'List',
+      checklist: 'Checklist',
       date: 'Date',
       number: 'Number'
     },
@@ -185,6 +187,25 @@ export const en = {
     noOptions: 'No options yet.',
     dragToReorder: 'Drag to reorder',
     optionN: 'Option {n}',
+    listStyle: 'List style',
+    styles: { bullets: 'Bullets', numbered: 'Numbered' },
+    items: 'Items',
+    newItem: 'New item…',
+    needItem: 'Please add at least one item for the checklist.',
+    itemEmpty: 'Items cannot be empty.',
+    itemsDiffer: 'Each item must be different.',
+    noItems: 'No items yet.',
+    itemN: 'Item {n}',
+    untickWarning: {
+      one: 'A removed item is ticked in {count} row; it will be unticked there. A backup is taken first.',
+      other:
+        'A removed item is ticked in {count} rows; it will be unticked there. A backup is taken first.'
+    },
+    restyleWarning: {
+      one: 'Changing the style rewrites the markers in {count} cell. Nothing is lost.',
+      other: 'Changing the style rewrites the markers in {count} cells. Nothing is lost.'
+    },
+    rewriteCells: 'Rewrite cells',
     removeOption: 'Remove {name}'
   },
   deleteColumn: {
@@ -210,6 +231,13 @@ export const en = {
     checked: 'Checked',
     unchecked: 'Unchecked',
     placeholder: 'Filter…',
+    noneTicked: '(none ticked)',
+    pickItems: 'Pick items…',
+    matchLabel: 'Match',
+    matchAny: 'Any',
+    matchAll: 'All',
+    matchAnyHelp: 'Rows with at least one picked item ticked',
+    matchAllHelp: 'Rows with every picked item ticked',
     helpText:
       'Words must all appear. "exact phrase", a OR b, a NOT b, (…), swim*. Not case-sensitive.',
     helpNumber:
@@ -639,6 +667,8 @@ export const en = {
       text: 'text',
       dropdown: 'dropdown',
       checkbox: 'checkbox',
+      list: 'list',
+      checklist: 'checklist',
       date: 'date',
       number: 'number'
     },

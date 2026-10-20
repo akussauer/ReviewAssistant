@@ -1,4 +1,5 @@
 import type { Column } from '../../shared/ipc'
+import { CHECKLIST_SEPARATOR } from '../../shared/lists'
 import { cellPath } from './cells'
 import type { DB } from './types'
 
@@ -20,6 +21,19 @@ function cellExpr(col: Column): string {
       if (choices.length === 0) return 'NULL'
       const whens = choices.map((c) => `WHEN ${str(c.id)} THEN ${str(c.label)}`).join(' ')
       return `CASE ${raw} ${whens} END`
+    }
+    case 'checklist': {
+      // The ticked labels in item order, "; " between them (the same text as the CSV):
+      // each item adds "; Label" if ticked, and the leading "; " is cut off.
+      const choices = col.options.choices ?? []
+      if (choices.length === 0) return "''"
+      const path = str(cellPath(col.id))
+      const parts = choices.map(
+        (c) =>
+          `CASE WHEN EXISTS (SELECT 1 FROM json_each(r.data, ${path}) WHERE value = ${str(c.id)})` +
+          ` THEN ${str(CHECKLIST_SEPARATOR + c.label)} ELSE '' END`
+      )
+      return `substr(${parts.join(' || ')}, ${CHECKLIST_SEPARATOR.length + 1})`
     }
     default:
       return raw

@@ -1,5 +1,6 @@
 import { displayText } from '../../../shared/conversion'
 import type { CellValue, Column, Row, TabView } from '../../../shared/ipc'
+import { tickedIds } from '../../../shared/lists'
 import {
   compileHighlighter,
   compileQuery,
@@ -77,11 +78,44 @@ export function comparisonTest(text: string, kind: 'number' | 'date'): ValueTest
   return null
 }
 
+// ---- Checklist filters: "any:<ids>" / "all:<ids>" (spec §7)
+
+// Picks "rows with nothing ticked" in a checklist filter, next to the item ids.
+export const NONE_TICKED = 'none'
+
+export type ChecklistFilter = { mode: 'any' | 'all'; ids: string[] }
+
+export function parseChecklistFilter(filter: string | undefined): ChecklistFilter {
+  const m = /^(any|all):(.*)$/.exec(filter ?? '')
+  if (!m) return { mode: 'any', ids: [] }
+  return { mode: m[1] as 'any' | 'all', ids: m[2].split(',').filter(Boolean) }
+}
+
+// No ids = no filter (''), so the box shows as unfiltered.
+export const formatChecklistFilter = (f: ChecklistFilter): string =>
+  f.ids.length ? `${f.mode}:${f.ids.join(',')}` : ''
+
+function checklistTest(column: Column, filter: string): ValueTest | null {
+  const { mode, ids } = parseChecklistFilter(filter)
+  // Items removed since don't count; with none left, the filter filters nothing.
+  const picked = ids.filter(
+    (id) => id === NONE_TICKED || column.options.choices?.some((c) => c.id === id)
+  )
+  if (picked.length === 0) return null
+  return (v) => {
+    const ticked = new Set(tickedIds(v))
+    const has = (id: string): boolean => (id === NONE_TICKED ? ticked.size === 0 : ticked.has(id))
+    return mode === 'all' ? picked.every(has) : picked.some(has)
+  }
+}
+
 // ---- One column's filter
 
 export function columnFilterTest(column: Column, filter: string | undefined): ValueTest | null {
   if (!filter) return null
   switch (column.type) {
+    case 'checklist':
+      return checklistTest(column, filter)
     case 'dropdown':
       // The picker stores an option id; one that no longer exists filters nothing.
       if (!column.options.choices?.some((c) => c.id === filter)) return null
@@ -141,9 +175,9 @@ export const isFiltered = (view: TabView, columns: Column[]): boolean =>
 // ---- Highlighting matches (spec §7)
 
 // What to mark in each column's cells: the global search's terms (every column but
-// checkboxes) plus the column's own text filter. Pickers (dropdown, checkbox) and number/
-// date comparisons mark nothing, as every row shown passes them. A column that marks
-// nothing is left out.
+// checkboxes) plus the column's own text filter. Pickers (dropdown, checkbox, checklist)
+// and number/date comparisons mark nothing, as every row shown passes them. A column that
+// marks nothing is left out.
 export function columnHighlighters(
   columns: Pick<Column, 'id' | 'type'>[],
   view: TabView
@@ -155,7 +189,8 @@ export function columnHighlighters(
     const filter = view.filters?.[String(c.id)]?.trim()
     const comparison =
       (c.type === 'number' || c.type === 'date') && comparisonTest(filter ?? '', c.type) !== null
-    const own = filter && c.type !== 'dropdown' && !comparison ? compileHighlighter(filter) : null
+    const picker = c.type === 'dropdown' || c.type === 'checklist'
+    const own = filter && !picker && !comparison ? compileHighlighter(filter) : null
     const both = [search, own].filter((h): h is Highlighter => h !== null)
     if (both.length === 1) result.set(c.id, both[0])
     else if (both.length === 2)

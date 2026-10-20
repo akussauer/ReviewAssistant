@@ -1,4 +1,5 @@
 import type { CellValue, Column } from '../../shared/ipc'
+import { normaliseList } from '../../shared/lists'
 import { listColumns } from './columns'
 import type { DB } from './types'
 
@@ -26,6 +27,12 @@ export function randomValue(column: Column, rng: Rng = Math.random): CellValue {
   switch (column.type) {
     case 'text':
       return rng() < 0.1 ? '' : sentence(rng, int(rng, 2, 25))
+    case 'list': {
+      const items = Array.from({ length: int(rng, 0, 4) }, () => sentence(rng, int(rng, 2, 8)))
+      return normaliseList(items.join('\n'), column.options.style)
+    }
+    case 'checklist':
+      return (column.options.choices ?? []).filter(() => rng() < 0.4).map((c) => c.id)
     case 'checkbox':
       return rng() < 0.5
     case 'number':

@@ -2,12 +2,14 @@ import { defaultKeymap, history, historyKeymap, indentWithTab, redo } from '@cod
 import { Annotation, Compartment, EditorState, Transaction } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { useEffect, useRef, useState } from 'react'
-import type { CellValue } from '../../../../../shared/ipc'
+import type { CellValue, ListStyle } from '../../../../../shared/ipc'
+import { normaliseList } from '../../../../../shared/lists'
 import type { Highlighter, MatchRange } from '../../../../../shared/search'
 import { highlightLine, kindColour } from '../../../lib/markdown'
 import { registerFlush } from '../../../lib/pendingEdits'
 import { reviewStore } from '../../../store'
 import { cellTheme, markdownHighlight, searchHighlight } from './codemirror'
+import { listEditing } from './listEditing'
 
 // Saves this long after the last keystroke (spec §3: text typing is debounced ~300 ms).
 const SAVE_DELAY_MS = 300
@@ -37,16 +39,20 @@ type Props = {
   // and become real editors once scrolling pauses (or as soon as they're clicked).
   live: boolean
   highlight?: Highlighter // search matches to mark (spec §7)
+  // Set for a list cell (spec §4.1): the same editor, with list editing on top.
+  listStyle?: ListStyle
 }
 
-// A text cell: a small CodeMirror editor (spec §6: always editable, a single click edits).
+// A text or list cell: a small CodeMirror editor (spec §6: always editable, a single click
+// edits).
 export function TextCell({
   rowId,
   columnId,
   label,
   value,
   live,
-  highlight
+  highlight,
+  listStyle
 }: Props): React.JSX.Element {
   const text = typeof value === 'string' ? value : ''
   const [mounted, setMounted] = useState(live)
@@ -79,6 +85,7 @@ export function TextCell({
       text={text}
       activation={activation}
       highlight={highlight}
+      listStyle={listStyle}
     />
   )
 }
@@ -89,7 +96,8 @@ function Editor({
   label,
   text,
   activation,
-  highlight
+  highlight,
+  listStyle
 }: {
   rowId: number
   columnId: number
@@ -97,6 +105,7 @@ function Editor({
   text: string
   activation: Activation
   highlight: Highlighter | undefined
+  listStyle: ListStyle | undefined
 }): React.JSX.Element {
   const host = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -126,6 +135,7 @@ function Editor({
       state: EditorState.create({
         doc: lastSaved.current,
         extensions: [
+          listStyle ? listEditing(listStyle) : [],
           historySlot.of(history()), // per-cell undo/redo (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z)
           keymap.of([
             // Esc leaves the cell (spec §6); the next Tab then moves on from it.
@@ -156,6 +166,14 @@ function Editor({
               return false
             },
             blur: () => {
+              // A list cell tidies itself when left: a marker on every line, numbers in
+              // order, empty items gone (spec §4.1).
+              if (listStyle) {
+                const doc = view.state.doc.toString()
+                const tidy = normaliseList(doc, listStyle)
+                if (tidy !== doc)
+                  view.dispatch({ changes: { from: 0, to: doc.length, insert: tidy } })
+              }
               flush()
               // A change made elsewhere while this cell had focus was skipped; show it now,
               // unless this cell just saved newer text of its own.

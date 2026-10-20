@@ -1,5 +1,6 @@
 import { isValidDate } from '../../shared/conversion'
 import type { CellValue, Column } from '../../shared/ipc'
+import { normaliseList } from '../../shared/lists'
 
 // JSON path to a column's value in rows.data, e.g. $."12". Built here rather than in SQL:
 // better-sqlite3 binds JS numbers as REAL, so '$."' || 12 || '"' would give $."12.0".
@@ -18,9 +19,12 @@ export function defaultValue(
 ): CellValue {
   switch (column.type) {
     case 'text':
+    case 'list':
       return ''
     case 'checkbox':
       return false
+    case 'checklist':
+      return []
     case 'number':
       return column.options.min ?? 0
     case 'dropdown':
@@ -31,7 +35,8 @@ export function defaultValue(
 }
 
 // Checks that `value` is allowed in `column` and returns it, or throws a readable error.
-// null means "empty" and is allowed for every type except text and checkbox.
+// null means "empty" and is allowed for every type except text and checkbox (and becomes
+// '' / [] for lists and checklists). List text and checklist ids come back normalised.
 export function validateCell(column: Column, value: CellValue): CellValue {
   const fail = (why: string): never => {
     throw new Error(`Invalid value for "${column.label}": ${why}`)
@@ -40,6 +45,19 @@ export function validateCell(column: Column, value: CellValue): CellValue {
     case 'text':
       if (typeof value !== 'string') fail('expected text')
       return value
+    case 'list':
+      if (value === null) return ''
+      if (typeof value !== 'string') fail('expected text')
+      return normaliseList(value as string, column.options.style)
+    case 'checklist': {
+      if (value === null) return []
+      if (!Array.isArray(value)) fail('expected a list of item ids')
+      const ticked = new Set(value as string[])
+      const items = column.options.choices ?? []
+      for (const id of ticked) if (!items.some((c) => c.id === id)) fail('unknown item')
+      // Stored in item order, each id once.
+      return items.filter((c) => ticked.has(c.id)).map((c) => c.id)
+    }
     case 'checkbox':
       if (typeof value !== 'boolean') fail('expected true/false')
       return value

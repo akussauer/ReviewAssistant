@@ -2,6 +2,7 @@
 // the renderer (the dialog's preview) and main (the real conversion), so the preview
 // always matches what happens.
 import type { CellValue, ColumnOptions, ColumnType } from './ipc'
+import { CHECKLIST_SEPARATOR, listItems, normaliseList, tickedLabels } from './lists'
 
 type ColumnShape = { type: ColumnType; options: ColumnOptions }
 
@@ -28,24 +29,48 @@ export function parseInteger(text: string): number | null {
   return /^[+-]?\d+(\.0*)?$/.test(t) ? Math.trunc(Number(t)) : null
 }
 
-const isEmpty = (v: CellValue | undefined): boolean => v === null || v === undefined || v === ''
+const isEmpty = (v: CellValue | undefined): boolean =>
+  v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0)
 
 // What a cell shows as text: the label for dropdowns, TRUE/FALSE for checkboxes (as in
-// the CSV export), '' for empty.
+// the CSV export), the ticked labels for checklists ("Blinded; Randomised"), '' for empty.
 export function displayText(column: ColumnShape, value: CellValue | undefined): string {
   if (value === null || value === undefined) return ''
   if (column.type === 'dropdown')
     return column.options.choices?.find((c) => c.id === value)?.label ?? ''
+  if (column.type === 'checklist')
+    return tickedLabels(column.options, value).join(CHECKLIST_SEPARATOR)
   if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE'
   return String(value)
+}
+
+// A value as separate lines: a checklist's ticked labels, a list's items, or a text
+// cell's non-blank lines (for conversions to and from lists and checklists).
+function valueLines(from: ColumnShape, value: CellValue | undefined): string[] {
+  if (from.type === 'checklist') return tickedLabels(from.options, value)
+  if (from.type === 'list') return listItems(displayText(from, value))
+  return displayText(from, value)
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l !== '')
 }
 
 const TRUE_WORDS = new Set(['true', 'yes', 'y', '1', 'x', '✓', '☑'])
 const FALSE_WORDS = new Set(['false', 'no', 'n', '0'])
 
-// The empty value each type stores (text and checkbox columns can't hold null).
+// The empty value each type stores (text, list, checkbox and checklist can't hold null).
 export function emptyValue(type: ColumnType): CellValue {
-  return type === 'text' ? '' : type === 'checkbox' ? false : null
+  switch (type) {
+    case 'text':
+    case 'list':
+      return ''
+    case 'checkbox':
+      return false
+    case 'checklist':
+      return []
+    default:
+      return null
+  }
 }
 
 export type Outcome = 'empty' | 'converted' | 'cleared'
@@ -70,7 +95,21 @@ export function convertValue(
 
   switch (to.type) {
     case 'text':
-      return ok(text)
+      // A checklist becomes its ticked labels, one per line.
+      return ok(from.type === 'checklist' ? valueLines(from, value).join('\n') : text)
+
+    case 'list': {
+      // Each non-blank line becomes an item.
+      const source = from.type === 'checklist' ? valueLines(from, value).join('\n') : text
+      return ok(normaliseList(source, to.options.style))
+    }
+
+    case 'checklist': {
+      // Each line ticks the item with that label.
+      const lines = new Set(valueLines(from, value))
+      const ids = (to.options.choices ?? []).filter((c) => lines.has(c.label)).map((c) => c.id)
+      return ids.length ? ok(ids) : cleared
+    }
 
     case 'number': {
       let n: number | null
@@ -98,6 +137,14 @@ export function convertValue(
     }
 
     case 'dropdown': {
+      if (from.type === 'checklist') {
+        // Keeps the first ticked item; a row with more ticked loses the others, so the
+        // preview counts it as cleared.
+        const labels = valueLines(from, value)
+        const choice = to.options.choices?.find((c) => c.label === labels[0])
+        if (!choice) return cleared
+        return { value: choice.id, outcome: labels.length > 1 ? 'cleared' : 'converted' }
+      }
       const choice = to.options.choices?.find((c) => c.label === text.trim())
       return choice ? ok(choice.id) : cleared
     }
@@ -112,6 +159,12 @@ export function distinctLabels(from: ColumnShape, values: (CellValue | undefined
     if (t) seen.add(t)
   }
   return [...seen]
+}
+
+// For a change to Checklist: the distinct lines (list items, ticked labels), in row order,
+// to offer as items.
+export function distinctLines(from: ColumnShape, values: (CellValue | undefined)[]): string[] {
+  return [...new Set(values.flatMap((v) => valueLines(from, v)))]
 }
 
 export type ConversionPreview = { converted: number; cleared: number; empty: number }

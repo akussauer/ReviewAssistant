@@ -111,3 +111,23 @@ describe('nextSort', () => {
     expect(nextSort(desc, 5)).toEqual({ columnId: 5, desc: false })
   })
 })
+
+describe('sorting a checklist', () => {
+  it('orders by how many items are ticked, then by the ticked labels', () => {
+    const col = column('checklist', {
+      choices: [
+        { id: 'a', label: 'Alpha' },
+        { id: 'b', label: 'Beta' }
+      ]
+    })
+    const values: CellValue[] = [['a', 'b'], ['b'], [], ['a']]
+    const rowsById = Object.fromEntries(
+      values.map((v, i): [number, Row] => [
+        i + 1,
+        { id: i + 1, data: { '1': v }, position: i, height: 80, checked: false }
+      ])
+    )
+    expect(sortRowIds([1, 2, 3, 4], rowsById, col, false)).toEqual([3, 4, 2, 1])
+    expect(sortRowIds([1, 2, 3, 4], rowsById, col, true)).toEqual([1, 2, 4, 3])
+  })
+})

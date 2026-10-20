@@ -1,4 +1,5 @@
 import { displayText } from './conversion'
+import { listItems, tickedIds, tickedLabels } from './lists'
 import {
   MAIN_TAB_ID,
   type CellValue,
@@ -18,7 +19,7 @@ export const MAX_FILE_NAME = 100
 // ---- Column settings ---------------------------------------------------------------
 
 export function defaultExport(column: Pick<Column, 'type'>): ColumnExport {
-  return { mode: column.type === 'text' ? 'section' : 'property' }
+  return { mode: column.type === 'text' || column.type === 'list' ? 'section' : 'property' }
 }
 
 export const columnExport = (column: Column): ColumnExport =>
@@ -172,9 +173,19 @@ function isDate(text: string): boolean {
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d
 }
 
-// The value after "key:" (with its leading space), or '' for an empty property.
+// A block YAML list, one quoted value per line, so Obsidian shows each as its own value.
+const yamlList = (values: string[]): string =>
+  values.map((v) => `\n  - ${yamlString(oneLine(v))}`).join('')
+
+// The value after "key:" (with its leading space, or a block list on the lines below), or
+// '' for an empty property.
 export function propertyValue(column: Column, value: CellValue | undefined): string {
   switch (column.type) {
+    case 'list':
+      // Flattened: nesting, numbers and the gaps between lists don't fit a property.
+      return yamlList(listItems(typeof value === 'string' ? value : ''))
+    case 'checklist':
+      return yamlList(tickedLabels(column.options, value))
     case 'checkbox':
       return value === true ? ' true' : ' false'
     case 'number':
@@ -191,6 +202,13 @@ export function propertyValue(column: Column, value: CellValue | undefined): str
 
 function sectionText(column: Column, value: CellValue | undefined): string {
   if (column.type === 'checkbox') return value === true ? 'Yes' : 'No'
+  if (column.type === 'checklist') {
+    // An Obsidian task list with every item, ticked or not.
+    const ticked = new Set(tickedIds(value))
+    return (column.options.choices ?? [])
+      .map((c) => `- [${ticked.has(c.id) ? 'x' : ' '}] ${c.label}`)
+      .join('\n')
+  }
   return displayText(column, value).replace(/\r\n/g, '\n').trim()
 }
 

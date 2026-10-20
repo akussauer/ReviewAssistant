@@ -72,9 +72,9 @@ export const de: Messages<En> = {
     undid: 'Änderung an {column} rückgängig gemacht ({row})',
     redid: 'Änderung an {column} wiederholt ({row})',
     undoMissing:
-      'Die Änderung an {column} kann nicht rückgängig gemacht werden: Diese Option wurde entfernt',
+      'Die Änderung an {column} kann nicht rückgängig gemacht werden: Diese Option bzw. dieser Punkt wurde entfernt',
     redoMissing:
-      'Die Änderung an {column} kann nicht wiederholt werden: Diese Option wurde entfernt',
+      'Die Änderung an {column} kann nicht wiederholt werden: Diese Option bzw. dieser Punkt wurde entfernt',
     dictionaryFailed:
       'Das Wörterbuch für {language} konnte nicht heruntergeladen werden (offline?), daher wird {language} vorerst nicht geprüft. Beim nächsten Start der App wird es erneut versucht.'
   },
@@ -164,6 +164,8 @@ export const de: Messages<En> = {
       text: 'Text (mehrzeilig)',
       dropdown: 'Auswahlliste',
       checkbox: 'Kontrollkästchen',
+      list: 'Liste (Aufzählung oder nummeriert)',
+      checklist: 'Checkliste',
       date: 'Datum',
       number: 'Zahl'
     },
@@ -194,6 +196,26 @@ export const de: Messages<En> = {
     noOptions: 'Noch keine Optionen.',
     dragToReorder: 'Ziehen zum Umsortieren',
     optionN: 'Option {n}',
+    listStyle: 'Listenstil',
+    styles: { bullets: 'Aufzählung (- Punkt)', numbered: 'Nummeriert (1. Punkt)' },
+    items: 'Punkte',
+    newItem: 'Neuer Punkt…',
+    needItem: 'Bitte mindestens einen Punkt für die Checkliste hinzufügen.',
+    itemEmpty: 'Punkte dürfen nicht leer sein.',
+    itemsDiffer: 'Jeder Punkt muss anders lauten.',
+    noItems: 'Noch keine Punkte.',
+    itemN: 'Punkt {n}',
+    untickWarning: {
+      one: 'Ein entfernter Punkt ist in {count} Zeile angehakt; dort wird der Haken entfernt. Vorher wird eine Sicherung erstellt.',
+      other:
+        'Ein entfernter Punkt ist in {count} Zeilen angehakt; dort wird der Haken entfernt. Vorher wird eine Sicherung erstellt.'
+    },
+    restyleWarning: {
+      one: 'Der neue Stil schreibt die Listenzeichen in {count} Zelle neu. Es geht nichts verloren.',
+      other:
+        'Der neue Stil schreibt die Listenzeichen in {count} Zellen neu. Es geht nichts verloren.'
+    },
+    rewriteCells: 'Zellen neu schreiben',
     removeOption: '{name} entfernen'
   },
   deleteColumn: {
@@ -218,6 +240,13 @@ export const de: Messages<En> = {
     checked: 'Angehakt',
     unchecked: 'Nicht angehakt',
     placeholder: 'Filtern…',
+    noneTicked: '(nichts angehakt)',
+    pickItems: 'Punkte wählen…',
+    matchLabel: 'Treffer',
+    matchAny: 'Beliebig',
+    matchAll: 'Alle',
+    matchAnyHelp: 'Zeilen, in denen mindestens ein gewählter Punkt angehakt ist',
+    matchAllHelp: 'Zeilen, in denen jeder gewählte Punkt angehakt ist',
     helpText:
       'Alle Wörter müssen vorkommen. "genaue Phrase", a OR b, a NOT b, (…), schwimm*. Groß-/Kleinschreibung egal.',
     helpNumber:
@@ -642,6 +671,8 @@ export const de: Messages<En> = {
       text: 'Text',
       dropdown: 'Auswahlliste',
       checkbox: 'Kontrollkästchen',
+      list: 'Liste',
+      checklist: 'Checkliste',
       date: 'Datum',
       number: 'Zahl'
     },

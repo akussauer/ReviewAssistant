@@ -92,3 +92,24 @@ describe('rowName', () => {
     expect(rowName(row(5), [text(1)], [9, 5])).toBe('row 2')
   })
 })
+
+describe('missingOption for checklists', () => {
+  it('is true when a ticked item has been removed from the column', () => {
+    const checklist: Column = {
+      ...text(2),
+      type: 'checklist',
+      options: { choices: [{ id: 'a', label: 'A' }] }
+    }
+    expect(missingOption(checklist, ['a'])).toBe(false)
+    expect(missingOption(checklist, [])).toBe(false)
+    expect(missingOption(checklist, ['a', 'gone'])).toBe(true)
+  })
+})
+
+describe('pushEdit with checklist values', () => {
+  it('skips an edit whose ticks are the same as before (arrays compared by contents)', () => {
+    const tick = edit({ columnType: 'checklist', before: ['a'], after: ['a'] })
+    expect(pushEdit([], tick)).toEqual([])
+    expect(pushEdit([], { ...tick, after: ['a', 'b'] })).toHaveLength(1)
+  })
+})

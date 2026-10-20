@@ -4,7 +4,10 @@ import {
   columnFilterTest,
   columnHighlighters,
   comparisonTest,
+  formatChecklistFilter,
   isFiltered,
+  NONE_TICKED,
+  parseChecklistFilter,
   visibleRowIds
 } from './filter'
 
@@ -179,5 +182,51 @@ describe('columnHighlighters', () => {
     expect(columnHighlighters(columns, { filters: { '3': '>2015', '4': '2015..' } }).size).toBe(0)
     expect(marks({ filters: { '3': '2015' } })[3]).toEqual(['4,8', '9,13'])
     expect(columnHighlighters(columns, { filters: { '1': '>2015' } }).has(1)).toBe(true)
+  })
+})
+
+describe('checklist filters', () => {
+  const design: Column = {
+    id: 9,
+    label: 'Design',
+    type: 'checklist',
+    options: {
+      choices: [
+        { id: 'r', label: 'Randomised' },
+        { id: 'b', label: 'Blinded' }
+      ]
+    },
+    width: 150,
+    position: 0
+  }
+  const test = (filter: string): ((v: CellValue) => boolean) => columnFilterTest(design, filter)!
+
+  it('Any: at least one picked item ticked; All: every one', () => {
+    expect(test('any:r,b')(['b'])).toBe(true)
+    expect(test('all:r,b')(['b'])).toBe(false)
+    expect(test('all:r,b')(['r', 'b'])).toBe(true)
+    expect(test('any:r')([])).toBe(false)
+  })
+
+  it('"none" picks rows with nothing ticked', () => {
+    expect(test(`any:${NONE_TICKED}`)([])).toBe(true)
+    expect(test(`any:${NONE_TICKED}`)(['r'])).toBe(false)
+    expect(test(`any:r,${NONE_TICKED}`)([])).toBe(true)
+  })
+
+  it('filters nothing when no picked item still exists', () => {
+    expect(columnFilterTest(design, 'any:gone')).toBeNull()
+    expect(columnFilterTest(design, '')).toBeNull()
+  })
+
+  it('round-trips through the saved text, empty when nothing is picked', () => {
+    expect(parseChecklistFilter('all:r,b')).toEqual({ mode: 'all', ids: ['r', 'b'] })
+    expect(formatChecklistFilter({ mode: 'all', ids: ['r'] })).toBe('all:r')
+    expect(formatChecklistFilter({ mode: 'all', ids: [] })).toBe('')
+  })
+
+  it('is a picker, so it marks nothing; the global search still does', () => {
+    expect(columnHighlighters([design], { filters: { '9': 'any:r' } }).has(9)).toBe(false)
+    expect(columnHighlighters([design], { search: 'blind' }).get(9)?.('Blinded')).toEqual([[0, 5]])
   })
 })

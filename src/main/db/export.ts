@@ -32,9 +32,12 @@ function csvField(text: string): string {
 // so Excel still reads them as numbers and dates.
 const guard = (text: string): string => (FORMULA_START.test(text) ? `\t${text}` : text)
 
+// Every typed type: a bullet list always starts with "-", and labels can start with anything.
+const TYPED = new Set<ColumnType>(['text', 'list', 'dropdown', 'checklist'])
+
 function csvCell(column: Column, value: CellValue | undefined): string {
   const text = displayText(column, value)
-  return column.type === 'text' || column.type === 'dropdown' ? guard(text) : text
+  return TYPED.has(column.type) ? guard(text) : text
 }
 
 // RFC 4180 with CRLF line ends, starting with a UTF-8 byte order mark: without it, Excel
@@ -51,8 +54,11 @@ export function toCsv(db: DB, onlyChecked: boolean): { text: string; rows: numbe
 
 // ---- JSON (the PySide app's schema v2, documented in docs/json-format.md) --------------
 
+// The old app has no list or checklist type: they go out as text (their shown text).
 const TYPE_KEYS: Record<ColumnType, string> = {
   text: 'textedit',
+  list: 'textedit',
+  checklist: 'textedit',
   dropdown: 'combobox',
   checkbox: 'checkbox',
   date: 'date',
@@ -82,7 +88,7 @@ export function toPysideJson(db: DB, onlyChecked: boolean): { text: string; rows
     columns: columns.map((c) => ({
       name: c.label,
       type_key: TYPE_KEYS[c.type],
-      options: (c.options.choices ?? []).map((o) => o.label),
+      options: c.type === 'dropdown' ? (c.options.choices ?? []).map((o) => o.label) : [],
       min_val: c.options.min ?? 0,
       max_val: c.options.max ?? 9999,
       width: c.width

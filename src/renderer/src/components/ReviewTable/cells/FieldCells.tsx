@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { isValidDate, parseInteger } from '../../../../../shared/conversion'
 import type { CellValue, Column } from '../../../../../shared/ipc'
+import { tickedIds } from '../../../../../shared/lists'
+import type { Highlighter } from '../../../../../shared/search'
 import { useT } from '../../../lib/i18n'
 import { clampNumber, parseNumberDraft } from '../../../lib/numbers'
 import { reviewStore } from '../../../store'
@@ -58,6 +60,69 @@ export function CheckboxCell({ rowId, column, value }: Props): React.JSX.Element
         }
       }}
     />
+  )
+}
+
+// Every item of the column with its own tick box (spec §4.1). Tab reaches the first item
+// (the table's Tab moves on to the next cell); ↑/↓ move between items; Space or Enter
+// ticks. Each tick is saved, and undone, on its own. A search tints matching labels.
+export function ChecklistCell({
+  rowId,
+  column,
+  value,
+  highlight
+}: Props & { highlight?: Highlighter }): React.JSX.Element {
+  const items = column.options.choices ?? []
+  const ticked = new Set(tickedIds(value))
+  const toggle = (id: string): void =>
+    save(
+      rowId,
+      column.id,
+      items.filter((c) => (c.id === id ? !ticked.has(id) : ticked.has(c.id))).map((c) => c.id)
+    )
+
+  const step = (e: React.KeyboardEvent<HTMLDivElement>, by: number): void => {
+    const boxes = [...e.currentTarget.querySelectorAll('input')]
+    const next = boxes[boxes.indexOf(e.target as HTMLInputElement) + by]
+    e.preventDefault()
+    next?.focus()
+  }
+
+  return (
+    <div
+      role="group"
+      aria-label={column.label}
+      className="h-full overflow-y-auto"
+      onKeyDown={(e) => {
+        if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return
+        if (e.key === 'ArrowUp') step(e, -1)
+        else if (e.key === 'ArrowDown') step(e, 1)
+      }}
+    >
+      {items.map((c) => (
+        <label key={c.id} className="flex items-start gap-1.5 text-sm leading-5">
+          <input
+            type="checkbox"
+            className="mt-1 shrink-0"
+            checked={ticked.has(c.id)}
+            onChange={() => toggle(c.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                toggle(c.id)
+              }
+            }}
+          />
+          <span
+            className={
+              highlight && highlight(c.label).length > 0 ? 'search-hit rounded-[2px]' : undefined
+            }
+          >
+            {c.label}
+          </span>
+        </label>
+      ))}
+    </div>
   )
 }
 

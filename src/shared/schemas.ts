@@ -8,6 +8,7 @@ import {
   EXPORT_MODES,
   fixedShortcut,
   IF_EXISTS,
+  LIST_STYLES,
   MARKDOWN_SCOPES,
   HOTKEY_NAMES,
   MARKDOWN_KINDS,
@@ -44,16 +45,19 @@ export const CellValueSchema = z.union([
   z.string(),
   z.number(),
   z.boolean(),
+  z.array(z.string().min(1).max(100)).max(1000), // checklist: ticked item ids
   z.null()
 ]) satisfies z.ZodType<CellValue>
 
 const ColumnOptionsInputSchema = z.object({
   choices: z
     .array(z.object({ id: z.string().min(1).optional(), label: z.string().trim().min(1) }))
+    .max(1000) // as many as a checklist cell can hold
     .optional(),
   // Same range as the reference app's spin boxes.
   min: z.number().int().min(-999999).max(999999).optional(),
-  max: z.number().int().min(-999999).max(999999).optional()
+  max: z.number().int().min(-999999).max(999999).optional(),
+  style: z.enum(LIST_STYLES).optional()
 }) satisfies z.ZodType<ColumnOptionsInput>
 
 export const ColumnCreateSchema = z.object({

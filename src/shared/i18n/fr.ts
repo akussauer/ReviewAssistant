@@ -72,9 +72,10 @@ export const fr: Messages<En> = {
     },
     undid: 'Modification de {column} annulée ({row})',
     redid: 'Modification de {column} rétablie ({row})',
-    undoMissing: 'Impossible d’annuler la modification de {column} : cette option a été supprimée',
+    undoMissing:
+      'Impossible d’annuler la modification de {column} : cette option ou cet élément a été supprimé',
     redoMissing:
-      'Impossible de rétablir la modification de {column} : cette option a été supprimée',
+      'Impossible de rétablir la modification de {column} : cette option ou cet élément a été supprimé',
     dictionaryFailed:
       'Impossible de télécharger le dictionnaire de la langue « {language} » (hors ligne ?) : cette langue n’est donc pas vérifiée pour l’instant. Nouvel essai au prochain démarrage de l’application.'
   },
@@ -164,6 +165,8 @@ export const fr: Messages<En> = {
       text: 'Texte (multiligne)',
       dropdown: 'Liste déroulante',
       checkbox: 'Case à cocher',
+      list: 'Liste (à puces ou numérotée)',
+      checklist: 'Liste de contrôle',
       date: 'Date',
       number: 'Nombre'
     },
@@ -194,6 +197,25 @@ export const fr: Messages<En> = {
     noOptions: 'Aucune option pour l’instant.',
     dragToReorder: 'Faites glisser pour réordonner',
     optionN: 'Option {n}',
+    listStyle: 'Style de liste',
+    styles: { bullets: 'Puces (- élément)', numbered: 'Numérotée (1. élément)' },
+    items: 'Éléments',
+    newItem: 'Nouvel élément…',
+    needItem: 'Ajoutez au moins un élément à la liste de contrôle.',
+    itemEmpty: 'Les éléments ne peuvent pas être vides.',
+    itemsDiffer: 'Chaque élément doit être différent.',
+    noItems: 'Aucun élément pour l’instant.',
+    itemN: 'Élément {n}',
+    untickWarning: {
+      one: 'Un élément supprimé est coché dans {count} ligne ; il y sera décoché. Une sauvegarde est faite avant.',
+      other:
+        'Un élément supprimé est coché dans {count} lignes ; il y sera décoché. Une sauvegarde est faite avant.'
+    },
+    restyleWarning: {
+      one: 'Changer le style réécrit les marqueurs dans {count} cellule. Rien n’est perdu.',
+      other: 'Changer le style réécrit les marqueurs dans {count} cellules. Rien n’est perdu.'
+    },
+    rewriteCells: 'Réécrire les cellules',
     removeOption: 'Retirer {name}'
   },
   deleteColumn: {
@@ -221,6 +243,13 @@ export const fr: Messages<En> = {
     checked: 'Cochées',
     unchecked: 'Non cochées',
     placeholder: 'Filtrer…',
+    noneTicked: '(rien de coché)',
+    pickItems: 'Choisir des éléments…',
+    matchLabel: 'Correspondance',
+    matchAny: 'Au moins un',
+    matchAll: 'Tous',
+    matchAnyHelp: 'Lignes où au moins un élément choisi est coché',
+    matchAllHelp: 'Lignes où chaque élément choisi est coché',
     helpText:
       'Tous les mots doivent apparaître. "expression exacte", a OR b, a NOT b, (…), nag*. Insensible à la casse.',
     helpNumber:
@@ -648,6 +677,8 @@ export const fr: Messages<En> = {
       text: 'texte',
       dropdown: 'liste déroulante',
       checkbox: 'case à cocher',
+      list: 'liste',
+      checklist: 'liste de contrôle',
       date: 'date',
       number: 'nombre'
     },

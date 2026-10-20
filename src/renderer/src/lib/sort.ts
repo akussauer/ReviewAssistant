@@ -1,10 +1,11 @@
+import { displayText } from '../../../shared/conversion'
 import type { CellValue, Column, Row, SortSpec } from '../../../shared/ipc'
+import { tickedIds } from '../../../shared/lists'
 
 // What a cell shows as text. Dropdowns store an option id, so show (and sort by) its label.
 export function displayValue(column: Column, value: CellValue | undefined): string {
   if (value === null || value === undefined) return ''
-  if (column.type === 'dropdown')
-    return column.options.choices?.find((c) => c.id === value)?.label ?? ''
+  if (column.type === 'dropdown' || column.type === 'checklist') return displayText(column, value)
   return String(value)
 }
 
@@ -54,13 +55,19 @@ export function sortRowIds(
   desc: boolean
 ): number[] {
   const key = String(column.id)
-  const keyed = ids.map((id, index) => ({
-    id,
-    index,
-    value: sortKey(column, rowsById[id]?.data[key])
-  }))
+  // Checklists sort by how many items are ticked, then by the ticked labels (spec §7).
+  const compare =
+    column.type === 'checklist'
+      ? (a: CellValue, b: CellValue): number =>
+          tickedIds(a).length - tickedIds(b).length ||
+          compareValues(displayText(column, a), displayText(column, b))
+      : compareValues
+  const keyed = ids.map((id, index) => {
+    const raw = rowsById[id]?.data[key]
+    return { id, index, value: column.type === 'checklist' ? (raw ?? null) : sortKey(column, raw) }
+  })
   keyed.sort((x, y) => {
-    const c = compareValues(x.value, y.value)
+    const c = compare(x.value, y.value)
     return (desc ? -c : c) || x.index - y.index
   })
   return keyed.map((k) => k.id)

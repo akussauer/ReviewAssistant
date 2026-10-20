@@ -72,8 +72,8 @@ export const es: Messages<En> = {
     },
     undid: 'Se deshizo el cambio en {column} ({row})',
     redid: 'Se rehízo el cambio en {column} ({row})',
-    undoMissing: 'No se pudo deshacer el cambio en {column}: esa opción se ha eliminado',
-    redoMissing: 'No se pudo rehacer el cambio en {column}: esa opción se ha eliminado',
+    undoMissing: 'No se pudo deshacer el cambio en {column}: esa opción o elemento se ha eliminado',
+    redoMissing: 'No se pudo rehacer el cambio en {column}: esa opción o elemento se ha eliminado',
     dictionaryFailed:
       'No se pudo descargar el diccionario de {language} (¿sin conexión?), así que el {language} no se revisa por ahora. Se volverá a intentar la próxima vez que se inicie la aplicación.'
   },
@@ -164,6 +164,8 @@ export const es: Messages<En> = {
       text: 'Texto (varias líneas)',
       dropdown: 'Lista desplegable',
       checkbox: 'Casilla',
+      list: 'Lista (viñetas o numerada)',
+      checklist: 'Lista de verificación',
       date: 'Fecha',
       number: 'Número'
     },
@@ -194,6 +196,25 @@ export const es: Messages<En> = {
     noOptions: 'Aún no hay opciones.',
     dragToReorder: 'Arrastra para reordenar',
     optionN: 'Opción {n}',
+    listStyle: 'Estilo de lista',
+    styles: { bullets: 'Viñetas (- elemento)', numbered: 'Numerada (1. elemento)' },
+    items: 'Elementos',
+    newItem: 'Nuevo elemento…',
+    needItem: 'Añade al menos un elemento a la lista de verificación.',
+    itemEmpty: 'Los elementos no pueden estar vacíos.',
+    itemsDiffer: 'Cada elemento debe ser distinto.',
+    noItems: 'Aún no hay elementos.',
+    itemN: 'Elemento {n}',
+    untickWarning: {
+      one: 'Un elemento eliminado está marcado en {count} fila; se desmarcará allí. Antes se hace una copia de seguridad.',
+      other:
+        'Un elemento eliminado está marcado en {count} filas; se desmarcará allí. Antes se hace una copia de seguridad.'
+    },
+    restyleWarning: {
+      one: 'Cambiar el estilo reescribe los marcadores en {count} celda. No se pierde nada.',
+      other: 'Cambiar el estilo reescribe los marcadores en {count} celdas. No se pierde nada.'
+    },
+    rewriteCells: 'Reescribir celdas',
     removeOption: 'Quitar {name}'
   },
   deleteColumn: {
@@ -218,6 +239,13 @@ export const es: Messages<En> = {
     checked: 'Marcadas',
     unchecked: 'Sin marcar',
     placeholder: 'Filtrar…',
+    noneTicked: '(nada marcado)',
+    pickItems: 'Elegir elementos…',
+    matchLabel: 'Coincidencia',
+    matchAny: 'Alguno',
+    matchAll: 'Todos',
+    matchAnyHelp: 'Filas con al menos un elemento elegido marcado',
+    matchAllHelp: 'Filas con todos los elementos elegidos marcados',
     helpText:
       'Deben aparecer todas las palabras. "frase exacta", a OR b, a NOT b, (…), nad*. No distingue mayúsculas.',
     helpNumber:
@@ -640,6 +668,8 @@ export const es: Messages<En> = {
       text: 'texto',
       dropdown: 'lista desplegable',
       checkbox: 'casilla',
+      list: 'lista',
+      checklist: 'lista de verificación',
       date: 'fecha',
       number: 'número'
     },

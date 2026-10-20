@@ -348,3 +348,44 @@ describe('hasMarker', () => {
     expect(hasMarker(`${String.fromCharCode(0xfeff)}---  \nreview-assistant: x\n--- \n`)).toBe(true)
   })
 })
+
+describe('list and checklist columns (M10e)', () => {
+  const list = col(20, 'Steps', 'list', { options: { style: 'numbered' } })
+  const design = col(21, 'Design', 'checklist', {
+    options: {
+      choices: [
+        { id: 'o_r', label: 'Randomised' },
+        { id: 'o_b', label: 'Blinded' }
+      ]
+    }
+  })
+  const steps = '1. warm up\n    1. "easy"\n2. race\n\n1. cool down'
+
+  it('default to Section (list) and Property (checklist)', () => {
+    const p = planNotes([list, design], new Map(), settings(), [], 'S.review')
+    expect(p.exports.get(20)?.mode).toBe('section')
+    expect(p.exports.get(21)?.mode).toBe('property')
+  })
+
+  it('write a block YAML list as a Property: list flattened, checklist ticked labels', () => {
+    expect(propertyValue(list, steps)).toBe(
+      '\n  - "warm up"\n  - "\\"easy\\""\n  - "race"\n  - "cool down"'
+    )
+    expect(propertyValue(design, ['o_b'])).toBe('\n  - "Blinded"')
+    expect(propertyValue(list, '')).toBe('')
+    expect(propertyValue(design, [])).toBe('')
+  })
+
+  it('write the list as-is, and the checklist as a task list, as a Section', () => {
+    const p = planNotes(
+      [list, design],
+      new Map([[21, { mode: 'section' as const }]]),
+      settings({ tagsFromTabs: false, extraTags: '', source: false }),
+      [],
+      'S.review'
+    )
+    const note = buildNote(p, row(1, { '20': steps, '21': ['o_r'] }))
+    expect(note).toContain(`## Steps\n${steps}\n`)
+    expect(note).toContain('## Design\n- [x] Randomised\n- [ ] Blinded\n')
+  })
+})

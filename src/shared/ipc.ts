@@ -97,17 +97,29 @@ export const IPC = {
 
 // ---- Columns ----------------------------------------------------------------
 
-export const COLUMN_TYPES = ['text', 'dropdown', 'checkbox', 'date', 'number'] as const
+export const COLUMN_TYPES = [
+  'text',
+  'list',
+  'dropdown',
+  'checklist',
+  'checkbox',
+  'date',
+  'number'
+] as const
 export type ColumnType = (typeof COLUMN_TYPES)[number]
 
 export type DropdownChoice = { id: string; label: string }
 
+export const LIST_STYLES = ['bullets', 'numbered'] as const
+export type ListStyle = (typeof LIST_STYLES)[number]
+
 // What `columns.options` holds, depending on the column type. `export` (any type) is the
 // column's Markdown export setting (spec §9.1); missing = the type's default.
 export type ColumnOptions = {
-  choices?: DropdownChoice[] // dropdown
+  choices?: DropdownChoice[] // dropdown, checklist (its items)
   min?: number // number
   max?: number // number
+  style?: ListStyle // list
   export?: ColumnExport
 }
 
@@ -122,7 +134,12 @@ export type Column = {
 
 // When creating or editing a dropdown, new choices have no id yet; main assigns one.
 export type ChoiceInput = { id?: string; label: string }
-export type ColumnOptionsInput = { choices?: ChoiceInput[]; min?: number; max?: number }
+export type ColumnOptionsInput = {
+  choices?: ChoiceInput[]
+  min?: number
+  max?: number
+  style?: ListStyle
+}
 
 export type ColumnCreateInput = {
   label: string
@@ -143,8 +160,9 @@ export type ColumnUpdateInput = {
 
 // ---- Rows ---------------------------------------------------------------------
 
-// text: string · number: integer · date: 'YYYY-MM-DD' · checkbox: boolean · dropdown: option id
-export type CellValue = string | number | boolean | null
+// text, list: string · number: integer · date: 'YYYY-MM-DD' · checkbox: boolean ·
+// dropdown: option id · checklist: the ticked item ids, in item order
+export type CellValue = string | number | boolean | string[] | null
 
 export type Row = {
   id: number
@@ -180,7 +198,8 @@ export type TabType = 'main' | 'review' | 'synthesis'
 export type SortSpec = { columnId: number; desc: boolean }
 // filters: per column id, what's typed in the filter box. Text/number/date: a query or
 // comparison (">2015", "2010..2020"); dropdown: an option id; checkbox: 'checked' |
-// 'unchecked'. Missing or '' = no filter.
+// 'unchecked'; checklist: "any:<ids>" or "all:<ids>" (comma-separated item ids, plus
+// "none" for rows with nothing ticked). Missing or '' = no filter.
 export type TabView = {
   sort?: SortSpec | null
   search?: string

@@ -436,7 +436,7 @@ describe('undo and redo (spec §6)', () => {
     store.getState().undo()
     expect(cell(1, 2)).toBe('coh')
     expect(store.getState().notice?.text).toBe(
-      "Couldn't undo the edit to Study: that option has been removed"
+      "Couldn't undo the edit to Study: that option or item has been removed"
     )
     expect(store.getState().undoStack).toEqual([])
     expect(store.getState().redoStack).toEqual([])

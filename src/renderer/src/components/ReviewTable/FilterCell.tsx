@@ -1,12 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Column } from '../../../../shared/ipc'
+import {
+  formatChecklistFilter,
+  NONE_TICKED,
+  parseChecklistFilter,
+  type ChecklistFilter
+} from '../../lib/filter'
 import { useT } from '../../lib/i18n'
 import { reviewStore, useReview } from '../../store'
+import { Button } from '../ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 
 const DEBOUNCE_MS = 150
 
-// One filter under a column name (spec §7): a text box for text, number and date columns,
-// a picker for dropdown and checkbox columns. Stored per tab in the tab's view.
+// One filter under a column name (spec §7): a text box for text, list, number and date
+// columns, a picker for dropdown, checkbox and checklist columns. Stored per tab in the
+// tab's view.
 export function FilterCell({
   tabId,
   column
@@ -57,6 +66,10 @@ export function FilterCell({
     saved ? 'border-primary/50' : 'border-input'
   }`
 
+  if (column.type === 'checklist') {
+    return <ChecklistFilterPicker column={column} saved={saved} apply={apply} className={cls} />
+  }
+
   if (column.type === 'dropdown' || column.type === 'checkbox') {
     return (
       <select
@@ -105,5 +118,88 @@ export function FilterCell({
       onChange={(e) => setText(e.target.value)}
       onKeyDown={(e) => e.key === 'Escape' && setText('')}
     />
+  )
+}
+
+// A checklist's filter (spec §7): pick items (and "none ticked"), and whether a row needs
+// Any or All of them. Applies at once, like the other pickers.
+function ChecklistFilterPicker({
+  column,
+  saved,
+  apply,
+  className
+}: {
+  column: Column
+  saved: string
+  apply: (value: string) => void
+  className: string
+}): React.JSX.Element {
+  const t = useT()
+  const filter = parseChecklistFilter(saved)
+  // Any/All is remembered here while nothing is picked (an empty filter is saved as '').
+  const [chosenMode, setChosenMode] = useState(filter.mode)
+  const mode = filter.ids.length ? filter.mode : chosenMode
+  const options = [
+    ...(column.options.choices ?? []),
+    { id: NONE_TICKED, label: t('filter.noneTicked') }
+  ]
+  const picked = options.filter((o) => filter.ids.includes(o.id))
+  const save = (next: ChecklistFilter): void => apply(formatChecklistFilter(next))
+  const summary = picked.length
+    ? picked.map((o) => o.label).join(mode === 'all' ? ' + ' : ' / ')
+    : t('filter.pickItems')
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={t('filter.label', { name: column.label })}
+          title={summary}
+          className={`${className} truncate text-left`}
+        >
+          {summary}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent>
+        <div className="mb-2 flex gap-1" role="group" aria-label={t('filter.matchLabel')}>
+          {(['any', 'all'] as const).map((m) => (
+            <Button
+              key={m}
+              size="sm"
+              variant={mode === m ? 'default' : 'outline'}
+              aria-pressed={mode === m}
+              title={t(m === 'any' ? 'filter.matchAnyHelp' : 'filter.matchAllHelp')}
+              onClick={() => {
+                setChosenMode(m)
+                if (filter.ids.length) save({ mode: m, ids: filter.ids })
+              }}
+            >
+              {t(m === 'any' ? 'filter.matchAny' : 'filter.matchAll')}
+            </Button>
+          ))}
+        </div>
+        <div className="max-h-60 overflow-y-auto">
+          {options.map((o) => (
+            <label key={o.id} className="flex items-start gap-2 py-0.5 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1 shrink-0"
+                checked={filter.ids.includes(o.id)}
+                onChange={(e) =>
+                  save({
+                    mode,
+                    ids: e.target.checked
+                      ? [...filter.ids, o.id]
+                      : filter.ids.filter((id) => id !== o.id)
+                  })
+                }
+              />
+              <span className={o.id === NONE_TICKED ? 'italic' : undefined}>{o.label}</span>
+            </label>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }

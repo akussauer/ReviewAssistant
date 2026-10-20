@@ -108,6 +108,11 @@ function describeColumn(c: Column): string {
   }
   if (c.type === 'number' && (c.options.min !== undefined || c.options.max !== undefined))
     return `number, ${c.options.min ?? '…'} to ${c.options.max ?? '…'}`
+  if (c.type === 'checklist') {
+    const labels = (c.options.choices ?? []).map((o) => o.label)
+    return `checklist (the ticked items, separated by "; "): ${labels.join(', ')}`
+  }
+  if (c.type === 'list') return `list (${c.options.style === 'numbered' ? 'numbered' : 'bullets'})`
   if (c.type === 'date') return 'date, YYYY-MM-DD'
   if (c.type === 'checkbox') return 'checkbox, TRUE/FALSE'
   return c.type

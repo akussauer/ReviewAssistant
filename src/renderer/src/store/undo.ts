@@ -18,6 +18,12 @@ export type CellEdit = {
   group?: string
 }
 
+// Same value; checklist values are arrays, so they're compared by their ids.
+const same = (a: CellValue, b: CellValue): boolean =>
+  Array.isArray(a) && Array.isArray(b)
+    ? a.length === b.length && a.every((id, i) => id === b[i])
+    : a === b
+
 // Adds an edit to the undo list, merging it into the last entry when they share a group.
 // An entry that ends where it started (typed, then deleted again) is dropped.
 export function pushEdit(stack: CellEdit[], edit: CellEdit): CellEdit[] {
@@ -29,9 +35,9 @@ export function pushEdit(stack: CellEdit[], edit: CellEdit): CellEdit[] {
     top.columnId === edit.columnId
   ) {
     const rest = stack.slice(0, -1)
-    return top.before === edit.after ? rest : [...rest, { ...top, after: edit.after }]
+    return same(top.before, edit.after) ? rest : [...rest, { ...top, after: edit.after }]
   }
-  if (edit.before === edit.after) return stack
+  if (same(edit.before, edit.after)) return stack
   return [...stack, edit].slice(-UNDO_LIMIT)
 }
 
@@ -55,13 +61,13 @@ export function pruneEdits(
   return kept.length === stack.length ? stack : kept
 }
 
-// A dropdown value that names an option since removed from the column.
+// A dropdown value, or a ticked checklist item, that names an option since removed from
+// the column.
 export function missingOption(column: Column, value: CellValue): boolean {
-  return (
-    column.type === 'dropdown' &&
-    typeof value === 'string' &&
-    !(column.options.choices ?? []).some((c) => c.id === value)
-  )
+  const known = (id: string): boolean => (column.options.choices ?? []).some((c) => c.id === id)
+  if (column.type === 'dropdown') return typeof value === 'string' && !known(value)
+  if (column.type === 'checklist') return Array.isArray(value) && !value.every(known)
+  return false
 }
 
 // How the status bar names a row: its first text column's first line (e.g. the title),

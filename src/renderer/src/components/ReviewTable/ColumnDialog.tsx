@@ -1,15 +1,18 @@
 import { GripVertical, Plus, X } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
-import { distinctLabels, previewConversion } from '../../../../shared/conversion'
+import { previewConversion } from '../../../../shared/conversion'
 import {
   COLUMN_TYPES,
+  LIST_STYLES,
   type ChoiceInput,
   type Column,
   type ColumnOptions,
   type ColumnOptionsInput,
-  type ColumnType
+  type ColumnType,
+  type ListStyle
 } from '../../../../shared/ipc'
-import { moveItem } from '../../lib/columns'
+import { tickedIds } from '../../../../shared/lists'
+import { choicesForRetype, moveItem } from '../../lib/columns'
 import { useT } from '../../lib/i18n'
 import { rich } from '../../lib/rich'
 import { reviewStore, useReview } from '../../store'
@@ -47,6 +50,7 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
   const [choices, setChoices] = useState<ChoiceInput[]>(original?.options.choices ?? [])
   const [min, setMin] = useState(String(original?.options.min ?? 0))
   const [max, setMax] = useState(String(original?.options.max ?? 9999))
+  const [style, setStyle] = useState<ListStyle>(original?.options.style ?? 'bullets')
   const [newChoice, setNewChoice] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -63,24 +67,27 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
   const changeType = (next: ColumnType): void => {
     setType(next)
     setError(null)
-    // Turning an existing column into a dropdown: offer its distinct values as options.
-    if (original && next === 'dropdown' && original.type !== 'dropdown') {
-      setChoices(distinctLabels(original, values).map((l) => ({ label: l })))
-    } else if (original && next === original.type) {
-      setChoices(original.options.choices ?? [])
-    }
+    const offered = original && choicesForRetype(original, next, values)
+    if (offered) setChoices(offered)
   }
+
+  const hasChoices = type === 'dropdown' || type === 'checklist'
+  const isChecklist = type === 'checklist'
 
   // The options to save, or a message saying what's wrong (rules from the reference app).
   const built = ((): { options: ColumnOptionsInput } | { error: string } => {
     if (!label.trim()) return { error: t('columns.nameEmpty') }
-    if (type === 'dropdown') {
-      if (choices.length === 0) return { error: t('columns.needOption') }
+    if (hasChoices) {
+      if (choices.length === 0)
+        return { error: t(isChecklist ? 'columns.needItem' : 'columns.needOption') }
       const labels = choices.map((c) => c.label.trim())
-      if (labels.some((l) => !l)) return { error: t('columns.optionEmpty') }
-      if (new Set(labels).size !== labels.length) return { error: t('columns.optionsDiffer') }
+      if (labels.some((l) => !l))
+        return { error: t(isChecklist ? 'columns.itemEmpty' : 'columns.optionEmpty') }
+      if (new Set(labels).size !== labels.length)
+        return { error: t(isChecklist ? 'columns.itemsDiffer' : 'columns.optionsDiffer') }
       return { options: { choices: choices.map((c) => ({ ...c, label: c.label.trim() })) } }
     }
+    if (type === 'list') return { options: { style } }
     if (type === 'number') {
       const lo = min.trim() === '' ? NaN : Number(min)
       const hi = max.trim() === '' ? NaN : Number(max)
@@ -98,6 +105,24 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
     retyping && 'options' in built
       ? previewConversion(original, { type, options: previewOptions(built.options) }, values)
       : null
+
+  // Editing a checklist: rows that tick an item being removed lose that tick.
+  const removedIds = new Set(
+    original?.type === 'checklist' && !retyping
+      ? (original.options.choices ?? [])
+          .filter((c) => !choices.some((k) => k.id === c.id))
+          .map((c) => c.id)
+      : []
+  )
+  const untickRows = removedIds.size
+    ? values.filter((v) => tickedIds(v).some((id) => removedIds.has(id))).length
+    : 0
+
+  // Switching a list's style rewrites the markers in every non-empty cell.
+  const restyleCells =
+    original?.type === 'list' && !retyping && style !== (original.options.style ?? 'bullets')
+      ? values.filter((v) => typeof v === 'string' && v !== '').length
+      : 0
 
   const submit = async (): Promise<void> => {
     if (submitting.current) return
@@ -187,14 +212,32 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
             </select>
           </div>
 
-          {type === 'dropdown' && (
+          {type === 'list' && (
             <div className="grid gap-2">
-              <Label>{t('columns.options')}</Label>
-              <ChoiceList choices={choices} onChange={setChoices} />
+              <Label htmlFor="col-style">{t('columns.listStyle')}</Label>
+              <select
+                id="col-style"
+                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                value={style}
+                onChange={(e) => setStyle(e.target.value as ListStyle)}
+              >
+                {LIST_STYLES.map((s) => (
+                  <option key={s} value={s}>
+                    {t(`columns.styles.${s}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {hasChoices && (
+            <div className="grid gap-2">
+              <Label>{t(isChecklist ? 'columns.items' : 'columns.options')}</Label>
+              <ChoiceList choices={choices} onChange={setChoices} items={isChecklist} />
               <div className="flex gap-2">
                 <Input
                   data-new-choice="true"
-                  placeholder={t('columns.newOption')}
+                  placeholder={t(isChecklist ? 'columns.newItem' : 'columns.newOption')}
                   value={newChoice}
                   onChange={(e) => setNewChoice(e.target.value)}
                   onKeyDown={(e) => {
@@ -257,6 +300,24 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
             </p>
           )}
 
+          {untickRows > 0 && (
+            <p
+              className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+              role="status"
+            >
+              {t('columns.untickWarning', { count: untickRows })}
+            </p>
+          )}
+
+          {restyleCells > 0 && (
+            <p
+              className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+              role="status"
+            >
+              {t('columns.restyleWarning', { count: restyleCells })}
+            </p>
+          )}
+
           {error && (
             <p className="text-sm text-destructive" role="alert">
               {error}
@@ -269,7 +330,11 @@ export function ColumnDialog({ mode, onClose }: Props): React.JSX.Element {
             {t('common.cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={saving}>
-            {retyping ? t('columns.changeType') : t('common.ok')}
+            {retyping
+              ? t('columns.changeType')
+              : restyleCells > 0
+                ? t('columns.rewriteCells')
+                : t('common.ok')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -285,19 +350,25 @@ function previewOptions(options: ColumnOptionsInput): ColumnOptions {
   }
 }
 
-// Dropdown options: rename in place, remove, drag the grip to reorder. Existing options
-// keep their id, so renaming one updates every row that uses it.
+// Dropdown options or checklist items: rename in place, remove, drag the grip to reorder.
+// Existing ones keep their id, so renaming one updates every row that uses it.
 function ChoiceList({
   choices,
-  onChange
+  onChange,
+  items
 }: {
   choices: ChoiceInput[]
   onChange: (c: ChoiceInput[]) => void
+  items: boolean // checklist items rather than dropdown options (only the wording differs)
 }): React.JSX.Element {
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const t = useT()
   if (choices.length === 0) {
-    return <p className="text-sm text-muted-foreground">{t('columns.noOptions')}</p>
+    return (
+      <p className="text-sm text-muted-foreground">
+        {t(items ? 'columns.noItems' : 'columns.noOptions')}
+      </p>
+    )
   }
   return (
     <ul className="max-h-56 divide-y overflow-y-auto rounded-md border">
@@ -322,7 +393,7 @@ function ChoiceList({
           </span>
           <Input
             className="h-7"
-            aria-label={t('columns.optionN', { n: i + 1 })}
+            aria-label={t(items ? 'columns.itemN' : 'columns.optionN', { n: i + 1 })}
             value={choice.label}
             onChange={(e) =>
               onChange(choices.map((c, j) => (j === i ? { ...c, label: e.target.value } : c)))

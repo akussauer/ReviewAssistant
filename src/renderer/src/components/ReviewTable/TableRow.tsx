@@ -1,6 +1,6 @@
 import { memo, useState } from 'react'
 import { displayText } from '../../../../shared/conversion'
-import type { Column, Row } from '../../../../shared/ipc'
+import type { Column, ColumnType, Row } from '../../../../shared/ipc'
 import type { Highlighter } from '../../../../shared/search'
 import { useT } from '../../lib/i18n'
 import { reviewStore } from '../../store'
@@ -8,6 +8,8 @@ import { Cell } from './Cell'
 import { ContextMenu, ContextMenuTrigger } from '../ui/context-menu'
 import { HEADER_HEIGHT, ROW_HEADER_WIDTH } from './layout'
 import { RowMenu } from './RowMenu'
+
+const MARKS_OWN = new Set<ColumnType>(['text', 'list', 'checklist'])
 
 type Props = {
   row: Row
@@ -41,10 +43,10 @@ export const TableRow = memo(function TableRow({
         const value = row.data[String(column.id)]
         const highlight = highlighters.get(column.id)
         // Form fields can't mark part of their text, so a matching one is tinted whole.
+        // Text and list cells mark characters, checklists their labels (in the cell).
+        const marksOwn = MARKS_OWN.has(column.type)
         const tinted =
-          column.type !== 'text' &&
-          highlight !== undefined &&
-          highlight(displayText(column, value)).length > 0
+          !marksOwn && highlight !== undefined && highlight(displayText(column, value)).length > 0
         return (
           <div
             key={column.id}
@@ -61,7 +63,7 @@ export const TableRow = memo(function TableRow({
               column={column}
               value={value}
               live={live}
-              highlight={column.type === 'text' ? highlight : undefined}
+              highlight={marksOwn ? highlight : undefined}
             />
           </div>
         )
