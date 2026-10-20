@@ -66,7 +66,7 @@ The window title shows the file name. One file is open per window **(A)**.
 - **Each review is one standard SQLite database.** The `.review` extension just lets Windows open it with the app. Any SQLite tool can read it: DB Browser for SQLite, Python's `sqlite3`, R's `RSQLite`, DuckDB, Excel via ODBC, and so on.
 - **It's a single self-contained file.** The app uses SQLite's standard rollback journal instead of WAL mode, so there are no `-wal`/`-shm` side files. Copying, emailing or syncing the file (e.g. through OneDrive) always gives you the complete, current data.
 - **Readable views [New]:** values are stored as JSON keyed by column id, which is robust but awkward to read from outside the app. Whenever columns change, the app regenerates two SQL views:
-  - `rows_readable`: one row per article, one SQL column per user column, named with the column label, with dropdown ids turned into their text and checkboxes as 0/1.
+  - `rows_readable`: one row per article, one SQL column per user column, named with the column label, with dropdown ids turned into their text, checkboxes as 0/1, list cells as their text, and checklist cells as the ticked labels in item order, joined with `; `.
   - `tab_membership`: tab label → row id.
 
   In another tool, `SELECT * FROM rows_readable` gives you a normal table.
@@ -82,14 +82,31 @@ The window title shows the file name. One file is open per window **(A)**.
 | **Checkbox** | Toggle with a click or Space/Enter **[Py]** | – | unchecked |
 | **Date** | Date picker (`YYYY-MM-DD`); the wheel doesn't change it **[Py]** | – | today **[Py]** |
 | **Number** | Integer input; the wheel doesn't change it **[Py]** | min, max (min ≤ max) **[Py]** | min **[Py]** |
+| **List [New]** | A text cell that keeps every line a list item (see *List cells* below) | Style: *Bullets* (`- `) or *Numbered* (`1. `) | empty |
+| **Checklist [New]** | Every item of the column, stacked in item order, each with its own tick box; scrolls if the row is too short | Ordered item list (add, rename, remove, drag to reorder), like the dropdown's; at least one item required | nothing ticked |
 
-**[New]** Dropdown options are stored by id, so renaming an option updates every row that uses it. (In the PySide app, renaming leaves the old text in the rows.)
+**[New]** Dropdown options are stored by id, so renaming an option updates every row that uses it. (In the PySide app, renaming leaves the old text in the rows.) Checklist items work the same way: a row stores the ids of its ticked items (e.g. `["opt3","opt7"]`), so renaming an item updates every row, and reordering only changes the display. Rows can't add items of their own.
+
+**List cells [New]:**
+- **Stored as markdown text** with the markers in it (`- a` / `1. a`), so search, export, the readable view and the assistant see ordinary text. Highlighting, spellcheck and undo are as for text cells.
+- **Every non-blank line is an item.** The marker is added as you type and to each pasted line, and any line that lost its marker is fixed when you leave the cell.
+- **Enter** on an item with text starts a new item; Enter on an empty item removes its marker, leaving a blank line that ends the list. **Backspace** on an empty marker removes it.
+- **Several numbered lists in one cell:** a blank line separates lists, and the next numbered line starts again at 1 (`1. 2. 3.` · blank · `1. 2.`). Numbers are renumbered automatically after every edit.
+- **Nesting:** Tab / Shift+Tab indent and outdent an item; each level is numbered separately (a sub-list under item 2 starts at 1). Esc → Tab moves on, as in text cells.
+- **Changing the Style** rewrites every row's markers (`- ` ↔ `1. `). Nothing is lost, so it only asks for confirmation ("Rewrite 240 cells?"), with no backup or preview.
+
+**Checklist text form [New]:** wherever a checklist needs to be text (readable view, CSV, search, sort ties, the assistant, Claude Desktop), it's the ticked labels in item order, joined with `; ` (e.g. `Blinded; Randomised`); an empty string means nothing is ticked.
 
 ### 4.2 Column operations
 - **Right-click a column name** to choose *Insert column before*, *Insert column after*, *Edit*, or *Delete* **[Py]**.
 - **Edit dialog:** name, type and the options for that type, validated as in the PySide app **[Py]**. Names can't be empty, and must be unique **[New]**.
 - **Delete:** a warning dialog, with *Cancel* as the default button **[Py]**. A backup is taken first **[New]**.
-- **Change type [New]:** before applying, the dialog previews the result, e.g. "38 values convert, 4 will be cleared". Conversions: text→number/date parse or clear; anything→text becomes its display string; text→dropdown turns distinct values into options.
+- **Removing a checklist item [New]** that rows have ticked warns first ("ticked in 12 rows"), takes a backup, and drops that id from those rows in one transaction.
+- **Change type [New]:** before applying, the dialog previews the result, e.g. "38 values convert, 4 will be cleared". Conversions:
+  - text→number/date parse or clear; anything→text becomes its display string; text→dropdown turns distinct values into options.
+  - text→list: each non-blank line becomes an item. list→text: the text is kept exactly as it is.
+  - dropdown→checklist: the options become the items, and each row's value is ticked. text→checklist: distinct non-blank lines become the items, and each row ticks its own lines.
+  - checklist→text or list: the ticked labels, one per line (as items for a list). checklist→dropdown: the first ticked item is kept (rows with more than one ticked count as cleared in the preview).
 - **Reorder** columns by dragging headers **[Py]**. **Resize** by dragging the header divider; widths are saved **[Py]**. Width and order are global, not per tab.
 - **Ctrl+Shift+N** creates a new column at the end **[Py]**.
 
@@ -125,27 +142,29 @@ Title (text), Study Type (dropdown: RCT, Cohort, Case Study, Systematic Review, 
 - **Spellcheck languages** are chosen in Settings **[Py]**. **[New]** Up to three at once, from every language Electron's built-in spellchecker offers (56 on Windows), so there's no extra dependency; a word passes if any chosen language accepts it, and choosing none turns spellcheck off. The English, German, French and Spanish dictionaries ship with the app and work offline; any other language is downloaded from Google's dictionary server the first time it's used. If that download fails (e.g. offline), that language is left out until the next start, with a status-bar notice, so the others keep working. On Windows, a language Windows itself has installed may be checked by Windows' spellchecker instead. *Add to dictionary* uses one custom word list shared by every language.
 - **Keyboard [New]:**
   - **Tab / Shift+Tab** move through the shown rows in order: the row's checkbox, then its cells left to right, then the next row. Rows off screen scroll into view. Tab on the last cell of the last row does nothing (Ctrl+N adds a row).
-  - **Inside a text cell,** Tab / Shift+Tab indent and outdent the line. **Esc** leaves the cell; the next Tab / Shift+Tab then moves on from that cell. A click elsewhere resets this.
+  - **Inside a text cell,** Tab / Shift+Tab indent and outdent the line. **Esc** leaves the cell; the next Tab / Shift+Tab then moves on from that cell. A click elsewhere resets this. List cells behave the same.
+  - **Inside a checklist cell,** Tab focuses the first item, ↑ / ↓ move between items, Space toggles the focused item, and Tab / Shift+Tab leave the cell. Each tick is one undo step.
   - **Ctrl+↑ / Ctrl+↓** jump to the same column in the row above / below, from any cell type (including text cells).
   - **Space** toggles a focused checkbox (row checks and checkbox cells).
 - **Undo [New]:**
   - **Ctrl+Z** undoes recent cell edits; **Ctrl+Y** and **Ctrl+Shift+Z** both redo. A new edit clears the redo list. Each undo/redo is saved like any other edit.
   - One list per open file, for all cell types, kept until another file is opened; the last 100 edits.
   - Inside a text cell, Ctrl+Z undoes the typing step by step (the editor's own undo). Elsewhere it undoes the latest edit in the list; everything typed during one visit to a text cell counts as one edit (likewise ↑/↓ steps in a number cell). In a number cell, Ctrl+Z while typing drops the half-typed number.
-  - Not undoable: row checks, row heights, adding/deleting rows, column changes. Edits to a deleted row, or to a deleted or retyped column, are dropped from the list. Undoing to a dropdown option that has since been removed is skipped, with a notice.
+  - Not undoable: row checks, row heights, adding/deleting rows, column changes. Edits to a deleted row, or to a deleted or retyped column, are dropped from the list. Undoing to a dropdown option or checklist item that has since been removed is skipped, with a notice.
   - If the undone cell's row is in the current tab, the table scrolls to it and briefly highlights it. The status bar always says e.g. "Undid edit to Notes (“Pacing in elite swimmers”)", naming the row by its first non-empty text column (else "row 12", its place in the main table). The app never switches tabs.
   - In the search box, filters, dialogs and the assistant input, Ctrl+Z / Ctrl+Y are that box's own undo.
   - **Undo / Redo buttons:** to the left of 🔍 by the tabs, the same as Ctrl+Z / Ctrl+Y outside a text box (an edit just made in a text cell counts as one step). Their tooltips name the edit; greyed out when there is nothing to undo or redo.
 
 ---
 ## 7. Sorting, filtering, search
-- **Sort:** clicking a header cycles ascending → descending → off, where *off* means the manual order **[New]**. Sorting is case-insensitive, puts numbers in numeric order, and puts unchecked before checked **[Py]**. *Insert row above/below* is disabled while a sort is active **(A)**.
+- **Sort:** clicking a header cycles ascending → descending → off, where *off* means the manual order **[New]**. Sorting is case-insensitive, puts numbers in numeric order, and puts unchecked before checked **[Py]**. Checklist columns sort by the number of ticked items, then by their text form **[New]**. *Insert row above/below* is disabled while a sort is active **(A)**.
 - **Column filters [Py]:** each column has a filter box under its name. Filters are case-insensitive "contains" matches, and all column filters must match (AND).
-  - **[New] type-aware filters:** dropdown and checkbox columns get a small picker instead of a text box. Number and date filters accept `>2015`, `<2020` or `2010..2020` as well as plain text.
+  - **[New] type-aware filters:** dropdown and checkbox columns get a small picker instead of a text box. Number and date filters accept `>2015`, `<2020` or `2010..2020` as well as plain text. List columns use the text box, like text columns.
+  - **[New] checklist filter:** a picker listing the items plus *(none ticked)*, with an **Any / All** switch (default Any): *Any* shows rows where at least one picked item is ticked, *All* rows where every picked item is ticked. *(none ticked)* matches rows with nothing ticked.
 - **Global search [Py]:** a row matches if any cell contains the text. Typing is debounced by 150 ms. Search and column filters combine (AND).
   - **[New] Hidden by default.** Ctrl+F (or the 🔍 button by the tabs) shows the bar and puts the cursor in it; Ctrl+F again, or Esc in an empty box, hides it. Shown/hidden is one app-wide setting, kept across restarts. Hiding the bar clears the search (column filters stay). Opening a tab that has a saved search shows the bar.
 - **Per tab (A):** each tab keeps its own sort, filters and search, saved in the file.
-- **Match highlighting [New]:** while a search or column filter is active, matches are highlighted in the shown rows. Every positive term is marked wherever it appears (words, `"phrases"`, `swim*` wildcards); terms after NOT never are, and AND/OR logic isn't traced per occurrence. A plain word marks just the matching characters (`swim` in "swimming"); a wildcard marks the whole span it matched; a phrase includes the spaces between its words. The global search highlights in every column it searches; a column filter only in its own column. Text cells mark the characters (also while editing, and in the lightweight copy shown while scrolling), over the markdown colouring. Dropdown, number and date cells are tinted as a whole when their shown value matches; comparison and range filters (`>2015`, `2010..2020`) and checkboxes highlight nothing. One colour for both, see *Search highlight* (§12). No next/previous navigation or match count.
+- **Match highlighting [New]:** while a search or column filter is active, matches are highlighted in the shown rows. Every positive term is marked wherever it appears (words, `"phrases"`, `swim*` wildcards); terms after NOT never are, and AND/OR logic isn't traced per occurrence. A plain word marks just the matching characters (`swim` in "swimming"); a wildcard marks the whole span it matched; a phrase includes the spaces between its words. The global search highlights in every column it searches; a column filter only in its own column. Text and list cells mark the characters (also while editing, and in the lightweight copy shown while scrolling), over the markdown colouring. Dropdown, number and date cells are tinted as a whole when their shown value matches; in checklist cells only the matching item labels are tinted; comparison and range filters (`>2015`, `2010..2020`) and checkboxes highlight nothing. One colour for both, see *Search highlight* (§12). No next/previous navigation or match count.
 
 ---
 ## 8. Tabs
@@ -168,8 +187,9 @@ Title (text), Study Type (dropdown: RCT, Cohort, Case Study, Systematic Review, 
     - Clashing names get " (2)".
 - **Export CSV [Py]:** if any rows are checked, it asks "Export only checked rows?" (default Yes). Booleans are written as `TRUE`/`FALSE`, and the files default to the Downloads folder. Covers the whole file: every column in display order, rows in manual order, regardless of the current tab, sort or filters.
   - **[New]** UTF-8 with a byte order mark, so Excel reads accents correctly.
-  - **[New]** Text cells starting with `= + - @` get a leading tab, so Excel shows them as text instead of a formula (`#NAME?`) or a number.
-- **Export JSON [New]:** the PySide v2 format (documented in `docs/json-format.md`), so it round-trips through the importer and opens in the old app. Same checked-only prompt; tabs keep only the exported rows.
+  - **[New]** Text cells starting with `= + - @` get a leading tab, so Excel shows them as text instead of a formula (`#NAME?`) or a number. List cells follow the same rule (a bullet list always starts with `-`).
+  - **[New]** List cells are written as their text, checklist cells as their text form (`Blinded; Randomised`).
+- **Export JSON [New]:** the PySide v2 format (documented in `docs/json-format.md`), so it round-trips through the importer and opens in the old app. Same checked-only prompt; tabs keep only the exported rows. List and checklist columns, which the old app doesn't have, are written as text columns (their text form).
 - **[New]** After an export, the status bar shows "Exported N rows to <file>" with *Show in folder*.
 
 ### 9.1 Markdown / Obsidian export [New]
@@ -177,8 +197,8 @@ Each row is exported as one `.md` note that can go straight into an Obsidian vau
 - **Columns** (a list in the dialog, in display order; not in the column Edit dialog). Each column has a mode, stored with the column:
   | Mode | Output |
   |---|---|
-  | **Property** (default for dropdown, number, date, checkbox) | YAML frontmatter key: text → quoted one-line string (line breaks become spaces), number → number, date → `YYYY-MM-DD`, checkbox → `true`/`false`, dropdown → its text. Empty cells are written as `key:`. |
-  | **Section** (default for text columns) | `## <Column name>` followed by the cell content as-is (cells are already markdown). Empty cells are left out. |
+  | **Property** (default for dropdown, number, date, checkbox, checklist) | YAML frontmatter key: text → quoted one-line string (line breaks become spaces), number → number, date → `YYYY-MM-DD`, checkbox → `true`/`false`, dropdown → its text. **[New]** List and checklist → a block YAML list (one `- "item"` line per value, see below), so Obsidian shows each item as its own property value. A list is flattened: nested items lose their indent, numbers are dropped, and several lists in one cell become one. A checklist gives its ticked labels in item order. Empty cells are written as `key:`. |
+  | **Section** (default for text and list columns) | `## <Column name>` followed by the cell content as-is (cells are already markdown, so a list cell stays a normal markdown list). **[New]** A checklist is written as an Obsidian task list, every item in order: `- [x] Blinded` / `- [ ] Allocation concealed`. Empty cells are left out. |
   | **Skip** | not exported |
 
   Each column also has a *property name*, by default a slug of its name ("Study Type" → `study-type`, "Author(s)" → `authors`); clashes get `-2`. One column is the **File name** column (default: the first text column); it is also written as `title` when it is a Section (a Property already has its own key; Skip means it only names the file).
@@ -197,6 +217,9 @@ Each row is exported as one `.md` note that can go straight into an Obsidian vau
   year: 2016
   study-type: "Cohort"
   read: true
+  design-features:
+    - "Blinded"
+    - "Randomised"
   tags:
     - "Pacing"
   source: "Swimming.review"
@@ -229,7 +252,7 @@ Each row is exported as one `.md` note that can go straight into an Obsidian vau
 ### 10.1 Connect to Claude Desktop (read-only) [New]
 For people with a Claude subscription (Pro/Max): they chat in Claude Desktop on their own plan, with no API key and no API cost, and Claude reads their review through our tools. (Anthropic only allows subscription sign-in in its own apps, so this is the supported route.) The built-in panel (§10) stays for API-key users.
 - **How:** Review Assistant writes a Claude Desktop extension (`.mcpb`), which the user installs once by double-clicking it. Claude Desktop runs the extension's small MCP script with its own Node.js. For each tool call the script asks the running app over a **local pipe** (no network port), using a per-install secret baked into the extension.
-- **Tools (all read-only):** `list_tabs` (id, name, type, row count), `get_columns` (types, dropdown options), `get_rows` (a tab's rows with every column, as "Column: value" lines, in main-table order, ignoring the app's filters; paged, 50 rows by default, at most 200 rows or ~100k characters), `search_rows` (the §7 search syntax, optionally within one tab; paged), `get_row` (one row and the tabs it's in). Tool descriptions and the server's instructions say that results are data, not instructions. While a tool runs, the database connection refuses writes.
+- **Tools (all read-only):** `list_tabs` (id, name, type, row count), `get_columns` (types, dropdown options, checklist items, list style), `get_rows` (a tab's rows with every column, as "Column: value" lines, in main-table order, ignoring the app's filters; paged, 50 rows by default, at most 200 rows or ~100k characters), `search_rows` (the §7 search syntax, optionally within one tab; paged), `get_row` (one row and the tabs it's in). Tool descriptions and the server's instructions say that results are data, not instructions. While a tool runs, the database connection refuses writes.
 - **Which file:** only the review open in the app. With no file open, or the app closed, or the switch off, tools answer with a message saying so.
 - **Settings → Preferences → Connect to Claude Desktop:** *Let Claude Desktop read the open review* (off by default; applied on Save), a status line (Off / waiting / how many reads and when), and *Save extension for Claude Desktop…* (save dialog, Downloads by default; then shows the file in its folder). The app never edits Claude Desktop's own files.
 - **Status bar:** "Claude Desktop is reading…" for a few seconds after each call.
