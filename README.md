@@ -4,6 +4,9 @@ A desktop app for writing good notes on many academic articles and analysing sub
 
 You keep one table of articles with the columns you choose, group articles into tabs (e.g. *RCTs*, *Elite swimmers*) without copying them, and search, filter and export the lot. An AI assistant is available if you want one, but it's optional help, never the point: **everything works with no API key.**
 
+> If you like the program and want to support what I am doing, feel free to [buy me a coffee](https://buymeacoffee.com/akussauer)
+
+
 ![Review Assistant main window](docs/screenshot.png)
 
 ## Features
