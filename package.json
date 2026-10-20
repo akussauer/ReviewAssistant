@@ -1,7 +1,7 @@
 {
   "name": "ReviewAssistant",
   "productName": "Review Assistant",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Write notes on many academic articles and analyse sub-groups.",
   "main": "./out/main/index.js",
   "author": "Alex Kussauer",
